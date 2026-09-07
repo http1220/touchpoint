@@ -9,11 +9,11 @@ CI4는 D3부터 올린다.
 
 | 항목 | 비고 |
 |---|---|
-| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) |
+| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md) |
 | AWS 계정 | 없으면 카드 등록·본인인증에 반나절 |
 | GA4 속성 | `measurement_id` + **API secret** (D12에 필요, 리드타임 대비 미리) |
 
-> 도메인은 저렴한 TLD면 충분하다. 이 프로젝트에서 가장 값싼 지출이면서 가장 중요한 지출이다.
+> ⚠️ **TLD를 아끼지 않는다.** 저가 TLD는 광고 차단기·기업 DNS에서 통째로 차단되는 일이 있어, 이 프로젝트에서는 **TLD가 실험 변수가 된다.** 요청이 막혔을 때 `SameSite` 때문인지 TLD 때문인지 구분할 수 없게 된다 → [domain-setup.md](domain-setup.md) 2장
 
 ---
 

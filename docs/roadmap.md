@@ -288,6 +288,7 @@ flowchart LR
 |---|---|
 | **의도** | 이 문서 ①장 |
 | **기획** | [research-method.md](research-method.md) · [decisions/](decisions/) |
-| **계획** | 이 문서 ③장 · [setup.md](setup.md) |
+| **계획** | 이 문서 ③장 · [setup.md](setup.md) · [domain-setup.md](domain-setup.md) |
 | 설계 | [architecture.md](architecture.md) · [domains-and-cookies.md](domains-and-cookies.md) · [api-spec.md](api-spec.md) · [data-model.md](data-model.md) |
 | 검증 | [failure-scenarios.md](failure-scenarios.md) · [benchmarks.md](benchmarks.md) |
+| **기록** | [worklog.md](worklog.md) — 한 일 · 막힌 것 · 결정한 것 |
