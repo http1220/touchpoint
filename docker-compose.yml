@@ -1,0 +1,97 @@
+name: attribution-bridge
+
+# t3.micro(1GB RAM) 전제. 메모리 상한을 명시해 한 컨테이너가 전체를 굶기지 않게 한다.
+# 합계 약 700MB + OS. swap 2GB가 없으면 MySQL이 OOM으로 죽는다. docs/benchmarks.md 6장.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"      # HTTP/3
+    environment:
+      SHOP_DOMAIN: ${SHOP_DOMAIN:?SHOP_DOMAIN 이 필요합니다}
+      TRACK_DOMAIN: ${TRACK_DOMAIN:?TRACK_DOMAIN 이 필요합니다}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL 이 필요합니다}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./public:/var/www/html/public:ro
+      - caddy_data:/data          # 인증서. 지우면 재발급이라 rate limit을 소모한다
+      - caddy_config:/config
+    mem_limit: 96m
+    depends_on:
+      - app
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    image: attribution-bridge/php:local
+    restart: unless-stopped
+    env_file: [.env]
+    volumes:
+      - .:/var/www/html
+    mem_limit: 224m
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # app과 같은 이미지. 커맨드만 다르다.
+  # --scale worker=4 로 늘려 SKIP LOCKED 동시성을 검증한다. ADR-004
+  #
+  # profiles로 묶어 기본 기동에서 제외한다. CI4와 dispatch:work 커맨드가
+  # 생기기 전(D12 이전)에 띄우면 크래시 루프에 빠지기 때문이다.
+  #   D1~D11  : docker compose up -d
+  #   D12~    : docker compose --profile worker up -d
+  worker:
+    profiles: ["worker"]
+    image: attribution-bridge/php:local
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    restart: unless-stopped
+    command: ["php", "spark", "dispatch:work"]
+    env_file: [.env]
+    volumes:
+      - .:/var/www/html
+    mem_limit: 128m
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci   # utf8은 3바이트라 이모지가 깨진다
+      - --default-time-zone=+00:00              # 저장은 UTC
+      - --innodb-buffer-pool-size=128M          # 1GB 인스턴스 기준. 기본 128M 유지
+      - --max-connections=60
+      - --skip-name-resolve
+      - --slow-query-log=1
+      - --long-query-time=0.3
+      - --log-queries-not-using-indexes=1       # 인덱스 실습용. 운영이면 끈다
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 이 필요합니다}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    # 포트를 호스트에 노출하지 않는다. 접속은 docker compose exec 로.
+
+volumes:
+  caddy_data:
+  caddy_config:
+  mysql_data:

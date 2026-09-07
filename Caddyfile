@@ -1,0 +1,85 @@
+# attribution-bridge · Caddy
+#
+# 호스트 3개를 한 대가 받는다. 두 개의 등록 도메인에 걸쳐 있으므로
+# 인증서도 도메인별로 따로 발급된다.
+#
+#   lp.{SHOP}   랜딩 · 브리지 리다이렉트   ─┐ first-party
+#   app.{SHOP}  서비스 · 전환 · 지표       ─┘
+#   api.{TRACK} 수집 API                    third-party  ← 여기서 cross-site 발생
+
+{
+	email {$ACME_EMAIL}
+
+	# ACME_STAGING=true 인 동안에는 아래 줄을 살려 스테이징 CA로 발급받는다.
+	# 브라우저는 신뢰하지 않지만 발급 절차가 도는지 확인할 수 있고,
+	# 프로덕션 rate limit(도메인당 주 5회)을 소모하지 않는다.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+# ─────────────────────────────────────────────────────────
+# 공통 설정
+# ─────────────────────────────────────────────────────────
+(common) {
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+
+		# 기본값(strict-origin-when-cross-origin)은 cross-origin 요청에서
+		# 경로와 쿼리를 잘라낸다. 유입 경로 추적에는 referrer가 필요하므로
+		# 이 프로젝트에서는 완화한다. 트레이드오프를 문서에 남긴다.
+		Referrer-Policy "no-referrer-when-downgrade"
+	}
+
+	# CORS 헤더는 여기서 붙이지 않는다.
+	# 오리진을 정확히 반향하고 Vary: Origin을 붙여야 하는데,
+	# 그 판단은 애플리케이션이 해야 한다. (docs/api-spec.md 3장)
+}
+
+(php) {
+	root * /var/www/html/public
+	php_fastcgi app:9000
+	file_server
+}
+
+# ─────────────────────────────────────────────────────────
+# 광고주 측 — first-party
+# ─────────────────────────────────────────────────────────
+lp.{$SHOP_DOMAIN} {
+	import common
+	import php
+
+	# 브리지는 캐시되면 안 된다. 301이 아니라 302를 쓰는 것과 같은 이유.
+	@bridge path /go /go/*
+	header @bridge Cache-Control "no-store"
+}
+
+app.{$SHOP_DOMAIN} {
+	import common
+	import php
+}
+
+# ─────────────────────────────────────────────────────────
+# 추적 측 — third-party. 여기가 cross-site 실험 지점
+# ─────────────────────────────────────────────────────────
+api.{$TRACK_DOMAIN} {
+	import common
+	import php
+
+	# 수집 응답은 캐시하지 않는다. 오리진 반향 응답이 캐시되면
+	# 다른 오리진에게 잘못된 Allow-Origin이 나갈 수 있다.
+	header /collect Cache-Control "no-store"
+	header /conversion Cache-Control "no-store"
+}

@@ -37,11 +37,21 @@ flowchart LR
 ## 2. 실행 방법
 
 ```bash
-cp .env.example .env      # SHOP_DOMAIN / TRACK_DOMAIN / GA4·Meta 자격증명
+cp .env.example .env      # SHOP_DOMAIN / TRACK_DOMAIN / DB 비밀번호
 docker compose up -d
 ```
 
+컨테이너 4개(`caddy` · `app` · `worker` · `mysql`)가 뜹니다. 워커는 아웃박스가 생긴 뒤부터 필요하므로 기본 기동에서 빠져 있습니다.
+
+```bash
+docker compose --profile worker up -d --scale worker=4   # D12~
+```
+
+**도메인·EC2·TLS 구축 절차 → [docs/setup.md](docs/setup.md)**
+
 > ⚠️ **로컬에서는 핵심 실험이 성립하지 않습니다.** `*.localhost`는 same-site라 서드파티 쿠키 차단과 `SameSite=None`을 재현할 수 없습니다. 등록 도메인 2개가 필요한 이유 → [ADR-002](docs/decisions/ADR-002-two-registered-domains.md)
+>
+> ⚠️ **ACME는 반드시 스테이징으로 먼저 검증하세요.** Let's Encrypt 프로덕션은 도메인당 주 5회 제한이라, 설정 시행착오로 소모하면 일주일을 기다려야 합니다.
 
 ---
 

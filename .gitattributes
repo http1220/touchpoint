@@ -1,0 +1,10 @@
+# Windows에서 작성하고 Linux(EC2)에서 실행한다.
+# CRLF가 섞이면 셸 스크립트와 Caddyfile이 깨지므로 저장소 안에서는 LF로 통일한다.
+* text=auto eol=lf
+
+# 바이너리
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary

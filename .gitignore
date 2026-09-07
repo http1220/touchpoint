@@ -1,0 +1,25 @@
+# 비밀값 — 절대 커밋하지 않는다
+.env
+.env.*
+!.env.example
+
+# 의존성
+/vendor/
+
+# CI4 런타임
+/writable/cache/*
+/writable/logs/*
+/writable/session/*
+/writable/uploads/*
+/writable/debugbar/*
+!/writable/**/.gitkeep
+
+# 계측 산출물 (원문은 docs/benchmarks.md에 정리해 넣는다)
+/tmp/
+*.log
+
+# OS · 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
