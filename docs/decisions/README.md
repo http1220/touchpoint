@@ -16,6 +16,8 @@
 | [009](ADR-009-no-spa.md) | SPA 미사용 | 백엔드 포지션 + 대상 서비스가 서버 렌더 + 추적 스니펫은 바닐라여야 |
 | [010](ADR-010-no-kubernetes.md) | K8s·ECR 미사용 | 컨테이너 4개. EKS 잡이 없는 것도 관측됨 |
 | [011](ADR-011-github-actions-over-jenkins.md) | GitHub Actions | **초안의 "CI 공백" 전제가 틀렸음.** 조직 표준은 Jenkins |
+| [012](ADR-012-observability-scope.md) | 관측 가능성 범위 | 어트리뷰션은 그대로, 계측을 **운영 관점으로 승격**. 인프라 포지션 동시 지원 대응 |
+| [013](ADR-013-caddy-over-nginx.md) | Caddy (Nginx 아님) | 두 도메인 자동 HTTPS가 전제. M1 이틀에 certbot 배선 위험을 피함 |
 
 ---
 
