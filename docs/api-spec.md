@@ -130,7 +130,7 @@ Cookie: ab_tid=...          ← SameSite=None; Secure; Partitioned 이어야 전
   "visit_uid": "01J8XK...",
   "event": "page_view",
   "work_id": 8733,
-  "occurred_at": "2026-09-01T12:34:56.789Z"
+  "occurred_at": "2026-09-07T12:34:56.789Z"
 }
 ```
 
