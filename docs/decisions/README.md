@@ -21,6 +21,7 @@
 | [014](ADR-014-stack-alignment.md) | **스택 정렬 원칙** | 다른 모든 ADR을 지배. "이 경험이 그 회사 업무에서 그대로 쓰이는가" |
 | [015](ADR-015-image-pipeline-cdn.md) | 이미지 S3 + CloudFront | **Phase 2.** 웹툰은 이미지가 본체. 미경험 영역이라 학습 가치가 크다 |
 | [016](ADR-016-payment-and-notification.md) | PG 테스트 연동 + 알림 어댑터 | **Phase 2.** 008 개정 — 구현체가 하나면 어댑터가 검증되지 않는다 |
+| [017](ADR-017-ci3-application-structure.md) | **CI3 앱 구조** | CI3 관용구 + Composer PSR-4 병용. `src/`는 프레임워크 독립이라 테스트가 성립 |
 
 ---
 

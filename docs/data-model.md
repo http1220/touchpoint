@@ -299,6 +299,21 @@ CREATE TABLE work_publish_days (                 -- 배열이므로 별도 테�
   PRIMARY KEY (work_id, day_of_week)
 ) ENGINE=InnoDB;
 
+-- 유료 회차 열람 권한.
+-- 접근통제는 뷰 플래그가 아니라 이 테이블로 판정하고, 판정 시점은 이미지 서빙 시점이다.
+-- 뷰 플래그로 하면 URL만 바꿔 유료 회차가 열린다 — 웹툰에서 가장 비싼 버그.
+CREATE TABLE entitlements (
+  id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id       BIGINT UNSIGNED NOT NULL,
+  episode_id    BIGINT UNSIGNED NOT NULL,
+  kind          ENUM('own','rent') NOT NULL,     -- 소장 / 대여
+  granted_at    DATETIME(3) NOT NULL,
+  expires_at    DATETIME(3) NULL,                -- 대여만 만료. 소장은 NULL
+  coin_spend_id BIGINT UNSIGNED NULL,            -- 어떤 코인 소비로 얻었는지
+  UNIQUE KEY uq_user_episode_kind (user_id, episode_id, kind),
+  KEY ix_check (user_id, episode_id, expires_at) -- 열람 판정 경로
+) ENGINE=InnoDB;
+
 CREATE TABLE locales (
   slug   VARCHAR(8)  PRIMARY KEY,                -- 'kr','esp','zh-hant' (URL)
   lang   CHAR(2)     NOT NULL,                   -- ISO 639-1
@@ -316,7 +331,24 @@ CREATE TABLE locales (
 | `work_publish_days` 별도 테이블 | `publishDayOfWeekList`가 **배열** (주 2회 연재) |
 | **조회수·별점 컬럼 없음** | 플랫폼 A·B **모두 조회수 비공개** ([조사 요약](research-method.md) 3-1) |
 | `locales` 매핑 테이블 | URL 슬러그 ≠ ISO 코드. 두 서비스에서 독립 재현된 문제 |
-| `published_at`이 `DATETIME` | 네이버의 `serviceDateDescription: "20.11.01"` 문자열이 반면교사 |
+| `published_at`이 `DATETIME` | 표시용 문자열 날짜(`"20.11.01"`)가 반면교사 |
+| **`entitlements` 로 접근통제** | 뷰 플래그는 UI 힌트일 뿐이다. **판정은 서빙 시점에 서버가 한다** ([조사 요약](research-method.md)) |
+
+### 열람 판정 쿼리
+
+```sql
+-- 이 회차를 볼 수 있는가. 무료 회차이거나, 유효한 권한이 있거나.
+SELECT 1 FROM episodes e
+LEFT JOIN entitlements ent
+       ON ent.episode_id = e.id
+      AND ent.user_id    = ?
+      AND (ent.expires_at IS NULL OR ent.expires_at > NOW(3))
+WHERE e.id = ?
+  AND (e.is_charged = 0 OR ent.id IS NOT NULL)
+LIMIT 1;
+```
+
+> **이 판정을 어디서 하느냐가 전부다.** 페이지 렌더 시점에만 하면 이미지 URL을 직접 치는 순간 뚫린다. `ENFORCE_EPISODE_ENTITLEMENT=false` 로 두면 그 상태를 재현할 수 있다.
 
 ---
 
