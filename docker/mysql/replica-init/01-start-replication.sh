@@ -7,6 +7,14 @@
 # SOURCE_DELAY 를 주면 복제를 의도적으로 지연시킬 수 있다.
 # read-after-write 이상을 재현할 때 쓴다 → docs/failure-scenarios.md E-1
 
+# 이 파일은 MySQL 엔트리포인트가 "실행" 하거나 "source" 한다.
+# 실행 비트가 없으면 source 되는데, 그러면 아래 셸 옵션이 엔트리포인트 쪽으로
+# 새어 나간다. 엔트리포인트는 뒤에서 MYSQL_ONETIME_PASSWORD 같은 미설정 변수를
+# 참조하므로 set -u 에 걸려 초기화가 거기서 끊긴다 — 실제로 그렇게 끊겼다.
+#
+# 그래서 본문을 서브셸로 감싼다. 실행되든 source 되든 옵션이 밖으로 나가지 않고,
+# 실패는 서브셸의 종료 코드로 그대로 전달된다.
+(
 set -euo pipefail
 
 SOURCE_HOST="${REPL_SOURCE_HOST:-mysql-primary}"
@@ -43,3 +51,4 @@ START REPLICA;
 SQL
 
 echo "[replica] 복제 시작. 지연 설정 = ${DELAY}초"
+)
