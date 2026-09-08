@@ -138,12 +138,26 @@ jobs:
       # nginx 문법 오류로 나타나 원인을 엉뚱한 데서 찾게 된다.
       - name: 잘못된 도메인은 거절되는가
         run: |
-          if docker run --rm \
-               -e SHOP_DOMAIN='bad;domain' -e TRACK_DOMAIN= \
-               -v "$PWD/docker/openresty/entrypoint.sh":/entrypoint.sh:ro \
-               openresty/openresty:alpine sh /entrypoint.sh 2>&1 | tee /tmp/out; then
+          # 파이프라인의 종료 코드는 마지막 명령(tee)의 것이라 항상 0 이다.
+          # 그래서 출력을 변수로 받고 종료 코드를 따로 본다.
+          set +e
+          out=$(docker run --rm \
+                  -e SHOP_DOMAIN='bad;domain' -e TRACK_DOMAIN= \
+                  -v "$PWD/docker/openresty/entrypoint.sh":/entrypoint.sh:ro \
+                  openresty/openresty:alpine sh /entrypoint.sh 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+
+          if [ "$rc" -eq 0 ]; then
             echo "형식 검증을 통과했습니다. 거절했어야 합니다."
             exit 1
           fi
-          grep -q '도메인 형식이 올바르지 않습니다' /tmp/out
+
+          # 종료 코드만 보면 약한 검사다 — 다른 이유로 죽어도 통과한다.
+          # 우리가 의도한 그 메시지로 거절했는지까지 확인한다.
+          if ! printf '%s' "$out" | grep -q '도메인 형식이 올바르지 않습니다'; then
+            echo "거절은 됐지만 형식 검증이 아닌 다른 이유입니다."
+            exit 1
+          fi
           echo "거절 확인"
