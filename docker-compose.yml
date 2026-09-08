@@ -46,11 +46,11 @@ services:
       - certbot_www:/var/www/certbot
     entrypoint: ["/bin/sh", "-c"]
     command: >
-      "certbot certonly --webroot -w /var/www/certbot
+      "certbot certonly --webroot -w /var/www/certbot $${ACME_STAGING:+--staging}
        --email $${ACME_EMAIL} --agree-tos --no-eff-email
        -d $${SHOP_DOMAIN} -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
        --cert-name $${SHOP_DOMAIN}
-       && certbot certonly --webroot -w /var/www/certbot
+       && certbot certonly --webroot -w /var/www/certbot $${ACME_STAGING:+--staging}
        --email $${ACME_EMAIL} --agree-tos --no-eff-email
        -d api.$${TRACK_DOMAIN}
        --cert-name $${TRACK_DOMAIN}"
@@ -58,6 +58,8 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL 이 필요합니다}
       SHOP_DOMAIN: ${SHOP_DOMAIN}
       TRACK_DOMAIN: ${TRACK_DOMAIN}
+      # 비어 있지 않으면 --staging 이 붙는다. 처음에는 반드시 채운다.
+      ACME_STAGING: ${ACME_STAGING:-}
 
   # ── 앱 ────────────────────────────────────────────────
   app:
@@ -84,7 +86,7 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     restart: unless-stopped
-    command: ["php", "index.php", "cli/dispatch", "work"]
+    command: ["php", "public/index.php", "cli/dispatch", "work"]
     env_file: [.env]
     volumes:
       - .:/var/www/html

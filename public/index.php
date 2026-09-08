@@ -1,108 +1,319 @@
 <?php
-declare(strict_types=1);
-
 /**
- * D1~D2 임시 진단 페이지.
+ * CodeIgniter
  *
- * 목적은 하나 — CI4를 올리기 전에 인프라가 맞게 섰는지 확인하는 것이다.
- * 확인 대상: DNS · TLS 발급 · 호스트 3개 라우팅 · HTTP 버전 · 쿠키 속성.
+ * An open source application development framework for PHP
  *
- * D3에서 CodeIgniter 4를 설치하면 이 파일은 CI4의 부트스트랩으로 교체된다.
- * 그때까지만 존재한다.
+ * This content is released under the MIT License (MIT)
+ *
+ * Copyright (c) 2014 - 2019, British Columbia Institute of Technology
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ * @package	CodeIgniter
+ * @author	EllisLab Dev Team
+ * @copyright	Copyright (c) 2008 - 2014, EllisLab, Inc. (https://ellislab.com/)
+ * @copyright	Copyright (c) 2014 - 2019, British Columbia Institute of Technology (https://bcit.ca/)
+ * @license	https://opensource.org/licenses/MIT	MIT License
+ * @link	https://codeigniter.com
+ * @since	Version 1.0.0
+ * @filesource
  */
 
-$host   = $_SERVER['HTTP_HOST'] ?? '(unknown)';
-$scheme = (($_SERVER['HTTPS'] ?? '') !== '' || ($_SERVER['REQUEST_SCHEME'] ?? '') === 'https') ? 'https' : 'http';
-$proto  = $_SERVER['SERVER_PROTOCOL'] ?? '?';
-$shop   = getenv('SHOP_DOMAIN') ?: '';
-$track  = getenv('TRACK_DOMAIN') ?: '';
+/*
+ *---------------------------------------------------------------
+ * APPLICATION ENVIRONMENT
+ *---------------------------------------------------------------
+ *
+ * You can load different configurations depending on your
+ * current environment. Setting the environment also influences
+ * things like logging and error reporting.
+ *
+ * This can be set to anything, but default usage is:
+ *
+ *     development
+ *     testing
+ *     production
+ *
+ * NOTE: If you change these, also change the error_reporting() code below
+ */
+	// docker-compose 가 env_file 로 넣어준 CI_ENVIRONMENT 를 그대로 쓴다.
+	define('ENVIRONMENT', getenv('CI_ENVIRONMENT') ?: 'development');
 
-// 어느 역할의 호스트인지 판별
-$role = match (true) {
-    $shop  !== '' && $host === "lp.{$shop}"   => ['lp',  '광고주 측 · 랜딩/브리지', 'first-party'],
-    $shop  !== '' && $host === "app.{$shop}"  => ['app', '광고주 측 · 서비스/전환', 'first-party'],
-    $track !== '' && $host === "api.{$track}" => ['api', '추적 측 · 수집 API',      'third-party'],
-    default                                    => ['?',   '알 수 없는 호스트',        '-'],
-};
+/*
+ *---------------------------------------------------------------
+ * ERROR REPORTING
+ *---------------------------------------------------------------
+ *
+ * Different environments will require different levels of error reporting.
+ * By default development will show errors but testing and live will hide them.
+ */
+switch (ENVIRONMENT)
+{
+	case 'development':
+		error_reporting(-1);
+		ini_set('display_errors', 1);
+	break;
 
-// 쿠키 정책표(docs/domains-and-cookies.md 3장)와 같은 속성으로 시험 발급.
-// DevTools > Application > Cookies 에서 속성이 그대로 찍히는지 눈으로 확인한다.
-if ($scheme === 'https') {
-    if ($role[0] === 'lp' || $role[0] === 'app') {
-        setcookie('ab_probe_vid', bin2hex(random_bytes(8)), [
-            'domain'   => '.' . $shop,
-            'path'     => '/',
-            'samesite' => 'Lax',
-            'secure'   => true,
-            'httponly' => true,
-            'expires'  => time() + 3600,
-        ]);
-    } elseif ($role[0] === 'api') {
-        // SameSite=None; Secure 는 PHP의 배열 문법으로 설정한다.
-        // Partitioned 는 PHP 8.3의 setcookie가 아직 지원하지 않으므로 헤더로 직접 붙인다.
-        header(sprintf(
-            'Set-Cookie: ab_probe_tid=%s; Domain=.%s; Path=/; Max-Age=3600; SameSite=None; Secure; HttpOnly; Partitioned',
-            bin2hex(random_bytes(8)),
-            $track
-        ), false);
-    }
+	case 'testing':
+	case 'production':
+		ini_set('display_errors', 0);
+		if (version_compare(PHP_VERSION, '5.3', '>='))
+		{
+			error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT & ~E_USER_NOTICE & ~E_USER_DEPRECATED);
+		}
+		else
+		{
+			error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_USER_NOTICE);
+		}
+	break;
+
+	default:
+		header('HTTP/1.1 503 Service Unavailable.', TRUE, 503);
+		echo 'The application environment is not set correctly.';
+		exit(1); // EXIT_ERROR
 }
 
-header('Content-Type: text/html; charset=utf-8');
-header('Cache-Control: no-store');
+/*
+ *---------------------------------------------------------------
+ * SYSTEM DIRECTORY NAME
+ *---------------------------------------------------------------
+ *
+ * This variable must contain the name of your "system" directory.
+ * Set the path if it is not in the same directory as this file.
+ */
+	// CI3 를 composer 로 받는다. system/ 을 저장소에 복사해 넣지 않는다.
+	// 프레임워크 업그레이드가 composer update 한 줄이 되고, 저장소 diff 에 프레임워크 코드가 섞이지 않는다.
+	$system_path = __DIR__.'/../vendor/codeigniter/framework/system';
 
-$rows = [
-    '호스트'        => $host,
-    '역할'          => "{$role[0]} — {$role[1]}",
-    '쿠키 관점'     => $role[2],
-    '스킴'          => $scheme,
-    'HTTP 버전'     => $proto,
-    'SHOP_DOMAIN'   => $shop !== '' ? $shop : '(미설정)',
-    'TRACK_DOMAIN'  => $track !== '' ? $track : '(미설정)',
-    'PHP'           => PHP_VERSION,
-    '서버 시각(UTC)' => gmdate('c'),
-];
-?>
-<!doctype html>
-<html lang="ko">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>touchpoint · 인프라 진단</title>
-<style>
-  body{font:14px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:2rem;
-       background:#0f1115;color:#e6e8ec}
-  main{max-width:44rem;margin:0 auto}
-  h1{font-size:1.1rem;margin:0 0 .25rem}
-  .sub{color:#8b93a1;margin:0 0 1.5rem}
-  table{width:100%;border-collapse:collapse}
-  th,td{text-align:left;padding:.5rem .25rem;border-bottom:1px solid #232733;vertical-align:top}
-  th{color:#8b93a1;font-weight:400;width:11rem}
-  code{background:#1a1e27;padding:.1rem .35rem;border-radius:3px}
-  .ok{color:#5ec27a} .warn{color:#e0b341}
-  .note{margin-top:1.75rem;padding:.9rem 1rem;background:#171b23;border-left:2px solid #3a4152;color:#a8b0bd}
-</style>
-<main>
-  <h1>touchpoint</h1>
-  <p class="sub">D1~D2 인프라 진단 · CI4 설치 시 교체됩니다</p>
+/*
+ *---------------------------------------------------------------
+ * APPLICATION DIRECTORY NAME
+ *---------------------------------------------------------------
+ *
+ * If you want this front controller to use a different "application"
+ * directory than the default one you can set its name here. The directory
+ * can also be renamed or relocated anywhere on your server. If you do,
+ * use an absolute (full) server path.
+ * For more info please see the user guide:
+ *
+ * https://codeigniter.com/userguide3/general/managing_apps.html
+ *
+ * NO TRAILING SLASH!
+ */
+	// 문서 루트(public/) 밖에 둔다. 설정·로그가 웹에서 열리면 안 된다.
+	$application_folder = __DIR__.'/../application';
 
-  <table>
-    <?php foreach ($rows as $k => $v): ?>
-      <tr><th><?= htmlspecialchars($k) ?></th><td><code><?= htmlspecialchars((string) $v) ?></code></td></tr>
-    <?php endforeach; ?>
-    <tr>
-      <th>TLS</th>
-      <td><?= $scheme === 'https'
-            ? '<span class="ok">발급됨 — 브라우저 자물쇠 표시를 함께 확인하세요</span>'
-            : '<span class="warn">HTTP. ACME 발급이 아직 끝나지 않았거나 실패했습니다</span>' ?></td>
-    </tr>
-  </table>
+/*
+ *---------------------------------------------------------------
+ * VIEW DIRECTORY NAME
+ *---------------------------------------------------------------
+ *
+ * If you want to move the view directory out of the application
+ * directory, set the path to it here. The directory can be renamed
+ * and relocated anywhere on your server. If blank, it will default
+ * to the standard location inside your application directory.
+ * If you do move this, use an absolute (full) server path.
+ *
+ * NO TRAILING SLASH!
+ */
+	$view_folder = '';
 
-  <div class="note">
-    <strong>확인할 것</strong><br>
-    호스트 3개가 모두 자물쇠 표시로 열리는지 · 역할이 올바르게 판별되는지 ·
-    DevTools의 Application &gt; Cookies에서 <code>ab_probe_*</code> 쿠키의
-    <code>SameSite</code>·<code>Secure</code>·<code>Partitioned</code> 속성이
-    <code>docs/domains-and-cookies.md</code> 3장의 정책표와 일치하는지.
-  </div>
-</main>
-</html>
+
+/*
+ * --------------------------------------------------------------------
+ * DEFAULT CONTROLLER
+ * --------------------------------------------------------------------
+ *
+ * Normally you will set your default controller in the routes.php file.
+ * You can, however, force a custom routing by hard-coding a
+ * specific controller class/function here. For most applications, you
+ * WILL NOT set your routing here, but it's an option for those
+ * special instances where you might want to override the standard
+ * routing in a specific front controller that shares a common CI installation.
+ *
+ * IMPORTANT: If you set the routing here, NO OTHER controller will be
+ * callable. In essence, this preference limits your application to ONE
+ * specific controller. Leave the function name blank if you need
+ * to call functions dynamically via the URI.
+ *
+ * Un-comment the $routing array below to use this feature
+ */
+	// The directory name, relative to the "controllers" directory.  Leave blank
+	// if your controller is not in a sub-directory within the "controllers" one
+	// $routing['directory'] = '';
+
+	// The controller class file name.  Example:  mycontroller
+	// $routing['controller'] = '';
+
+	// The controller function you wish to be called.
+	// $routing['function']	= '';
+
+
+/*
+ * -------------------------------------------------------------------
+ *  CUSTOM CONFIG VALUES
+ * -------------------------------------------------------------------
+ *
+ * The $assign_to_config array below will be passed dynamically to the
+ * config class when initialized. This allows you to set custom config
+ * items or override any default config values found in the config.php file.
+ * This can be handy as it permits you to share one application between
+ * multiple front controller files, with each file containing different
+ * config values.
+ *
+ * Un-comment the $assign_to_config array below to use this feature
+ */
+	// $assign_to_config['name_of_config_item'] = 'value of config item';
+
+
+
+// --------------------------------------------------------------------
+// END OF USER CONFIGURABLE SETTINGS.  DO NOT EDIT BELOW THIS LINE
+// --------------------------------------------------------------------
+
+/*
+ * ---------------------------------------------------------------
+ *  Resolve the system path for increased reliability
+ * ---------------------------------------------------------------
+ */
+
+	// Set the current directory correctly for CLI requests
+	if (defined('STDIN'))
+	{
+		chdir(dirname(__FILE__));
+	}
+
+	if (($_temp = realpath($system_path)) !== FALSE)
+	{
+		$system_path = $_temp.DIRECTORY_SEPARATOR;
+	}
+	else
+	{
+		// Ensure there's a trailing slash
+		$system_path = strtr(
+			rtrim($system_path, '/\\'),
+			'/\\',
+			DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR
+		).DIRECTORY_SEPARATOR;
+	}
+
+	// Is the system path correct?
+	if ( ! is_dir($system_path))
+	{
+		header('HTTP/1.1 503 Service Unavailable.', TRUE, 503);
+		echo 'Your system folder path does not appear to be set correctly. Please open the following file and correct this: '.pathinfo(__FILE__, PATHINFO_BASENAME);
+		exit(3); // EXIT_CONFIG
+	}
+
+/*
+ * -------------------------------------------------------------------
+ *  Now that we know the path, set the main path constants
+ * -------------------------------------------------------------------
+ */
+	// The name of THIS file
+	define('SELF', pathinfo(__FILE__, PATHINFO_BASENAME));
+
+	// Path to the system directory
+	define('BASEPATH', $system_path);
+
+	// Path to the front controller (this file) directory
+	define('FCPATH', dirname(__FILE__).DIRECTORY_SEPARATOR);
+
+	// Name of the "system" directory
+	define('SYSDIR', basename(BASEPATH));
+
+	// The path to the "application" directory
+	if (is_dir($application_folder))
+	{
+		if (($_temp = realpath($application_folder)) !== FALSE)
+		{
+			$application_folder = $_temp;
+		}
+		else
+		{
+			$application_folder = strtr(
+				rtrim($application_folder, '/\\'),
+				'/\\',
+				DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR
+			);
+		}
+	}
+	elseif (is_dir(BASEPATH.$application_folder.DIRECTORY_SEPARATOR))
+	{
+		$application_folder = BASEPATH.strtr(
+			trim($application_folder, '/\\'),
+			'/\\',
+			DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR
+		);
+	}
+	else
+	{
+		header('HTTP/1.1 503 Service Unavailable.', TRUE, 503);
+		echo 'Your application folder path does not appear to be set correctly. Please open the following file and correct this: '.SELF;
+		exit(3); // EXIT_CONFIG
+	}
+
+	define('APPPATH', $application_folder.DIRECTORY_SEPARATOR);
+
+	// The path to the "views" directory
+	if ( ! isset($view_folder[0]) && is_dir(APPPATH.'views'.DIRECTORY_SEPARATOR))
+	{
+		$view_folder = APPPATH.'views';
+	}
+	elseif (is_dir($view_folder))
+	{
+		if (($_temp = realpath($view_folder)) !== FALSE)
+		{
+			$view_folder = $_temp;
+		}
+		else
+		{
+			$view_folder = strtr(
+				rtrim($view_folder, '/\\'),
+				'/\\',
+				DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR
+			);
+		}
+	}
+	elseif (is_dir(APPPATH.$view_folder.DIRECTORY_SEPARATOR))
+	{
+		$view_folder = APPPATH.strtr(
+			trim($view_folder, '/\\'),
+			'/\\',
+			DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR
+		);
+	}
+	else
+	{
+		header('HTTP/1.1 503 Service Unavailable.', TRUE, 503);
+		echo 'Your view folder path does not appear to be set correctly. Please open the following file and correct this: '.SELF;
+		exit(3); // EXIT_CONFIG
+	}
+
+	define('VIEWPATH', $view_folder.DIRECTORY_SEPARATOR);
+
+/*
+ * --------------------------------------------------------------------
+ * LOAD THE BOOTSTRAP FILE
+ * --------------------------------------------------------------------
+ *
+ * And away we go...
+ */
+require_once BASEPATH.'core/CodeIgniter.php';

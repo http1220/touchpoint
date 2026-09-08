@@ -27,3 +27,9 @@ Thumbs.db
 # PHPUnit
 /.phpunit.cache/
 /.phpunit.result.cache
+
+# CI3 런타임 산출물
+/application/cache/*
+/application/logs/*
+!/application/cache/index.html
+!/application/logs/index.html
