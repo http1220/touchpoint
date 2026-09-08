@@ -345,6 +345,33 @@ sed -i \
 
 `ACME_EMAIL` 만 실제 주소로 바꿔서 붙여 넣는다. 비밀값은 **서버에서 생성되고 서버에만 남는다** — 어디에도 옮겨 적지 않는다.
 
+### 채워진 `.env` 는 이렇게 생겼다
+
+전체 94줄 중 **바뀌는 부분만** 옮긴 것이다. 나머지 줄은 `.env.example` 그대로 둔다.
+
+```ini
+SHOP_DOMAIN=sshwan.com               # 광고주 측 → lp. / m. / app.
+TRACK_DOMAIN=                        # 비운 채로. 추적 도메인 등록 전
+ACME_EMAIL=you@yourmail.com          # 만료 알림 60·30·7일 전에 여기로 온다
+ACME_STAGING=true                    # 처음에는 반드시 true
+
+CI_ENVIRONMENT=development           # 구축 중에만. 공개 전 production 으로
+APP_TIMEZONE=UTC
+ENCRYPTION_KEY=ee534c51a979848a70642da6a88e1aa9
+
+MYSQL_ROOT_PASSWORD=d2aa516e1b82774468cdfdf14f066ac3
+MYSQL_DATABASE=attribution
+MYSQL_USER=ab
+MYSQL_PASSWORD=10de0f4c203312d056033cfba6d67c47
+
+REPL_DELAY_SECONDS=0
+REPL_PASSWORD=521899674ea379c0fa848f5d9f381fe6
+```
+
+> **위 hex 4개는 예시다. 그대로 쓰지 않는다.** 공개 저장소에 적혀 있는 값이므로 그대로 쓰면 비밀값이 아니다. `openssl rand -hex 16` 으로 각각 새로 만든다.
+
+나머지 값들 — `GA4_*`·`META_*` 는 지금 비어 있어도 된다. 매체 전송은 채널 어댑터를 붙일 때 채운다. `COOKIE_*`·`BRIDGE_*`·`WORKER_*` 는 실험용 스위치라 기본값이 곧 대조군이다.
+
 ### 채워졌는지 확인
 
 ```bash
