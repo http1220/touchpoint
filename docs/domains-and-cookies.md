@@ -11,7 +11,7 @@
 | 구성 | CORS preflight | `SameSite=None` 필요 | 서드파티 쿠키 차단 재현 |
 |---|---|---|---|
 | `lp.` / `api.` / `app.example.com` (서브도메인 3개) | 발생 | **불필요** — `Lax`로 전송됨 | **불가능** |
-| `lp.toonlab` → `api.abridge` (**등록 도메인 2개**) | 발생 | **필요** | **가능** |
+| `lp.sshwan.com` → `api.khan-edge.com` (**등록 도메인 2개**) | 발생 | **필요** | **가능** |
 
 > 서브도메인 3개는 cross-**origin**이지만 same-**site**다. 광고 어트리뷰션의 핵심 난제(서드파티 쿠키)를 하나도 겪을 수 없다.
 > 상세 근거 → [ADR-002](decisions/ADR-002-two-registered-domains.md)
@@ -22,17 +22,17 @@
 
 ```
 ── 광고주 측 (first-party) ──────────────
-  lp.toonlab.example      랜딩 · 브리지 리다이렉트
-  app.toonlab.example     서비스 · 가입 · 결제 · 지표
+  lp.sshwan.com      랜딩 · 브리지 리다이렉트
+  app.sshwan.com     서비스 · 가입 · 결제 · 지표
 
 ── 추적 사업자 측 (third-party) ──────────
-  api.abridge.example     수집 API · 전환 등록
+  api.khan-edge.com     수집 API · 전환 등록
 ```
 
 | 호출 | 관계 | 역할 |
 |---|---|---|
-| `lp.toonlab` → `api.abridge` | **cross-site** | **실험군** — 여기서 모든 문제가 발생한다 |
-| `lp.toonlab` → `app.toonlab` | same-site, cross-origin | **대조군** — 같은 CORS인데 쿠키는 통과한다 |
+| `lp.sshwan.com` → `api.khan-edge.com` | **cross-site** | **실험군** — 여기서 모든 문제가 발생한다 |
+| `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | **대조군** — 같은 CORS인데 쿠키는 통과한다 |
 
 > **대조군이 있다는 게 이 설계의 값어치다.** "cross-site면 막히고 same-site면 통과한다"를 나란히 보여줘야 원인이 오리진이 아니라 사이트라는 게 증명된다.
 
@@ -41,9 +41,9 @@
 두 도메인의 A 레코드를 **같은 EIP**로 향하게 한다. Caddy 한 대가 호스트네임 3개를 받고 ACME HTTP-01로 각각 인증서를 발급한다.
 
 ```
-lp.toonlab.example    A  <EIP>
-app.toonlab.example   A  <EIP>
-api.abridge.example   A  <EIP>
+lp.sshwan.com    A  <EIP>
+app.sshwan.com   A  <EIP>
+api.khan-edge.com   A  <EIP>
 ```
 
 > ACME는 **staging 엔드포인트로 먼저 검증**한다. 설정 시행착오로 Let's Encrypt rate limit에 걸리면 일주일을 날린다.
@@ -54,10 +54,10 @@ api.abridge.example   A  <EIP>
 
 | 쿠키 | 발급 도메인 | `Domain` | `SameSite` | `Secure` | `HttpOnly` | `Partitioned` | 수명 | 담는 값 |
 |---|---|---|---|---|---|---|---|---|
-| `ab_vid` | `lp.toonlab` | `.toonlab.example` | `Lax` | ✅ | ✅ | — | 1년 | **visit_uid만** (UUIDv7) |
-| `ab_sid` | `app.toonlab` | `.toonlab.example` | `Lax` | ✅ | ✅ | — | 세션 | 로그인 세션 |
-| `ab_tid` | `api.abridge` | `.abridge.example` | **`None`** | ✅ | ✅ | ✅ | 1년 | **추적 ID (서드파티)** |
-| `ab_g4cid` | `app.toonlab` | `.toonlab.example` | `Lax` | ✅ | ❌ | — | 2년 | GA4 client_id 복제 |
+| `ab_vid` | `lp.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | **visit_uid만** (UUIDv7) |
+| `ab_sid` | `app.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 세션 | 로그인 세션 |
+| `ab_tid` | `api.khan-edge.com` | `.khan-edge.com` | **`None`** | ✅ | ✅ | ✅ | 1년 | **추적 ID (서드파티)** |
+| `ab_g4cid` | `app.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ❌ | — | 2년 | GA4 client_id 복제 |
 
 ### 설계 결정 4가지
 
@@ -135,7 +135,7 @@ GA4 클라이언트 스크립트가 읽고 써야 하고, 서버도 읽어야 �
 | 항목 | 방법 |
 |---|---|
 | 쿠키 속성 | DevTools → Application → Cookies에서 `Domain`·`SameSite`·`Secure`·`Partitioned` 육안 확인 |
-| cross-site 판정 | `lp.toonlab` → `api.abridge` 요청에 `ab_tid`가 붙는지 |
-| same-site 대조 | `lp.toonlab` → `app.toonlab` 요청에 `ab_vid`가 붙는지 |
+| cross-site 판정 | `lp.sshwan.com` → `api.khan-edge.com` 요청에 `ab_tid`가 붙는지 |
+| same-site 대조 | `lp.sshwan.com` → `app.sshwan.com` 요청에 `ab_vid`가 붙는지 |
 | preflight | Network 탭에 **OPTIONS 요청이 실제로 뜨는지** |
 | 차단 재현 | 브라우저별 설정을 바꿔가며 5장 매트릭스를 채운다 |

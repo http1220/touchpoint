@@ -24,9 +24,9 @@
 | Firefox | 기본 (TCP) | | | **차단** | ☐ |
 
 **재현 절차**
-1. `https://lp.toonlab.example/go?work=1&pid=test` 접속
+1. `https://lp.sshwan.com/go?work=1&pid=test` 접속
 2. DevTools → Application → Cookies에서 두 도메인의 쿠키 확인
-3. Network 탭에서 `POST api.abridge.example/collect` 요청 헤더에 `Cookie: ab_tid`가 붙는지 확인
+3. Network 탭에서 `POST api.khan-edge.com/collect` 요청 헤더에 `Cookie: ab_tid`가 붙는지 확인
 4. 브라우저 설정을 바꿔 2~3 반복
 
 **확인할 것**: 어트리뷰션이 **어느 지점에서 끊기는가.** 쿠키가 없어도 `visit_uid`가 URL로 전달되면 살아남는지.
@@ -49,8 +49,8 @@
 
 | 호출 | 관계 | 쿠키 전송 | 결과 |
 |---|---|---|---|
-| `lp.toonlab` → `api.abridge` | cross-site | `SameSite=None` 필요 | ☐ |
-| `lp.toonlab` → `app.toonlab` | **same-site** | `Lax`로도 전송 | ☐ |
+| `lp.sshwan.com` → `api.khan-edge.com` | cross-site | `SameSite=None` 필요 | ☐ |
+| `lp.sshwan.com` → `app.sshwan.com` | **same-site** | `Lax`로도 전송 | ☐ |
 
 > **이 표가 [ADR-002](decisions/ADR-002-two-registered-domains.md)의 증명이다.** 같은 CORS 상황인데 쿠키만 다르게 동작하는 것을 나란히 보여준다.
 

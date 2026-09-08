@@ -48,7 +48,7 @@ services:
     command: >
       "certbot certonly --webroot -w /var/www/certbot
        --email $${ACME_EMAIL} --agree-tos --no-eff-email
-       -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
+       -d $${SHOP_DOMAIN} -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
        --cert-name $${SHOP_DOMAIN}
        && certbot certonly --webroot -w /var/www/certbot
        --email $${ACME_EMAIL} --agree-tos --no-eff-email
