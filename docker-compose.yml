@@ -1,4 +1,4 @@
-name: attribution-bridge
+name: touchpoint
 
 # 대상 조직 스택에 정렬한 구성 → docs/decisions/ADR-014
 #   OpenResty(Nginx+Lua) · PHP 8.2 + CodeIgniter 3 · MySQL 프라이머리 + 복제본
@@ -64,7 +64,7 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    image: attribution-bridge/php:local
+    image: touchpoint/php:local
     restart: unless-stopped
     env_file: [.env]
     volumes:
@@ -79,7 +79,7 @@ services:
   # CI3에는 spark가 없으므로 CLI 컨트롤러를 직접 호출한다.
   worker:
     profiles: ["worker"]
-    image: attribution-bridge/php:local
+    image: touchpoint/php:local
     build:
       context: .
       dockerfile: docker/php/Dockerfile

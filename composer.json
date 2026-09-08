@@ -1,5 +1,5 @@
 {
-    "name": "attribution-bridge/app",
+    "name": "http1220/touchpoint",
     "description": "유입·전환 추적 파이프라인 — 도메인 로직은 CodeIgniter 3에 의존하지 않는다",
     "type": "project",
     "license": "MIT",

@@ -69,8 +69,8 @@ docker compose version
 ## 3. 저장소와 환경 설정
 
 ```bash
-git clone <repo> attribution-bridge
-cd attribution-bridge
+git clone <repo> touchpoint
+cd touchpoint
 cp .env.example .env
 ```
 
@@ -119,7 +119,7 @@ curl -kI https://lp.<SHOP_DOMAIN>
 
 ```bash
 docker compose down
-docker volume rm attribution-bridge_caddy_data
+docker volume rm touchpoint_caddy_data
 docker compose up -d
 docker compose logs -f caddy
 ```

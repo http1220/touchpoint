@@ -1,4 +1,4 @@
-# attribution-bridge
+# touchpoint
 
 **광고 유입부터 결제 전환까지를 추적해 매체로 되돌려 보내는 파이프라인.**
 
