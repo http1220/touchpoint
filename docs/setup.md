@@ -13,6 +13,7 @@
 |---|---|
 | **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md)<br>광고주 측 1개만 있어도 착수는 된다 (3-1) |
 | AWS 계정 | 없으면 카드 등록·본인인증에 반나절. **결제 알림을 먼저 걸고 인스턴스를 만든다** (2-1) |
+| DNS | 도메인을 Route 53에서 등록했다면 호스팅 영역이 이미 있다. 확인: `dig +short NS <도메인>` 에 **awsdns** 가 나오는지 (1장) |
 | GA4 속성 | `measurement_id` + **API secret** (D12에 필요, 리드타임 대비 미리) |
 
 > ⚠️ **TLD를 아끼지 않는다.** 저가 TLD는 광고 차단기·기업 DNS에서 통째로 차단되는 일이 있어, 이 프로젝트에서는 **TLD가 실험 변수가 된다.** 요청이 막혔을 때 `SameSite` 때문인지 TLD 때문인지 구분할 수 없게 된다 → [domain-setup.md](domain-setup.md) 2장
@@ -21,19 +22,62 @@
 
 ## 1. DNS
 
-A 레코드를 **같은 EIP**로 향하게 한다. 루트를 포함해 넷이고, 추적 도메인이 있으면 하나 더.
+### 어디서 하는가
 
+도메인을 **Route 53에서 등록했다면 Route 53**이 맞다. 등록과 동시에 호스팅 영역이 만들어지고 도메인의 네임서버가 거기를 가리킨다.
+
+확인은 한 줄이면 된다.
+
+```bash
+dig +short NS sshwan.com
 ```
-<SHOP_DOMAIN>        A   <EIP>     루트. 없으면 인증서 불일치 경고가 난다
-lp.<SHOP_DOMAIN>     A   <EIP>     랜딩·브리지
-m.<SHOP_DOMAIN>      A   <EIP>     모바일 (UA 302 대상)
-app.<SHOP_DOMAIN>    A   <EIP>     서비스·전환
-api.<TRACK_DOMAIN>   A   <EIP>     수집. 추적 도메인 등록 후에 추가한다
+
+`ns-xxxx.awsdns-xx.co.uk` 같은 **awsdns** 이름 4개가 나오면 Route 53이 권한 있는 DNS다. 다른 등록기관 이름이 나오면 그쪽 DNS를 쓰고 있는 것이니, Route 53 호스팅 영역의 NS 4개를 등록기관에 그대로 넣어 위임하거나, 아예 등록기관 DNS에서 레코드를 만든다. **둘 중 하나만 한다** — 양쪽에 레코드를 만들어 두면 어느 쪽이 먹히는지 알 수 없게 된다.
+
+> **호스팅 영역을 중복으로 만들지 않는다.** 같은 도메인으로 두 번째 영역을 만들면 NS가 달라 아무것도 안 먹고, 영역마다 **월 $0.50**이 나간다. Route 53 비용은 호스팅 영역 $0.50/월 + 쿼리 백만 건당 $0.40 이고, 이 프로젝트에서 쿼리 비용은 사실상 0이다.
+
+### 레코드 4개
+
+**EIP를 먼저 할당해 둔다** ([2장 탄력적 IP](#탄력적-ip)). 값이 없으면 레코드를 만들 수 없다. 인스턴스보다 EIP를 먼저 만들어도 되므로, DNS 전파를 기다리는 동안 인스턴스를 만드는 편이 시간이 덜 든다.
+
+호스팅 영역 → **레코드 생성** → 라우팅 정책 **단순 라우팅** → **단순 레코드 정의**:
+
+| 레코드 이름 | 레코드 유형 | 값 | 비고 |
+|---|---|---|---|
+| *(비움)* | A | `<EIP>` | 루트. 비워 두면 `sshwan.com` 자체 |
+| `lp` | A | `<EIP>` | 랜딩·브리지 |
+| `m` | A | `<EIP>` | 모바일 (UA 302 대상) |
+| `app` | A | `<EIP>` | 서비스·전환 |
+| `api` | A | `<EIP>` | 수집. **추적 도메인의** 호스팅 영역에 만든다 |
+
+**트래픽 라우팅 대상**은 드롭다운에서 **"IP 주소 또는 다른 값에 대한 별칭이 아님"** 을 고르고 EIP를 붙여 넣는다.
+
+> ### 왜 별칭(Alias)이 아닌가
+>
+> 드롭다운에 CloudFront·ALB·S3 같은 "별칭" 항목이 잔뜩 있는데, **EC2 인스턴스와 EIP는 별칭 대상이 아니다.** 별칭은 AWS가 IP를 대신 관리해 주는 리소스(ALB·CloudFront·S3 웹사이트·API Gateway·Global Accelerator)에만 붙는다. 우리는 고정 IP 하나를 직접 가리키므로 평범한 A 레코드다.
+>
+> 나중에 CDN을 붙이면 그때는 CloudFront 배포에 대한 별칭이 등장한다 → [ADR-015](decisions/ADR-015-image-pipeline-cdn.md)
+
+**TTL은 300초.** 구축 중에는 60으로 낮춰 두면 오타를 고쳤을 때 5분을 기다리지 않아도 된다. 안정되면 300으로 올린다.
+
+**NS와 SOA 레코드는 건드리지 않는다.** 자동 생성된 것이고, 지우면 도메인 전체가 죽는다.
+
+CLI로 하려면:
+
+```bash
+ZONE=$(aws route53 list-hosted-zones-by-name --dns-name sshwan.com \
+        --query 'HostedZones[0].Id' --output text)
+EIP=<EIP>
+
+for name in sshwan.com lp.sshwan.com m.sshwan.com app.sshwan.com; do
+  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE" \
+    --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{
+      \"Name\":\"$name\",\"Type\":\"A\",\"TTL\":300,
+      \"ResourceRecords\":[{\"Value\":\"$EIP\"}]}}]}"
+done
 ```
 
-> CNAME이 아니라 **A 레코드**다. 루트 도메인에는 CNAME을 붙일 수 없고(RFC 1034), 서브도메인만 CNAME으로 하면 루트와 관리 방식이 갈려 나중에 헷갈린다.
-
-전파 확인:
+### 전파 확인
 
 ```bash
 dig +short sshwan.com lp.sshwan.com m.sshwan.com app.sshwan.com
@@ -41,7 +85,15 @@ dig +short sshwan.com lp.sshwan.com m.sshwan.com app.sshwan.com
 
 > **모든 줄이 같은 EIP를 뱉을 때까지 다음 단계로 넘어가지 않는다.** DNS가 안 된 상태로 certbot을 돌리면 ACME 검증이 실패하면서 rate limit만 소모한다.
 >
-> 등록기관 기본 네임서버를 쓰면 보통 수 분 안에 반영되지만, TTL이 길게 잡혀 있으면 더 걸린다. `dig`가 아무것도 안 뱉으면 아직 기다릴 때다.
+> Route 53은 권한 있는 서버라 변경이 초 단위로 반영된다. 그런데도 안 보이면 캐시가 원인이므로 권한 있는 서버에 직접 물어본다.
+>
+> ```bash
+> dig +short @ns-440.awsdns-55.com lp.sshwan.com    # NS 중 아무거나
+> ```
+>
+> 여기서는 나오는데 `dig +short lp.sshwan.com` 에서 안 나오면 기다리면 된다. 여기서도 안 나오면 레코드가 잘못된 것이다.
+
+> AAAA(IPv6)는 만들지 않는다. EC2에 IPv6를 주지 않았으므로 AAAA가 있으면 IPv6 우선 클라이언트가 먼저 실패한 뒤 IPv4로 넘어와 첫 요청이 느려진다.
 
 ---
 
@@ -157,8 +209,10 @@ docker compose version
 | t3.small 온디맨드 | $18~19 | `standard` 크레딧이면 이게 상한 |
 | gp3 30GiB | $2~3 | |
 | 퍼블릭 IPv4 1개 | $3~4 | 2024-02 이후 |
+| Route 53 호스팅 영역 | $0.50 | 영역당. **중복 생성하면 그만큼 더 나간다** |
+| Route 53 쿼리 | ~$0 | 백만 건당 $0.40 |
 | 데이터 전송(아웃바운드) | ~$0 | 월 100GB 무료. 이 프로젝트는 그 근처도 안 간다 |
-| **합계** | **월 $24 안팎 / 2주 $12 안팎** | |
+| **합계** | **월 $25 안팎 / 2주 $13 안팎** | |
 
 목록에 없는 것이 붙으면 그건 실수다. **NAT 게이트웨이($40/월), ALB($20/월), RDS, EKS** — 이 넷이 개인 프로젝트 청구서를 터뜨리는 단골이고, 이 구성에는 하나도 없다.
 
