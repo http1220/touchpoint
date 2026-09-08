@@ -86,3 +86,47 @@ CI2 → CI3의 대표적 파괴적 변경이 **정확히 세션 드라이버**�
 - **README에 명시**: "CI3는 유지보수 모드입니다. 신규 서비스라면 CI4가 맞지만, 이 프로젝트는 대상 코드베이스(CI2)와의 근접성을 우선했습니다"
 - **감수**: 13일 중 2~3일을 CI3 학습에 쓴다. CI4보다는 단순해 부담이 적다
 - **완화**: 면접에서 숨기지 않는다 — "PHP는 이 프로젝트가 전부입니다. 다만 C#·Node로 같은 계층을 다뤄왔습니다"
+
+---
+
+## 부록 · PHP 8.2 deprecation 을 어떻게 다뤘나 (2026-09-09 추가)
+
+"deprecated 경고가 나오는데 그걸 고치는 게 경험"이라고 위에 적었다. 실제로 부딪혀 보니 **경고가 두 종류**였고, 둘을 같이 다루면 안 됐다.
+
+```
+PHP Deprecated:  Creation of dynamic property CI_URI::$config is deprecated
+                 in .../vendor/codeigniter/framework/system/core/URI.php on line 102
+PHP Deprecated:  Creation of dynamic property Migrate::$migration is deprecated
+                 in .../vendor/codeigniter/framework/system/core/Loader.php on line 1284
+```
+
+두 줄 다 `Loader`/`URI` 에서 났지만, **프로퍼티가 붙는 대상**이 다르다.
+
+| | 대상 | 우리가 고칠 수 있나 |
+|---|---|---|
+| `CI_URI::$config` | 프레임워크 자기 자신 | **아니다.** `vendor/` 안이다 |
+| `Migrate::$migration` | 우리 컨트롤러 | 그렇다 |
+
+### 하지 않은 것
+
+`error_reporting` 에서 `E_DEPRECATED` 를 빼는 것. 한 줄이면 조용해지지만, **우리가 새로 쓴 코드의 deprecation 까지 같이 사라진다.** 8.2 위에서 CI3 를 돌리기로 한 이유가 "부딪히면서 고치는 경험"인데, 그 경험이 오는 통로를 스스로 막는 셈이다.
+
+### 한 것
+
+**우리 코드** — `MY_Controller` 에 `#[\AllowDynamicProperties]`. 속성은 상속되므로 모든 컨트롤러에 한 번에 적용된다. 클래스마다 `public $db; public $session;` 을 선언하는 방법도 있지만, 무엇을 로드하는지는 요청 경로마다 다르고 선언을 빠뜨리면 경고가 되살아난다.
+
+**프레임워크 내부** — `MY_Exceptions` 로 CI3 의 에러 처리 진입점 두 개를 감싸고, **발생 위치가 `vendor/codeigniter/framework/` 인 `E_DEPRECATED` 만** 걸러낸다.
+
+```php
+class MY_Exceptions extends CI_Exceptions
+{
+    const FRAMEWORK_PATH = 'vendor/codeigniter/framework/';
+    // log_exception() / show_php_error() 에서 이 경로의 E_DEPRECATED 만 조기 반환
+}
+```
+
+억제한 건수는 세어서 `/diag` 에 띄운다. **안 보이게 하는 것과 없는 것처럼 구는 것은 다르다.** 숫자가 늘어나면 프레임워크를 더 깊이 건드리고 있다는 신호다.
+
+### 면접에서 말할 한 줄
+
+> "지원 범위 밖의 런타임에서 레거시 프레임워크를 돌릴 때, 경고를 끄는 범위를 **심각도가 아니라 발생 위치로** 좁혔습니다. 그래야 내가 새로 쓴 코드의 경고는 계속 보입니다."

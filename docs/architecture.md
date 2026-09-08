@@ -41,28 +41,42 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph EC2["AWS EC2 t3.micro + swap 2GB"]
-        CADDY["caddy<br/>자동 HTTPS · 4개 호스트 · 리버스 프록시"]
-        PHP["app (php-fpm 8.3)<br/>CodeIgniter 4"]
-        WORKER["worker<br/>php spark dispatch:work"]
-        MYSQL[("mysql 8.0")]
-        CADDY --> PHP
-        PHP --> MYSQL
-        WORKER --> MYSQL
+    subgraph EC2["AWS EC2 t3.small (2GB) + swap 2GB"]
+        NGX["openresty<br/>Nginx + Lua · 5개 호스트 · TLS"]
+        PHP["app (php-fpm 8.2)<br/>CodeIgniter 3"]
+        WORKER["worker<br/>cli/dispatch work"]
+        PRI[("mysql-primary<br/>쓰기 · rdb1")]
+        REP[("mysql-replica<br/>rdb2 · 지연 발생")]
+        NGX --> PHP
+        PHP -->|"쓰기 · 세션"| PRI
+        PHP -.->|"Lua가 배정한 읽기"| REP
+        PRI ==>|"GTID 복제"| REP
+        WORKER --> PRI
     end
     WORKER -->|HTTPS| EXT["GA4 / Meta"]
 ```
 
 | 컨테이너 | 역할 | 비고 |
 |---|---|---|
-| `caddy` | TLS 자동 발급(ACME), 4개 호스트네임 라우팅, 302 리다이렉트 | `SameSite=None`이 HTTPS를 요구하므로 필수 |
-| `app` | CodeIgniter 4 / PHP 8.3-fpm | 서버 렌더. SPA 없음 → [ADR-009](decisions/ADR-009-no-spa.md) |
-| `worker` | 아웃박스 폴링 → 매체 전송 | `app`과 **같은 이미지**, 커맨드만 다름 |
-| `mysql` | MySQL 8.0 | `FOR UPDATE SKIP LOCKED` 사용 → [ADR-004](decisions/ADR-004-skip-locked.md) |
+| `openresty` | TLS 종단, 5개 호스트네임 라우팅, 302 리다이렉트, **Lua 읽기 복제본 배정** | 대상 조직이 OpenResty 를 쓴다는 것을 응답 헤더로 확인 → [ADR-013](decisions/ADR-013-caddy-over-nginx.md) |
+| `app` | CodeIgniter 3 / PHP 8.2-fpm | 서버 렌더. SPA 없음 → [ADR-009](decisions/ADR-009-no-spa.md) |
+| `worker` | 아웃박스 폴링 → 매체 전송 | `app`과 **같은 이미지**, 커맨드만 다름. 프로파일로 분리 |
+| `mysql-primary` | 쓰기 · 세션 · 읽기 대상 `rdb1`(지연 0) | `FOR UPDATE SKIP LOCKED` → [ADR-004](decisions/ADR-004-skip-locked.md) |
+| `mysql-replica` | 읽기 대상 `rdb2`. **실제 복제 지연이 나는 쪽** | `SOURCE_DELAY` 로 지연을 키워 재현 → [ADR-007](decisions/ADR-007-read-write-split.md) |
+| `certbot` | 인증서 발급(일회성) | `--profile cert` |
 
-> 컨테이너 4개다. Kubernetes를 쓰지 않는 이유 → [ADR-010](decisions/ADR-010-no-kubernetes.md)
+> 상시 기동은 4개다. Kubernetes 를 쓰지 않는 이유 → [ADR-010](decisions/ADR-010-no-kubernetes.md)
 
----
+### 애플리케이션 내부 경계
+
+CI3 관용구와 PSR-4 를 병용한다. 경계는 하나다 — **`src/` 는 프레임워크를 모른다.**
+
+| 영역 | 방식 | 왜 |
+|---|---|---|
+| `application/controllers`·`models`·`views` | CI3 관용구 (`$this->load->model()`) | 대상 코드베이스와 같은 관용구 |
+| `src/` (`App\` 네임스페이스) | PSR-4 · 생성자 주입 | 인터페이스·다형성·**PHPUnit 단위 테스트** |
+
+경계가 깨지면 어댑터·원장·멱등성 로직의 검증 수단이 통째로 사라지므로, CI 에서 `src/` 안의 CI3 참조를 찾아 실패시킨다 → [ADR-017](decisions/ADR-017-ci3-application-structure.md)
 
 ## 3. 데이터 흐름 — 클릭에서 매체 전송까지
 
@@ -175,9 +189,9 @@ classDiagram
 
 | 안 한 것 | 이유 |
 |---|---|
-| 다중 AZ·읽기 복제본 실물 | 단일 t3.micro. **Well-Architected 신뢰성 기둥을 의도적으로 포기** |
+| 다중 AZ · 자동 페일오버 | 단일 t3.small · 단일 AZ. **Well-Architected 신뢰성 기둥을 의도적으로 포기.** 복제본은 띄우지만 승격은 수동 |
 | Kubernetes / ECR | 컨테이너 4개 → [ADR-010](decisions/ADR-010-no-kubernetes.md) |
 | Redis / SQS | → [ADR-003](decisions/ADR-003-mysql-outbox.md) |
 | SPA / React | → [ADR-009](decisions/ADR-009-no-spa.md) |
-| 실제 PG 연동 | 결제는 스텁. 상태 머신·멱등성만 진짜로 구현 |
+| 실제 PG 상용 연동 | **테스트 모듈 2개**를 붙인다. 상용 계약·정산은 범위 밖 → [ADR-016](decisions/ADR-016-payment-and-notification.md) |
 | 웹툰 뷰어·랭킹·검색 | 광고 연동과 무관 → [조사 요약](research-method.md) 버린 것 24개 |
