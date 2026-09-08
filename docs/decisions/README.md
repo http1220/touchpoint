@@ -5,19 +5,20 @@
 
 | # | 결정 | 한 줄 |
 |---|---|---|
-| [001](ADR-001-php-codeigniter.md) | PHP 8.3 + CodeIgniter 4 | 공고 스택. 세션 쿠키 `ci_session`으로 실측 확인 |
+| [001](ADR-001-php-codeigniter.md) | PHP 8.2 + **CodeIgniter 3** | 대상은 CI 2.x. CI3가 관용구가 같고 공식 마이그레이션 경로상 **다음 단계** |
 | [002](ADR-002-two-registered-domains.md) | **등록 도메인 2개** | 서브도메인 3개로는 same-site라 서드파티 쿠키 실험이 성립하지 않음 |
 | [003](ADR-003-mysql-outbox.md) | MySQL 아웃박스 | 전환과 전송 지시를 **한 트랜잭션**에. Redis·SQS는 정합성 구멍 |
 | [004](ADR-004-skip-locked.md) | `FOR UPDATE SKIP LOCKED` | 중복 전송을 사후 차단이 아니라 **DB가 예방** |
 | [005](ADR-005-channel-adapter.md) | 채널 어댑터 | 매체 **10종 이상** 실측. 신규 매체 = 클래스 1개 + 설정 1줄 |
 | [006](ADR-006-coin-ledger.md) | 코인 원장 | 약관의 **유료 5년 / 무료 1년**은 잔액 컬럼으로 구현 불가 |
-| [007](ADR-007-read-write-split.md) | 읽기/쓰기 분리 | `…slave=sdb3` 쿠키 실측 → 복제 지연 재현 |
+| [007](ADR-007-read-write-split.md) | 읽기/쓰기 분리 | **실물 복제본** + Lua 배정. 흉내에서 실물로 |
 | [008](ADR-008-stub-pg.md) | 스텁 PG | PG 30개사. 어댑터는 이미 005에서 증명 — 여기선 상태 머신만 |
 | [009](ADR-009-no-spa.md) | SPA 미사용 | 백엔드 포지션 + 대상 서비스가 서버 렌더 + 추적 스니펫은 바닐라여야 |
 | [010](ADR-010-no-kubernetes.md) | K8s·ECR 미사용 | 컨테이너 4개. EKS 잡이 없는 것도 관측됨 |
 | [011](ADR-011-github-actions-over-jenkins.md) | GitHub Actions | **초안의 "CI 공백" 전제가 틀렸음.** 조직 표준은 Jenkins |
 | [012](ADR-012-observability-scope.md) | 관측 가능성 범위 | 어트리뷰션은 그대로, 계측을 **운영 관점으로 승격**. 인프라 포지션 동시 지원 대응 |
-| [013](ADR-013-caddy-over-nginx.md) | Caddy (Nginx 아님) | 두 도메인 자동 HTTPS가 전제. M1 이틀에 certbot 배선 위험을 피함 |
+| [013](ADR-013-caddy-over-nginx.md) | **OpenResty** (Caddy 아님) | 최초 결정을 뒤집음. Lua로 복제본 배정을 구현한다 |
+| [014](ADR-014-stack-alignment.md) | **스택 정렬 원칙** | 다른 모든 ADR을 지배. "이 경험이 그 회사 업무에서 그대로 쓰이는가" |
 
 ---
 

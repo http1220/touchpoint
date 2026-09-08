@@ -1,29 +1,65 @@
 name: attribution-bridge
 
-# t3.micro(1GB RAM) 전제. 메모리 상한을 명시해 한 컨테이너가 전체를 굶기지 않게 한다.
-# 합계 약 700MB + OS. swap 2GB가 없으면 MySQL이 OOM으로 죽는다. docs/benchmarks.md 6장.
+# 대상 조직 스택에 정렬한 구성 → docs/decisions/ADR-014
+#   OpenResty(Nginx+Lua) · PHP 8.2 + CodeIgniter 3 · MySQL 프라이머리 + 복제본
+#
+# t3.small(2GB) 전제. t3.micro(1GB)로는 MySQL 2대가 올라가지 않는다.
+# 메모리 상한 합계 약 1.2GB.
 
 services:
-  caddy:
-    image: caddy:2-alpine
+  # ── 엣지 ──────────────────────────────────────────────
+  # Lua가 읽기 복제본을 배정하고, 모바일 UA를 302로 분기한다.
+  openresty:
+    image: openresty/openresty:alpine
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"      # HTTP/3
     environment:
       SHOP_DOMAIN: ${SHOP_DOMAIN:?SHOP_DOMAIN 이 필요합니다}
       TRACK_DOMAIN: ${TRACK_DOMAIN:?TRACK_DOMAIN 이 필요합니다}
-      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL 이 필요합니다}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./docker/openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.template:ro
+      - ./docker/openresty/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/openresty/lua:/usr/local/openresty/nginx/lua:ro
       - ./public:/var/www/html/public:ro
-      - caddy_data:/data          # 인증서. 지우면 재발급이라 rate limit을 소모한다
-      - caddy_config:/config
-    mem_limit: 96m
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot
+    # nginx.conf 안의 ${SHOP_DOMAIN} 등을 치환한 뒤 기동한다.
+    command: >
+      sh -c "envsubst '$$SHOP_DOMAIN $$TRACK_DOMAIN'
+             < /usr/local/openresty/nginx/conf/nginx.template
+             > /usr/local/openresty/nginx/conf/nginx.conf
+             && exec openresty -g 'daemon off;'"
+    mem_limit: 128m
     depends_on:
       - app
 
+  # ── 인증서 발급 (일회성) ──────────────────────────────
+  # docker compose --profile cert run --rm certbot
+  # 처음에는 반드시 --staging 을 붙여 검증한다. docs/setup.md 4장
+  certbot:
+    profiles: ["cert"]
+    image: certbot/certbot:latest
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "certbot certonly --webroot -w /var/www/certbot
+       --email $${ACME_EMAIL} --agree-tos --no-eff-email
+       -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
+       --cert-name $${SHOP_DOMAIN}
+       && certbot certonly --webroot -w /var/www/certbot
+       --email $${ACME_EMAIL} --agree-tos --no-eff-email
+       -d api.$${TRACK_DOMAIN}
+       --cert-name $${TRACK_DOMAIN}"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL 이 필요합니다}
+      SHOP_DOMAIN: ${SHOP_DOMAIN}
+      TRACK_DOMAIN: ${TRACK_DOMAIN}
+
+  # ── 앱 ────────────────────────────────────────────────
   app:
     build:
       context: .
@@ -33,18 +69,14 @@ services:
     env_file: [.env]
     volumes:
       - .:/var/www/html
-    mem_limit: 224m
+    mem_limit: 256m
     depends_on:
-      mysql:
+      mysql-primary:
         condition: service_healthy
 
   # app과 같은 이미지. 커맨드만 다르다.
   # --scale worker=4 로 늘려 SKIP LOCKED 동시성을 검증한다. ADR-004
-  #
-  # profiles로 묶어 기본 기동에서 제외한다. CI4와 dispatch:work 커맨드가
-  # 생기기 전(D12 이전)에 띄우면 크래시 루프에 빠지기 때문이다.
-  #   D1~D11  : docker compose up -d
-  #   D12~    : docker compose --profile worker up -d
+  # CI3에는 spark가 없으므로 CLI 컨트롤러를 직접 호출한다.
   worker:
     profiles: ["worker"]
     image: attribution-bridge/php:local
@@ -52,28 +84,35 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     restart: unless-stopped
-    command: ["php", "spark", "dispatch:work"]
+    command: ["php", "index.php", "cli/dispatch", "work"]
     env_file: [.env]
     volumes:
       - .:/var/www/html
     mem_limit: 128m
     depends_on:
-      mysql:
+      mysql-primary:
         condition: service_healthy
 
-  mysql:
+  # ── 데이터 ────────────────────────────────────────────
+  # 쓰기 전용. 그리고 읽기 대상 rdb1 로도 쓴다(지연 0).
+  mysql-primary:
     image: mysql:8.0
     restart: unless-stopped
     command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
       - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_0900_ai_ci   # utf8은 3바이트라 이모지가 깨진다
-      - --default-time-zone=+00:00              # 저장은 UTC
-      - --innodb-buffer-pool-size=128M          # 1GB 인스턴스 기준. 기본 128M 유지
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+      - --innodb-buffer-pool-size=160M
       - --max-connections=60
       - --skip-name-resolve
       - --slow-query-log=1
       - --long-query-time=0.3
-      - --log-queries-not-using-indexes=1       # 인덱스 실습용. 운영이면 끈다
+      - --log-queries-not-using-indexes=1
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 이 필요합니다}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -81,7 +120,8 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: UTC
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_primary:/var/lib/mysql
+      - ./docker/mysql/primary-init:/docker-entrypoint-initdb.d:ro
     mem_limit: 384m
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD}"]
@@ -89,9 +129,35 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-    # 포트를 호스트에 노출하지 않는다. 접속은 docker compose exec 로.
+
+  # 읽기 대상 rdb2. 실제 복제 지연이 발생하는 쪽.
+  # 지연을 인위적으로 키우려면 SOURCE_DELAY 를 쓴다 → docs/failure-scenarios.md E-1
+  mysql-replica:
+    image: mysql:8.0
+    restart: unless-stopped
+    command:
+      - --server-id=2
+      - --relay-log=relay-bin
+      - --read-only=ON
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=40
+      - --skip-name-resolve
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: UTC
+    volumes:
+      - mysql_replica:/var/lib/mysql
+      - ./docker/mysql/replica-init:/docker-entrypoint-initdb.d:ro
+    mem_limit: 320m
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
 
 volumes:
-  caddy_data:
-  caddy_config:
-  mysql_data:
+  certbot_conf:
+  certbot_www:
+  mysql_primary:
+  mysql_replica:
