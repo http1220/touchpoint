@@ -118,6 +118,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REPL_PASSWORD: ${REPL_PASSWORD:?REPL_PASSWORD 이 필요합니다}
       TZ: UTC
     volumes:
       - mysql_primary:/var/lib/mysql
@@ -147,6 +148,9 @@ services:
       - --skip-name-resolve
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REPL_PASSWORD: ${REPL_PASSWORD}
+      REPL_SOURCE_HOST: mysql-primary
+      REPL_DELAY_SECONDS: ${REPL_DELAY_SECONDS:-0}
       TZ: UTC
     volumes:
       - mysql_replica:/var/lib/mysql
