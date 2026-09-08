@@ -100,26 +100,50 @@ jobs:
       - name: docker compose 유효성
         run: docker compose config --quiet
 
-      # nginx.conf 는 envsubst 를 거쳐야 문법이 완성된다.
-      # listen 443 ssl 은 인증서가 없으면 -t 자체가 실패하므로
-      # 자체서명 인증서를 만들어 경로만 갈아 끼운다.
-      # 확인하려는 것은 블록 구조와 Lua 지시어이지 인증서가 아니다.
-      - name: OpenResty 문법
+      # 엔트리포인트 스크립트를 실제로 돌려서 검증한다.
+      # 설정 생성 로직을 CI 에 다시 옮겨 적으면 두 벌이 갈라지고,
+      # 갈라진 쪽이 통과하는 CI 는 아무것도 보장하지 않는다.
+      #
+      # 두 경우를 모두 본다 — 추적 도메인이 있을 때와 없을 때.
+      # 없을 때가 지금 실제 상태이고, 그 상태에서도 광고주 측 호스트는
+      # 떠야 한다.
+      - name: OpenResty 설정 생성과 문법
         run: |
           set -e
-          export SHOP_DOMAIN=example.com TRACK_DOMAIN=example.net
-          mkdir -p /tmp/ngx/lua /tmp/ngx/conf.d /tmp/ngx/cert
-          cp docker/openresty/lua/*.lua /tmp/ngx/lua/
-          cp docker/openresty/conf.d/*.conf /tmp/ngx/conf.d/
+          mkdir -p /tmp/le/live/example.com /tmp/le/live/example.net
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
             -subj '/CN=ci.invalid' \
-            -keyout /tmp/ngx/cert/privkey.pem \
-            -out /tmp/ngx/cert/fullchain.pem 2>/dev/null
-          envsubst '$SHOP_DOMAIN $TRACK_DOMAIN' < docker/openresty/nginx.conf \
-            | sed -E 's#/etc/letsencrypt/live/[^/]+/#/etc/ngx-cert/#' > /tmp/ngx/nginx.conf
-          docker run --rm \
-            -v /tmp/ngx/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro \
-            -v /tmp/ngx/lua:/usr/local/openresty/nginx/lua:ro \
-            -v /tmp/ngx/conf.d:/etc/nginx/conf.d:ro \
-            -v /tmp/ngx/cert:/etc/ngx-cert:ro \
-            openresty/openresty:alpine openresty -t
+            -keyout /tmp/le/live/example.com/privkey.pem \
+            -out /tmp/le/live/example.com/fullchain.pem 2>/dev/null
+          cp /tmp/le/live/example.com/*.pem /tmp/le/live/example.net/
+
+          # 기동 대신 문법 검사로 바꾼 사본
+          sed 's|^exec openresty.*|exec openresty -t|' \
+            docker/openresty/entrypoint.sh > /tmp/entrypoint-test.sh
+
+          for track in example.net ""; do
+            echo "──── TRACK_DOMAIN='$track'"
+            docker run --rm --add-host app:127.0.0.1 \
+              -e SHOP_DOMAIN=example.com -e TRACK_DOMAIN="$track" \
+              -v "$PWD/docker/openresty/nginx.conf":/usr/local/openresty/nginx/conf/nginx.template:ro \
+              -v "$PWD/docker/openresty/templates":/usr/local/openresty/nginx/templates:ro \
+              -v "$PWD/docker/openresty/lua":/usr/local/openresty/nginx/lua:ro \
+              -v "$PWD/docker/openresty/conf.d":/etc/nginx/conf.d:ro \
+              -v /tmp/le:/etc/letsencrypt:ro \
+              -v /tmp/entrypoint-test.sh:/entrypoint-test.sh:ro \
+              openresty/openresty:alpine sh /entrypoint-test.sh
+          done
+
+      # 도메인 형식 검증이 실제로 막는지. 막지 못하면 .env 의 오타가
+      # nginx 문법 오류로 나타나 원인을 엉뚱한 데서 찾게 된다.
+      - name: 잘못된 도메인은 거절되는가
+        run: |
+          if docker run --rm \
+               -e SHOP_DOMAIN='bad;domain' -e TRACK_DOMAIN= \
+               -v "$PWD/docker/openresty/entrypoint.sh":/entrypoint.sh:ro \
+               openresty/openresty:alpine sh /entrypoint.sh 2>&1 | tee /tmp/out; then
+            echo "형식 검증을 통과했습니다. 거절했어야 합니다."
+            exit 1
+          fi
+          grep -q '도메인 형식이 올바르지 않습니다' /tmp/out
+          echo "거절 확인"

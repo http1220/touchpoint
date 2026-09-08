@@ -1,0 +1,32 @@
+# ── api. 수집 (추적 측 · 다른 등록 도메인) ───────────────────
+#
+# 이 파일은 TRACK_DOMAIN 이 설정됐을 때만 생성된다.
+# 추적 도메인이 없으면 수집 호스트도 없다 — 서브도메인으로 대체하지 않는다.
+# 브라우저는 same-site 를 eTLD+1 로 판정하므로, 서브도메인으로 만든
+# "가짜 서드파티"에서는 SameSite=None 도 쿠키 차단도 재현되지 않는다.
+# → docs/decisions/ADR-002-two-registered-domains.md
+#
+# 생성 주체: docker/openresty/entrypoint.sh
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name api.${TRACK_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${TRACK_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${TRACK_DOMAIN}/privkey.pem;
+    include /etc/nginx/conf.d/tls-common.conf;
+
+    set $read_target "";
+    access_by_lua_block { require("replica").assign() }
+
+    # CORS 헤더는 여기서 붙이지 않는다.
+    # 오리진을 정확히 반향하고 Vary를 붙이는 판단은 앱이 해야 한다.
+    # docs/api-spec.md 3장
+    location ~ ^/(collect|conversion|impression|click)$ {
+        add_header Cache-Control "no-store" always;
+        include /etc/nginx/conf.d/php-pass.conf;
+    }
+
+    include /etc/nginx/conf.d/php-app.conf;
+}
