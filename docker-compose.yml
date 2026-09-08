@@ -135,6 +135,11 @@ services:
       - --server-id=2
       - --relay-log=relay-bin
       - --read-only=ON
+      # GTID 는 양쪽에 다 켜야 한다. 프라이머리에만 켜면 복제본에서
+      # SOURCE_AUTO_POSITION=1 이 ERROR 1777 로 거절된다 —
+      # "@@GLOBAL.GTID_MODE = OFF". 실제로 여기서 막혔다.
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
       - --default-time-zone=+00:00
