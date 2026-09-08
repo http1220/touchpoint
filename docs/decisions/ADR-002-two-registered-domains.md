@@ -24,14 +24,14 @@
 **등록 도메인 2개**를 산다. 현실의 광고 추적처럼 **광고주 도메인 ≠ 추적 도메인**으로 가른다.
 
 ```
-toonlab.example    lp.  (랜딩·브리지)   app. (서비스·전환·지표)
-abridge.example    api. (수집 API)
+sshwan.com    lp.  (랜딩·브리지)   app. (서비스·전환·지표)
+khan-edge.com    api. (수집 API)
 ```
 
 | 호출 | 관계 | 역할 |
 |---|---|---|
-| `lp.toonlab` → `api.abridge` | **cross-site** | 실험군 |
-| `lp.toonlab` → `app.toonlab` | same-site, cross-origin | **대조군** |
+| `lp.sshwan.com` → `api.khan-edge.com` | **cross-site** | 실험군 |
+| `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | **대조군** |
 
 ## 근거
 

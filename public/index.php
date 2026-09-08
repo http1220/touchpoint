@@ -67,7 +67,7 @@ $rows = [
 <html lang="ko">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>attribution-bridge · 인프라 진단</title>
+<title>touchpoint · 인프라 진단</title>
 <style>
   body{font:14px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:2rem;
        background:#0f1115;color:#e6e8ec}
@@ -82,7 +82,7 @@ $rows = [
   .note{margin-top:1.75rem;padding:.9rem 1rem;background:#171b23;border-left:2px solid #3a4152;color:#a8b0bd}
 </style>
 <main>
-  <h1>attribution-bridge</h1>
+  <h1>touchpoint</h1>
   <p class="sub">D1~D2 인프라 진단 · CI4 설치 시 교체됩니다</p>
 
   <table>

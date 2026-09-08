@@ -11,8 +11,12 @@ set -euo pipefail
 
 SOURCE_HOST="${REPL_SOURCE_HOST:-mysql-primary}"
 SOURCE_USER="${REPL_USER:-repl}"
-SOURCE_PW="${REPL_PASSWORD:-repl_pw_change_me}"
 DELAY="${REPL_DELAY_SECONDS:-0}"
+
+# 기본값을 두지 않는다. 프라이머리와 복제본이 서로 다른 비밀번호를 쓰면
+# 복제가 조용히 끊기고, 그 원인을 찾는 데 시간이 걸린다.
+: "${REPL_PASSWORD:?REPL_PASSWORD 가 필요합니다. .env 에서 설정하세요}"
+SOURCE_PW="${REPL_PASSWORD}"
 
 echo "[replica] 프라이머리(${SOURCE_HOST}) 대기..."
 for i in $(seq 1 60); do

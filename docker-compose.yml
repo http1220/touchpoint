@@ -1,4 +1,4 @@
-name: attribution-bridge
+name: touchpoint
 
 # 대상 조직 스택에 정렬한 구성 → docs/decisions/ADR-014
 #   OpenResty(Nginx+Lua) · PHP 8.2 + CodeIgniter 3 · MySQL 프라이머리 + 복제본
@@ -48,7 +48,7 @@ services:
     command: >
       "certbot certonly --webroot -w /var/www/certbot
        --email $${ACME_EMAIL} --agree-tos --no-eff-email
-       -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
+       -d $${SHOP_DOMAIN} -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
        --cert-name $${SHOP_DOMAIN}
        && certbot certonly --webroot -w /var/www/certbot
        --email $${ACME_EMAIL} --agree-tos --no-eff-email
@@ -64,7 +64,7 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    image: attribution-bridge/php:local
+    image: touchpoint/php:local
     restart: unless-stopped
     env_file: [.env]
     volumes:
@@ -79,7 +79,7 @@ services:
   # CI3에는 spark가 없으므로 CLI 컨트롤러를 직접 호출한다.
   worker:
     profiles: ["worker"]
-    image: attribution-bridge/php:local
+    image: touchpoint/php:local
     build:
       context: .
       dockerfile: docker/php/Dockerfile
@@ -118,6 +118,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REPL_PASSWORD: ${REPL_PASSWORD:?REPL_PASSWORD 이 필요합니다}
       TZ: UTC
     volumes:
       - mysql_primary:/var/lib/mysql
@@ -147,6 +148,9 @@ services:
       - --skip-name-resolve
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REPL_PASSWORD: ${REPL_PASSWORD}
+      REPL_SOURCE_HOST: mysql-primary
+      REPL_DELAY_SECONDS: ${REPL_DELAY_SECONDS:-0}
       TZ: UTC
     volumes:
       - mysql_replica:/var/lib/mysql

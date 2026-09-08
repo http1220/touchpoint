@@ -11,14 +11,14 @@
 flowchart LR
     AD["광고 매체<br/>(Google/Meta/...)"] -->|"클릭<br/>utm·gclid·fbclid"| BR
 
-    subgraph SHOP["toonlab.example — 광고주 측 (first-party)"]
+    subgraph SHOP["sshwan.com — 광고주 측 (first-party)"]
         BR["lp. /go<br/>브리지 302"]
         LP["lp. /l/{work}<br/>랜딩"]
         APP["app. /signup /purchase<br/>서비스·전환"]
         MET["app. /metrics<br/>지표"]
     end
 
-    subgraph TRACK["abridge.example — 추적 측 (third-party)"]
+    subgraph TRACK["khan-edge.com — 추적 측 (third-party)"]
         API["api. /collect /conversion<br/>수집 API"]
     end
 
@@ -70,9 +70,9 @@ flowchart TB
 sequenceDiagram
     autonumber
     participant U as 브라우저
-    participant LP as lp.toonlab (광고주)
-    participant API as api.abridge (추적)
-    participant APP as app.toonlab (서비스)
+    participant LP as lp.sshwan.com (광고주)
+    participant API as api.khan-edge.com (추적)
+    participant APP as app.sshwan.com (서비스)
     participant DB as MySQL
     participant W as 워커
     participant M as GA4 / Meta
@@ -112,9 +112,9 @@ sequenceDiagram
 
 | 호출 | 관계 | 무슨 일이 벌어지나 |
 |---|---|---|
-| `lp.toonlab` → `api.abridge` | **cross-site + cross-origin** | preflight + `SameSite=None; Secure` + 브라우저별 차단 |
-| `lp.toonlab` → `app.toonlab` | same-site, cross-origin | CORS는 필요, 쿠키는 `Lax`로 전송 |
-| `app.toonlab` 내부 | same-origin | 아무 제약 없음 |
+| `lp.sshwan.com` → `api.khan-edge.com` | **cross-site + cross-origin** | preflight + `SameSite=None; Secure` + 브라우저별 차단 |
+| `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | CORS는 필요, 쿠키는 `Lax`로 전송 |
+| `app.sshwan.com` 내부 | same-origin | 아무 제약 없음 |
 
 > **대조군이 있어야 실험이 성립한다.** 서브도메인만 나누면 첫 행이 사라지고, 그러면 이 프로젝트의 존재 이유가 없어진다 → [domains-and-cookies](domains-and-cookies.md)
 
@@ -165,7 +165,7 @@ classDiagram
 | 환경 | 도메인 | 용도 |
 |---|---|---|
 | 로컬 | `*.localhost` | 개발. 크로스사이트 실험은 불가(same-site) |
-| 운영 | `toonlab.example` / `abridge.example` | **실험은 여기서만 성립** |
+| 운영 | `sshwan.com` / `khan-edge.com` | **실험은 여기서만 성립** |
 
 > `.example`은 문서용 placeholder다. 실제 구매 도메인으로 치환한다 (`.env`의 `SHOP_DOMAIN` / `TRACK_DOMAIN`).
 

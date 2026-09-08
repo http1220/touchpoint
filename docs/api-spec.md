@@ -10,13 +10,13 @@
 
 | # | 메서드 | 경로 | 호스트 | 역할 |
 |---|---|---|---|---|
-| 1 | GET | `/go` | `lp.toonlab` | 브리지 리다이렉트 |
-| 2 | GET | `/l/{work}` | `lp.toonlab` | 랜딩 |
-| 3 | POST | `/collect` | **`api.abridge`** | 크로스사이트 수집 |
-| 4 | POST | `/conversion` | **`api.abridge`** | 전환 등록 |
-| 5 | POST | `/signup` | `app.toonlab` | 가입 |
-| 6 | POST | `/purchase` | `app.toonlab` | 코인 결제(스텁) |
-| 7 | GET | `/metrics` | `app.toonlab` | 지표 화면 |
+| 1 | GET | `/go` | `lp.sshwan.com` | 브리지 리다이렉트 |
+| 2 | GET | `/l/{work}` | `lp.sshwan.com` | 랜딩 |
+| 3 | POST | `/collect` | **`api.khan-edge.com`** | 크로스사이트 수집 |
+| 4 | POST | `/conversion` | **`api.khan-edge.com`** | 전환 등록 |
+| 5 | POST | `/signup` | `app.sshwan.com` | 가입 |
+| 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(스텁) |
+| 7 | GET | `/metrics` | `app.sshwan.com` | 지표 화면 |
 
 ---
 
@@ -30,7 +30,7 @@
 GET /go?work=8733&pid=google&subpid=2609_romance_a&channel=search
         &utm_source=google&utm_medium=cpc&utm_campaign=romance_sep
         &gclid=EAIa...
-Host: lp.toonlab.example
+Host: lp.sshwan.com
 ```
 
 | 파라미터 | 필수 | 설명 |
@@ -51,8 +51,8 @@ Host: lp.toonlab.example
 
 ```
 HTTP/1.1 302 Found
-Location: https://lp.toonlab.example/l/8733?vid=01J8XK...
-Set-Cookie: ab_vid=01J8XK...; Domain=.toonlab.example; Path=/;
+Location: https://lp.sshwan.com/l/8733?vid=01J8XK...
+Set-Cookie: ab_vid=01J8XK...; Domain=.sshwan.com; Path=/;
             SameSite=Lax; Secure; HttpOnly; Max-Age=31536000
 Cache-Control: no-store
 ```
@@ -83,7 +83,7 @@ Cache-Control: no-store
 
 ```
 GET /l/8733
-Host: lp.toonlab.example
+Host: lp.sshwan.com
 ```
 
 응답은 HTML. `<script src="/track.js">` 포함.
@@ -92,7 +92,7 @@ Host: lp.toonlab.example
 
 ## 3. `POST api./collect` — 크로스사이트 수집 ★ 핵심
 
-**`lp.toonlab` → `api.abridge`** 이므로 **cross-site + cross-origin**이다. 여기서 이 프로젝트의 모든 문제가 발생한다.
+**`lp.sshwan.com` → `api.khan-edge.com`** 이므로 **cross-site + cross-origin**이다. 여기서 이 프로젝트의 모든 문제가 발생한다.
 
 ### preflight
 
@@ -100,14 +100,14 @@ Host: lp.toonlab.example
 
 ```
 OPTIONS /collect
-Origin: https://lp.toonlab.example
+Origin: https://lp.sshwan.com
 Access-Control-Request-Method: POST
 Access-Control-Request-Headers: content-type
 ```
 
 ```
 HTTP/1.1 204 No Content
-Access-Control-Allow-Origin: https://lp.toonlab.example    ← * 아님
+Access-Control-Allow-Origin: https://lp.sshwan.com    ← * 아님
 Access-Control-Allow-Credentials: true
 Access-Control-Allow-Methods: POST, OPTIONS
 Access-Control-Allow-Headers: Content-Type
@@ -121,8 +121,8 @@ Vary: Origin
 
 ```
 POST /collect
-Host: api.abridge.example
-Origin: https://lp.toonlab.example
+Host: api.khan-edge.com
+Origin: https://lp.sshwan.com
 Content-Type: application/json
 Cookie: ab_tid=...          ← SameSite=None; Secure; Partitioned 이어야 전송됨
 
@@ -136,10 +136,10 @@ Cookie: ab_tid=...          ← SameSite=None; Secure; Partitioned 이어야 전
 
 ```
 HTTP/1.1 200 OK
-Access-Control-Allow-Origin: https://lp.toonlab.example
+Access-Control-Allow-Origin: https://lp.sshwan.com
 Access-Control-Allow-Credentials: true
 Vary: Origin
-Set-Cookie: ab_tid=...; Domain=.abridge.example; SameSite=None; Secure;
+Set-Cookie: ab_tid=...; Domain=.khan-edge.com; SameSite=None; Secure;
             HttpOnly; Partitioned; Max-Age=31536000
 
 { "ok": true }
@@ -267,7 +267,7 @@ HTTP/1.1 422 Unprocessable Content
 Content-Type: application/problem+json
 
 {
-  "type": "https://toonlab.example/probs/invalid-currency",
+  "type": "https://sshwan.com/probs/invalid-currency",
   "title": "Invalid currency",
   "status": 422,
   "detail": "currency must be an ISO 4217 alpha-3 code",
