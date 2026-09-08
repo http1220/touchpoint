@@ -116,6 +116,39 @@ docker: 'compose' is not a docker command.
 - **대응**: 공식 릴리스 바이너리를 `/usr/libexec/docker/cli-plugins/` 에 넣는다. 버전을 문서에 박지 않고 최신 태그를 리다이렉트에서 받아온다 — 존재하지 않는 태그를 적어 두면 몇 달 뒤 404 로 조용히 실패한다
 - **검증**: `amazonlinux:2023` 컨테이너에서 절차를 그대로 돌려 `Docker Compose version v5.5.1` 까지 확인했다. 문서에 적기 전에 돌려 보는 것이 ④에서 배운 것이다
 
+
+**⑧ 실제 배포에서만 나온 것 다섯**
+
+문서를 아무리 정성껏 써도 서버에 올리기 전에는 알 수 없는 것들이 있었다. 하루치 문서가 실제로는 **동작하지 않는 절차**였다.
+
+| # | 증상 | 원인 |
+|---|---|---|
+| a | `compose build requires buildx 0.17.0 or later` | AL2023 에 buildx 도 없다. Compose v2 만 넣고 끝난 줄 알았다 |
+| b | `MYSQL_ONETIME_PASSWORD: unbound variable` → mysql unhealthy | init 스크립트의 `set -euo pipefail` 이 MySQL 엔트리포인트로 샜다 |
+| c | openresty 가 뜨지 못함 (인증서 없음) | `listen 443 ssl` 이 인증서 파일을 요구 → 80번 블록까지 죽음 → 인증서를 영영 못 받는 교착 |
+| d | `ERROR 1777: @@GLOBAL.GTID_MODE = OFF` | 복제본 command 에 GTID 를 안 넣었다. 프라이머리에만 넣었다 |
+| e | 쿠키 없는 요청 12번이 전부 `rdb1` | 내부 리다이렉트로 access 단계가 요청당 두 번 → 카운터가 2씩 → 한쪽으로 고정 |
+
+**c 가 가장 값어치 있다.** [setup.md](setup.md) 4장은 *"`docker compose up -d openresty` 하고 certbot 을 돌려라"* 였는데, 새 서버에서는 **첫 줄부터 실패한다.** 문서대로 하면 절대 안 되는 절차를 하루 동안 적어 두고 있었다. 443 블록을 별도 파일로 빼서 인증서가 실재할 때만 생성하도록 고쳤다.
+
+**e 는 두 번 틀렸다.** 처음에 "이미 배정됐으면 건너뛴다" 로 고쳤는데, 서버 블록의 `set $read_target ""` 도 내부 리다이렉트에서 다시 실행되어 플래그가 매번 지워졌다. **재측정하지 않았으면 고쳤다고 믿고 넘어갔을 것이다.** 분포는 여전히 12/12 였다. `$request_id` 해시로 바꾸니 20회에 13/7 로 갈렸다.
+
+**d 는 [ADR-007](decisions/ADR-007-read-write-split.md)의 값어치를 증명한다.** "복제본을 흉내내지 않고 실물로 띄운다" 고 정했기 때문에 이 한 줄이 빠진 걸 알 수 있었다. 지연 주입 시뮬레이션이었다면 영영 몰랐다.
+
+### 배포 완료 상태 (2026-09-09)
+
+```
+호스트    sshwan.com · lp. · m. · app.   전부 HTTPS (Let's Encrypt, ~2026-12-07)
+인프라    t3.small / eu-north-1 / 2 vCPU / 1.9Gi + swap 2Gi
+컨테이너  openresty · app · mysql-primary · mysql-replica
+스키마    마이그레이션 20260909000700, 테이블 18개 (프라이머리·복제본 일치)
+복제      Replica_IO_Running=Yes  Replica_SQL_Running=Yes  Seconds_Behind_Source=0
+배정      쿠키 없이 20회 → rdb1 13 / rdb2 7, 쿠키 있으면 고정·재발급 없음
+갱신      cron 매주 월 03:17, --dry-run 통과
+```
+
+> **리전이 eu-north-1(스톡홀름)이다.** 서울을 권했는데 실제로는 여기에 만들어졌다. 스톡홀름은 온디맨드 단가가 가장 싼 축이라 비용에는 유리하지만, 한국에서 접속하면 왕복 지연이 250ms 안팎 붙는다. [benchmarks.md](benchmarks.md)에 수치를 적을 때 **어느 리전에서 잰 것인지 반드시 함께 적는다** — 안 그러면 매체 전송 지연과 지리적 지연이 섞인다.
+
 ### 결정한 것
 
 | 결정 | 근거 |

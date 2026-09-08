@@ -182,6 +182,18 @@ install -d /usr/libexec/docker/cli-plugins
 curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-x86_64" \
   -o /usr/libexec/docker/cli-plugins/docker-compose
 chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+# buildx 도 없다. Compose v2 가 build 에 요구하므로 같이 넣는다.
+# 없으면 "compose build requires buildx 0.17.0 or later" 로 막힌다.
+BUILDX_VER=$(curl -sI https://github.com/docker/buildx/releases/latest \
+  | tr -d "\r" | awk 'tolower($0) ~ /^location:/ {n=split($0,a,"/"); print a[n]}')
+curl -fsSL "https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-amd64" \
+  -o /usr/libexec/docker/cli-plugins/docker-buildx
+chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
+
+# 인증서 자동 갱신에 쓸 cron. AL2023 최소 이미지에는 없다.
+dnf install -y cronie
+systemctl enable --now crond
 ```
 
 ### 탄력적 IP
@@ -506,7 +518,7 @@ docker compose restart openresty
 
 ```bash
 # crontab -e  (매주 월요일 03:17 — 정각을 피해 ACME 서버 부하 분산)
-17 3 * * 1 cd /home/ec2-user/touchpoint && docker compose --profile cert run --rm certbot renew && docker compose restart openresty
+17 3 * * 1 cd /home/ec2-user/touchpoint && /usr/bin/docker compose --profile cert run --rm --entrypoint certbot certbot renew --webroot -w /var/www/certbot --quiet && /usr/bin/docker compose restart openresty
 ```
 
 ---

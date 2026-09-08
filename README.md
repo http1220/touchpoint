@@ -6,7 +6,7 @@
 
 > 이건 웹툰 서비스가 아닙니다. 어트리뷰션 파이프라인이고, 도메인(회원·코인·회차)은 **전환을 측정할 대상이 필요해서** 최소한만 두었습니다. 그 도메인은 상상해서 만든 것이 아니라 **공개 자료를 조사해 역추론**했습니다 → [조사 요약](docs/research-method.md)
 
-- **상태**: 설계 완료 · CI3 스켈레톤과 스키마 마이그레이션 동작 확인 (2026-09-09)
+- **상태**: **배포 완료** — https://lp.sshwan.com 가동 중. CI3 · 스키마 18테이블 · MySQL 복제 · 읽기 분리 동작 확인 (2026-09-09)
 - **스택**: PHP 8.2 · **CodeIgniter 3** · MySQL 8.0(프라이머리+복제본) · **OpenResty(Nginx+Lua)** · Docker · AWS EC2 t3.small
 - **왜 이 스택인가**: 대상 조직이 쓰는 것에 맞췄습니다 → [ADR-014](docs/decisions/ADR-014-stack-alignment.md)
 - **로드맵**: [docs/roadmap.md](docs/roadmap.md) — 의도 → 기획 → 계획 3층 구조
