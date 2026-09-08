@@ -52,7 +52,7 @@ class MY_Controller extends CI_Controller
 
 		// 엣지가 넘긴 $request_id. 없으면(CLI·로컬) 직접 만든다.
 		// → docker/openresty/conf.d/php-pass.conf 의 AB_TRACE_ID
-		$this->trace_id = TraceId::fromEdge($this->server('AB_TRACE_ID'));
+		$this->trace_id = TraceId::current();
 
 		// 응답에 되돌려준다. 사용자가 캡처한 화면 하나로 로그를 찾을 수 있게.
 		if ( ! is_cli())

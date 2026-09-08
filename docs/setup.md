@@ -3,7 +3,7 @@
 목표: **광고주 측 호스트(루트 · `lp.` · `m.` · `app.`)가 자물쇠 표시로 열리는 진단 화면.** 여기까지가 D1~D2다.
 그 다음이 CodeIgniter 3 기동과 스키마 마이그레이션이다.
 
-추적 도메인(`api.`)은 등록되면 붙인다. 없어도 여기까지는 전부 진행된다 → [3-1](#3-1-추적-도메인이-아직-없을-때)
+추적 도메인(`api.`)은 등록되면 붙인다. 없어도 여기까지는 전부 진행된다 → [3-2](#3-2-추적-도메인이-아직-없을-때)
 
 ---
 
@@ -11,7 +11,7 @@
 
 | 항목 | 비고 |
 |---|---|
-| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md)<br>광고주 측 1개만 있어도 착수는 된다 (3-1) |
+| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md)<br>광고주 측 1개만 있어도 착수는 된다 (3-2) |
 | AWS 계정 | 없으면 카드 등록·본인인증에 반나절. **결제 알림을 먼저 걸고 인스턴스를 만든다** (2-1) |
 | DNS | 도메인을 Route 53에서 등록했다면 호스팅 영역이 이미 있다. 확인: `dig +short NS <도메인>` 에 **awsdns** 가 나오는지 (1장) |
 | GA4 속성 | `measurement_id` + **API secret** (D12에 필요, 리드타임 대비 미리) |
@@ -254,26 +254,57 @@ MFA를 켜고, 일상 작업은 IAM 사용자로 한다. **비용이 폭발하�
 ---
 ## 3. 저장소와 환경 설정
 
+**여기부터는 전부 EC2 인스턴스 안에서 한다.** 로컬 PC 가 아니다.
+
 ```bash
-git clone <repo> touchpoint
+ssh -i touchpoint.pem ec2-user@<EIP>
+```
+
+> `Permissions 0644 for 'touchpoint.pem' are too open` 이 나오면 키 파일 권한 문제다. 리눅스·맥은 `chmod 400 touchpoint.pem`. 윈도우 PowerShell 이면 파일 속성 → 보안 → 고급에서 상속을 끊고 본인만 남긴다.
+
+### 3-0. 사용자 데이터가 제대로 돌았는지
+
+```bash
+free -h                 # Swap 2.0Gi
+docker compose version  # v2.x
+groups                  # docker 가 보여야 한다
+```
+
+`groups` 에 `docker` 가 없으면 **한 번 로그아웃했다 다시 들어온다.** `usermod -aG docker` 는 새 로그인 세션부터 적용된다. 그래도 없으면 사용자 데이터가 실패한 것이니 [2장의 스크립트](#사용자-데이터-선택)를 `sudo` 붙여 손으로 돌린다.
+
+### 3-1. 클론과 `.env`
+
+```bash
+git clone https://github.com/http1220/touchpoint.git
 cd touchpoint
 cp .env.example .env
-openssl rand -hex 16    # ENCRYPTION_KEY / REPL_PASSWORD 용. 두 번 돌린다
+chmod 600 .env          # 비밀값이 들어간다
+openssl rand -hex 16    # 세 번 돌려서 아래 셋에 쓴다
 ```
 
 `.env`에서 반드시 채울 것:
 
 | 키 | 값 |
 |---|---|
-| `SHOP_DOMAIN` | 실제 구매 도메인 |
-| `TRACK_DOMAIN` | 추적 도메인. **아직 없으면 비워 둔다** (아래 3-1) |
+| `SHOP_DOMAIN` | `sshwan.com` |
+| `TRACK_DOMAIN` | **비워 둔다** — 추적 도메인 등록 전 (아래 3-2) |
 | `ACME_EMAIL` | 인증서 만료 알림 수신 주소 |
-| `MYSQL_ROOT_PASSWORD` / `MYSQL_PASSWORD` | 직접 생성 |
-| `REPL_PASSWORD` | 복제 계정. **나중에 바꾸면 볼륨을 지워야 한다** |
-| `ENCRYPTION_KEY` | CI3 세션·해시 소금. 32자 hex |
 | `ACME_STAGING` | **처음에는 `true`** |
+| `MYSQL_ROOT_PASSWORD` / `MYSQL_PASSWORD` | `openssl rand -hex 16` |
+| `REPL_PASSWORD` | 복제 계정. **지금 정하고 바꾸지 않는다** — 바꾸려면 MySQL 볼륨 두 개를 지우고 처음부터 다시 초기화해야 한다 |
+| `ENCRYPTION_KEY` | CI3 세션·해시 소금. 32자 hex |
+| `CI_ENVIRONMENT` | 구축 중에는 `development`. **공개 전에 반드시 `production`** (아래) |
 
-### 3-1. 추적 도메인이 아직 없을 때
+> ### `CI_ENVIRONMENT` 를 언제 바꾸는가
+>
+> `development` 는 PHP 에러를 **화면에 그대로 출력한다.** 파일 경로와 스택 트레이스가 방문자에게 보인다는 뜻이다. 구축 중에는 그게 있어야 원인을 빨리 찾지만, 링크를 남에게 주기 전에는 반드시 `production` 으로 바꾸고 컨테이너를 재기동한다.
+>
+> ```bash
+> sed -i 's/^CI_ENVIRONMENT=.*/CI_ENVIRONMENT=production/' .env
+> docker compose up -d --force-recreate app
+> ```
+
+### 3-2. 추적 도메인이 아직 없을 때
 
 `TRACK_DOMAIN`을 비워 두면 `api.` 수집 호스트 없이 뜬다. 광고주 측(`lp.` `m.` `app.`)은 전부 정상 동작한다.
 
@@ -312,14 +343,21 @@ docker compose up -d --force-recreate openresty
 ```bash
 # .env 에 ACME_STAGING=true 인지 확인
 docker compose up -d openresty          # 80 포트로 ACME 챌린지를 받는다
+```
+
+> 이 명령이 `app` 컨테이너 이미지를 처음 빌드한다. PHP 확장을 컴파일하므로 **5~10분** 걸린다. 인증서만 받을 것이라 앱이 아직 비어 있어도(=`vendor/` 없음) 상관없다 — ACME 챌린지는 nginx 가 정적 파일로 응답한다.
+
+```bash
 docker compose --profile cert run --rm certbot
 ```
 
 `SHOP_DOMAIN`(루트 + `lp.` `m.` `app.`)에 하나. `TRACK_DOMAIN` 이 채워져 있으면 `api.` 에 하나 더 발급된다. 비어 있으면 건너뛴다는 메시지가 나오고 정상 종료한다.
 
 ```bash
-curl -kI https://lp.<SHOP_DOMAIN>
-# 200 이 오면 성공. 인증서 경고(-k)는 스테이징 CA라 정상이다.
+curl -kI https://lp.<SHOP_DOMAIN> 2>&1 | head -1
+# 여기서 확인하는 것은 TLS 핸드셰이크가 되느냐다.
+# 502 가 나와도 정상이다 — 아직 composer install 전이라 앱이 비어 있다(6-1).
+# 인증서 경고(-k)도 스테이징 CA라 정상이다.
 ```
 
 > 발급 실패 시 `openresty` 컨테이너 로그에서 `/.well-known/acme-challenge/` 요청이 **200 으로** 찍혔는지 본다. 404 라면 DNS 나 webroot 볼륨 문제다.
@@ -352,22 +390,80 @@ docker compose restart openresty
 
 ## 6. 애플리케이션 기동과 마이그레이션
 
+### 6-1. 의존성 — 이걸 빼먹으면 전부 500 이다
+
+`vendor/` 는 저장소에 없다(`.gitignore`). CodeIgniter 자체가 composer 의존성이므로, **클론 직후에는 프레임워크가 아예 없는 상태다.**
+
 ```bash
-docker compose up -d
+docker compose run --rm --no-deps --user "$(id -u):$(id -g)" \
+  app composer install --no-dev --optimize-autoloader
+```
+
+| 옵션 | 왜 |
+|---|---|
+| `--no-deps` | MySQL 을 띄우지 않는다. 의존성 설치에 DB 가 필요 없다 |
+| `--user $(id -u):$(id -g)` | 없으면 `vendor/` 가 root 소유로 생겨 나중에 손댈 때 sudo 가 필요해진다 |
+| `--no-dev` | PHPUnit 은 서버에 필요 없다. 테스트는 CI 가 돌린다 |
+| `--optimize-autoloader` | 클래스맵을 미리 만든다. 요청마다 파일을 찾지 않는다 |
+
+`ls vendor/codeigniter/framework/system` 이 나오면 성공이다.
+
+### 6-2. 기동
+
+```bash
+docker compose up -d --build
+docker compose ps        # openresty · app · mysql-primary · mysql-replica 넷이 Up
+```
+
+> 첫 `--build` 는 PHP 확장(`intl`·`mysqli`·`opcache`…)을 컴파일하므로 t3.small 에서 **5~10분** 걸린다. 두 번째부터는 캐시된다. 여기서 멈춘 것처럼 보여도 기다린다.
+
+### 6-3. 마이그레이션
+
+```bash
 docker compose exec app php public/index.php cli/migrate latest
 docker compose exec app php public/index.php cli/migrate current   # 20260909000700
 ```
 
-복제가 붙었는지 확인한다. **여기서 `Slave_IO_Running`/`Slave_SQL_Running` 이 둘 다 `Yes` 가 아니면 읽기 분리 실험 전체가 성립하지 않는다.**
+테이블 18개 + `ci_migrations` 가 생긴다.
 
 ```bash
-docker compose exec mysql-replica \
-  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS\G" \
-  | grep -E "Replica_IO_Running|Replica_SQL_Running|Seconds_Behind_Source"
+docker compose exec mysql-primary sh -c \
+  'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -D "$MYSQL_DATABASE" -e "SHOW TABLES"'
+```
+
+### 6-4. 복제 확인
+
+**둘 다 `Yes` 가 아니면 읽기 분리 실험 전체가 성립하지 않는다.** MySQL 8.0.22 부터 항목 이름이 `Slave_*` 에서 `Replica_*` 로 바뀌었다.
+
+```bash
+docker compose exec mysql-replica sh -c \
+  'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS\G"' \
+  | grep -E "Replica_IO_Running|Replica_SQL_Running|Seconds_Behind_Source|Last_Error"
+```
+
+붙지 않았다면 원인은 십중팔구 `REPL_PASSWORD` 불일치다. `.env` 를 나중에 고쳤다면 볼륨을 지우고 처음부터 초기화해야 한다.
+
+```bash
+docker compose down
+docker volume rm touchpoint_mysql_primary touchpoint_mysql_replica
+docker compose up -d
+```
+
+### 6-5. 로그 보기
+
+앱 로그는 파일이 아니라 **컨테이너 stdout/stderr** 로 나온다. 엣지와 앱을 한 화면에서 볼 수 있다.
+
+```bash
+docker compose logs -f openresty app
+```
+
+앱 로그는 JSON 한 줄이고 `trace_id` 가 붙어 있다. 엣지 로그의 `trace_id` 와 같은 값이므로, 느린 요청 하나를 잡아 양쪽을 이어서 볼 수 있다.
+
+```bash
+docker compose logs app | grep '"trace_id":"<그 값>"'
 ```
 
 ---
-
 ## 7. 검증 — 여기까지가 D1~D2 완료 조건
 
 | # | 확인 | 방법 |
@@ -406,6 +502,9 @@ done
 | MySQL 컨테이너가 반복 재시작 | RAM 부족 | swap 확인. `docker compose logs mysql-primary` 에 OOM 흔적 |
 | 복제가 안 붙음 | `REPL_PASSWORD` 불일치 | `.env` 를 바꿨다면 두 볼륨을 모두 지우고 다시 초기화해야 한다 |
 | `.env` 값이 반영 안 됨 | compose 가 캐시된 설정 사용 | `docker compose up -d --force-recreate` |
+| 모든 요청이 500 | **`composer install` 을 안 했다.** `vendor/` 가 없으면 CodeIgniter 자체가 없다 | 6-1 |
+| `Class "CI_Controller" not found` | 위와 같다 | 6-1 |
+| `vendor/` 를 지울 수 없다(Permission denied) | `--user` 없이 composer 를 돌려 root 소유로 생겼다 | `sudo rm -rf vendor` 후 6-1 을 다시 |
 | 502 Bad Gateway | `app` 컨테이너 미기동 | `docker compose ps`, `logs app` |
 | 마이그레이션이 `(없음)` 에서 안 올라감 | `migration_version` 을 안 올렸다 | 새 마이그레이션을 추가하면 `config/migration.php` 의 목표 버전도 올린다 |
 | 로그인이 간헐적으로 풀림 | 세션 조회가 복제본으로 갔다 | `database.php` 의 `$active_group` 이 `write` 인지 확인 |
