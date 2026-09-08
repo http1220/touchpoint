@@ -314,21 +314,59 @@ git clone https://github.com/http1220/touchpoint.git
 cd touchpoint
 cp .env.example .env
 chmod 600 .env          # 비밀값이 들어간다
-openssl rand -hex 16    # 세 번 돌려서 아래 셋에 쓴다
 ```
 
-`.env`에서 반드시 채울 것:
+**손으로 고칠 줄은 여섯이다.** 나머지는 기본값 그대로 둔다.
 
-| 키 | 값 |
-|---|---|
-| `SHOP_DOMAIN` | `sshwan.com` |
-| `TRACK_DOMAIN` | **비워 둔다** — 추적 도메인 등록 전 (아래 3-2) |
-| `ACME_EMAIL` | 인증서 만료 알림 수신 주소 |
-| `ACME_STAGING` | **처음에는 `true`** |
-| `MYSQL_ROOT_PASSWORD` / `MYSQL_PASSWORD` | `openssl rand -hex 16` |
-| `REPL_PASSWORD` | 복제 계정. **지금 정하고 바꾸지 않는다** — 바꾸려면 MySQL 볼륨 두 개를 지우고 처음부터 다시 초기화해야 한다 |
-| `ENCRYPTION_KEY` | CI3 세션·해시 소금. 32자 hex |
-| `CI_ENVIRONMENT` | 구축 중에는 `development`. **공개 전에 반드시 `production`** (아래) |
+| 줄 | 바꿀 값 | 비고 |
+|---|---|---|
+| `SHOP_DOMAIN` | `sshwan.com` | 이미 맞게 들어 있다 |
+| `TRACK_DOMAIN` | **비운 채로** | 추적 도메인 등록 전 (3-2) |
+| `ACME_EMAIL` | 본인 메일 | 인증서 만료 60·30·7일 전 알림이 여기로 온다 |
+| `ACME_STAGING` | `true` | 이미 들어 있다 |
+| `CI_ENVIRONMENT` | `production` → **`development`** | 구축 중에만. 공개 전 되돌린다 |
+| `ENCRYPTION_KEY` | `openssl rand -hex 16` | |
+| `MYSQL_ROOT_PASSWORD` | `openssl rand -hex 16` | |
+| `MYSQL_PASSWORD` | `openssl rand -hex 16` | |
+| `REPL_PASSWORD` | `openssl rand -hex 16` | **한 번 정하면 바꾸지 않는다** |
+
+vim 으로 하나씩 고쳐도 되지만, 비밀값 넷은 손으로 옮겨 적다 틀리기 쉽다. 한 번에 채우려면:
+
+```bash
+sed -i \
+  -e "s|^ACME_EMAIL=.*|ACME_EMAIL=본인메일@example.com|" \
+  -e "s|^CI_ENVIRONMENT=.*|CI_ENVIRONMENT=development|" \
+  -e "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 16)|" \
+  -e "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)|" \
+  -e "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=$(openssl rand -hex 16)|" \
+  -e "s|^REPL_PASSWORD=.*|REPL_PASSWORD=$(openssl rand -hex 16)|" \
+  .env
+```
+
+`ACME_EMAIL` 만 실제 주소로 바꿔서 붙여 넣는다. 비밀값은 **서버에서 생성되고 서버에만 남는다** — 어디에도 옮겨 적지 않는다.
+
+### 채워졌는지 확인
+
+```bash
+sh scripts/check-env.sh
+```
+
+```
+  필수 값이 모두 채워졌습니다
+```
+
+가 나와야 한다. 이 검사는 컨테이너를 띄우기 전에 도는데, 이유는 두 값의 실패 방식이 고약해서다 — `MYSQL_ROOT_PASSWORD` 가 비면 MySQL 컨테이너가 아예 안 뜨고, `ENCRYPTION_KEY` 가 비면 **아무 에러 없이** 세션이 깨진다.
+
+눈으로 보고 싶으면 비밀값을 가린 채 출력한다.
+
+```bash
+grep -E '^(SHOP_DOMAIN|TRACK_DOMAIN|ACME_EMAIL|ACME_STAGING|CI_ENVIRONMENT|MYSQL_DATABASE|MYSQL_USER)=' .env
+grep -cE '^(ENCRYPTION_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|REPL_PASSWORD)=.+' .env   # 4 가 나와야 한다
+```
+
+> **값 뒤 인라인 주석은 그대로 둬도 된다.** `APP_TIMEZONE=UTC   # 저장·연산은 UTC` 같은 줄에서 Compose 의 dotenv 파서가 주석을 떼고 `UTC` 만 넘긴다. 컨테이너 안에서 실측해 확인했다.
+>
+> 다만 **값 자체에 공백이나 `#` 이 들어가면 따옴표로 감싸야 한다.** 이 프로젝트의 값은 전부 hex·도메인·불리언이라 해당 없다.
 
 > ### `CI_ENVIRONMENT` 를 언제 바꾸는가
 >
@@ -536,6 +574,8 @@ done
 | 루트 도메인에서 인증서 경고 | 서버 블록 누락 | 루트(`${SHOP_DOMAIN}`) 블록이 있어야 첫 443 블록으로 새지 않는다 |
 | MySQL 컨테이너가 반복 재시작 | RAM 부족 | swap 확인. `docker compose logs mysql-primary` 에 OOM 흔적 |
 | 복제가 안 붙음 | `REPL_PASSWORD` 불일치 | `.env` 를 바꿨다면 두 볼륨을 모두 지우고 다시 초기화해야 한다 |
+| MySQL 이 안 뜬다 | `MYSQL_ROOT_PASSWORD` 가 비었다 | `sh scripts/check-env.sh` (3-1) |
+| 세션이 유지되지 않는다 | `ENCRYPTION_KEY` 가 비었다. **에러 없이** 깨진다 | 위와 같다 |
 | `.env` 값이 반영 안 됨 | compose 가 캐시된 설정 사용 | `docker compose up -d --force-recreate` |
 | `docker: 'compose' is not a docker command` | AL2023 의 docker 패키지에 Compose v2 가 없다 | 3-0-1 |
 | 모든 요청이 500 | **`composer install` 을 안 했다.** `vendor/` 가 없으면 CodeIgniter 자체가 없다 | 6-1 |
