@@ -105,6 +105,17 @@ SELECT *
 - **대응**: setup.md 6-1 로 분리하고, 문제해결 표에 "모든 요청이 500" 항목을 넣었다. `--user $(id -u):$(id -g)` 를 빼면 `vendor/` 가 root 소유로 생겨 나중에 손을 못 댄다는 것도 같이
 - **배운 것**: 개발 환경은 **누적된 상태**다. 배포 문서를 쓰는 것이 그 누적을 드러내는 가장 싼 방법이다
 
+
+**⑦ 사용자 데이터에 Compose v2 설치가 빠져 있었다**
+
+```
+docker: 'compose' is not a docker command.
+```
+
+- **원인** [확인]: Amazon Linux 2023 의 `docker` 패키지에는 Compose v2 가 들어 있지 않고, `dnf` 에 별도 패키지도 없다. `dnf install -y docker git` 한 줄로 끝날 거라고 가정했다
+- **대응**: 공식 릴리스 바이너리를 `/usr/libexec/docker/cli-plugins/` 에 넣는다. 버전을 문서에 박지 않고 최신 태그를 리다이렉트에서 받아온다 — 존재하지 않는 태그를 적어 두면 몇 달 뒤 404 로 조용히 실패한다
+- **검증**: `amazonlinux:2023` 컨테이너에서 절차를 그대로 돌려 `Docker Compose version v5.5.1` 까지 확인했다. 문서에 적기 전에 돌려 보는 것이 ④에서 배운 것이다
+
 ### 결정한 것
 
 | 결정 | 근거 |

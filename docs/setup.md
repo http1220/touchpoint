@@ -170,6 +170,18 @@ echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf
 dnf install -y docker git
 systemctl enable --now docker
 usermod -aG docker ec2-user
+
+# Compose v2 는 AL2023 의 docker 패키지에 들어 있지 않다.
+# dnf 에도 없으므로 공식 릴리스를 CLI 플러그인 디렉터리에 직접 넣는다.
+# 버전을 박아 두지 않고 최신 태그를 받아온다 — 존재하지 않는 버전을
+# 적어 두면 몇 달 뒤 이 스크립트가 조용히 실패한다.
+COMPOSE_VER=$(curl -sI https://github.com/docker/compose/releases/latest \
+  | tr -d "\r" | awk 'tolower($0) ~ /^location:/ {n=split($0,a,"/"); print a[n]}')
+install -d /usr/libexec/docker/cli-plugins
+# t4g(arm64) 라면 파일명이 docker-compose-linux-aarch64 다.
+curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-x86_64" \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 ```
 
 ### 탄력적 IP
@@ -271,6 +283,29 @@ groups                  # docker 가 보여야 한다
 ```
 
 `groups` 에 `docker` 가 없으면 **한 번 로그아웃했다 다시 들어온다.** `usermod -aG docker` 는 새 로그인 세션부터 적용된다. 그래도 없으면 사용자 데이터가 실패한 것이니 [2장의 스크립트](#사용자-데이터-선택)를 `sudo` 붙여 손으로 돌린다.
+
+### 3-0-1. `docker: 'compose' is not a docker command`
+
+**Compose v2 는 AL2023 의 `docker` 패키지에 들어 있지 않다.** `dnf` 에도 별도 패키지가 없어서, 공식 릴리스 바이너리를 CLI 플러그인 디렉터리에 직접 넣어야 한다. 사용자 데이터에 이미 넣어 뒀지만, 그 전에 만든 인스턴스라면 지금 한 번 돌린다.
+
+```bash
+COMPOSE_VER=$(curl -sI https://github.com/docker/compose/releases/latest \
+  | tr -d "\r" | awk 'tolower($0) ~ /^location:/ {n=split($0,a,"/"); print a[n]}')
+echo "$COMPOSE_VER"                      # v로 시작하는 태그가 찍히는지 먼저 본다
+
+sudo install -d /usr/libexec/docker/cli-plugins
+sudo curl -fsSL \
+  "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-x86_64" \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+docker compose version
+```
+
+> 버전을 문서에 박아 두지 않는 이유: 존재하지 않는 태그를 적어 두면 몇 달 뒤 이 절차가 404 로 조용히 실패한다. 최신 릴리스 태그를 리다이렉트에서 받아온다.
+>
+> `t4g`(arm64) 인스턴스라면 파일명이 `docker-compose-linux-aarch64` 다. `uname -m` 으로 확인한다.
+
 
 ### 3-1. 클론과 `.env`
 
@@ -502,6 +537,7 @@ done
 | MySQL 컨테이너가 반복 재시작 | RAM 부족 | swap 확인. `docker compose logs mysql-primary` 에 OOM 흔적 |
 | 복제가 안 붙음 | `REPL_PASSWORD` 불일치 | `.env` 를 바꿨다면 두 볼륨을 모두 지우고 다시 초기화해야 한다 |
 | `.env` 값이 반영 안 됨 | compose 가 캐시된 설정 사용 | `docker compose up -d --force-recreate` |
+| `docker: 'compose' is not a docker command` | AL2023 의 docker 패키지에 Compose v2 가 없다 | 3-0-1 |
 | 모든 요청이 500 | **`composer install` 을 안 했다.** `vendor/` 가 없으면 CodeIgniter 자체가 없다 | 6-1 |
 | `Class "CI_Controller" not found` | 위와 같다 | 6-1 |
 | `vendor/` 를 지울 수 없다(Permission denied) | `--user` 없이 composer 를 돌려 root 소유로 생겼다 | `sudo rm -rf vendor` 후 6-1 을 다시 |
