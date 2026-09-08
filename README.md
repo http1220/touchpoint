@@ -1,11 +1,14 @@
 # touchpoint
 
+[![CI](https://github.com/http1220/touchpoint/actions/workflows/ci.yml/badge.svg)](https://github.com/http1220/touchpoint/actions/workflows/ci.yml)
+
 **광고 유입부터 결제 전환까지를 추적해 매체로 되돌려 보내는 파이프라인.**
 
 > 이건 웹툰 서비스가 아닙니다. 어트리뷰션 파이프라인이고, 도메인(회원·코인·회차)은 **전환을 측정할 대상이 필요해서** 최소한만 두었습니다. 그 도메인은 상상해서 만든 것이 아니라 **공개 자료를 조사해 역추론**했습니다 → [조사 요약](docs/research-method.md)
 
-- **상태**: 설계·인프라 구성 완료, 구현 착수 전 (2026-09-07)
-- **스택**: PHP 8.3 · CodeIgniter 4 · MySQL 8.0 · Docker · Caddy · AWS EC2
+- **상태**: 설계 완료 · CI3 스켈레톤과 스키마 마이그레이션 동작 확인 (2026-09-09)
+- **스택**: PHP 8.2 · **CodeIgniter 3** · MySQL 8.0(프라이머리+복제본) · **OpenResty(Nginx+Lua)** · Docker · AWS EC2 t3.small
+- **왜 이 스택인가**: 대상 조직이 쓰는 것에 맞췄습니다 → [ADR-014](docs/decisions/ADR-014-stack-alignment.md)
 - **로드맵**: [docs/roadmap.md](docs/roadmap.md) — 의도 → 기획 → 계획 3층 구조
 
 ---
@@ -38,14 +41,29 @@ flowchart LR
 ## 2. 실행 방법
 
 ```bash
-cp .env.example .env      # SHOP_DOMAIN / TRACK_DOMAIN / DB 비밀번호
-docker compose up -d
+cp .env.example .env      # SHOP_DOMAIN / TRACK_DOMAIN / DB·복제 비밀번호
+docker compose up -d      # openresty · app · mysql-primary · mysql-replica
+docker compose exec app php public/index.php cli/migrate latest
 ```
 
-컨테이너 4개(`caddy` · `app` · `worker` · `mysql`)가 뜹니다. 워커는 아웃박스가 생긴 뒤부터 필요하므로 기본 기동에서 빠져 있습니다.
+기본 기동은 컨테이너 4개입니다. 워커는 아웃박스에 적재가 생긴 뒤부터 필요하므로 프로파일로 분리해 두었습니다.
 
 ```bash
-docker compose --profile worker up -d --scale worker=4   # D12~
+docker compose --profile worker up -d --scale worker=4   # SKIP LOCKED 동시성 검증
+```
+
+마이그레이션은 CLI 로만 돕니다. 스키마를 바꾸는 경로를 브라우저 요청으로 열어두지 않습니다.
+
+```bash
+docker compose exec app php public/index.php cli/migrate current
+docker compose exec app php public/index.php cli/migrate to 20260909000600   # 인덱스 없는 상태로
+```
+
+동작 확인:
+
+```bash
+curl -s https://app.<SHOP_DOMAIN>/readyz     # 쓰기·읽기 커넥션과 배정된 복제본
+open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 속성
 ```
 
 **도메인·EC2·TLS 구축 절차 → [docs/setup.md](docs/setup.md)**
@@ -122,7 +140,7 @@ FOR UPDATE SKIP LOCKED;
 
 ## 7. 기술 선택과 근거 — 채택하지 않은 것 포함
 
-**11개 결정을 ADR로 기록했습니다** → [docs/decisions/](docs/decisions/)
+**17개 결정을 ADR로 기록했습니다** → [docs/decisions/](docs/decisions/)
 
 | # | 결정 | 왜 |
 |---|---|---|
@@ -132,6 +150,9 @@ FOR UPDATE SKIP LOCKED;
 | [005](docs/decisions/ADR-005-channel-adapter.md) | 채널 어댑터 | 대상 서비스에 매체가 **10종 이상** 붙어 있음 (실측) |
 | [006](docs/decisions/ADR-006-coin-ledger.md) | 코인 **원장** | 약관의 유료 5년 / 무료 1년은 잔액 컬럼으로 구현 불가 |
 | [009](docs/decisions/ADR-009-no-spa.md) | React **안 씀** | 백엔드 포지션 + 추적 스니펫은 프레임워크가 없어야 배포됨 |
+| [014](docs/decisions/ADR-014-stack-alignment.md) | **스택 정렬** | 최신 스택보다 **대상 조직과 같은 스택**에서 부딪히는 편이 값어치가 큼 |
+| [016](docs/decisions/ADR-016-payment-and-notification.md) | PG **2개** + 알림 | 어댑터의 값어치는 구현체가 2개 이상일 때만 증명됨 |
+| [017](docs/decisions/ADR-017-ci3-application-structure.md) | CI3 + **PSR-4 병용** | 컨트롤러는 관용구대로, 도메인 로직은 프레임워크 밖으로 빼서 테스트 가능하게 |
 | [010](docs/decisions/ADR-010-no-kubernetes.md) | K8s **안 씀** | 컨테이너 4개 |
 
 ### 리서치가 뒤집은 것 3개
@@ -156,21 +177,25 @@ AWS Well-Architected 6기둥 기준입니다.
 | 보안 | TLS, 최소권한, 시크릿 분리 |
 | **신뢰성** | **단일 인스턴스·단일 AZ — 의도적 포기** |
 | 성능 효율 | 인덱스 실습으로 증명 |
-| 비용 최적화 | 프리티어 t3.micro |
+| 비용 최적화 | t3.small. MySQL 2대가 t3.micro(1GB)에 올라가지 않습니다 |
 
-### 흉내인 것 (실물로 포장하지 않음)
+### 흉내가 아닌 것 · 흉내인 것
+
+정렬 원칙([ADR-014](docs/decisions/ADR-014-stack-alignment.md))을 세운 뒤 "일정이 빠듯하니 흉내로 대체하자"고 했던 결정 두 개를 되돌렸습니다.
 
 | 항목 | 실제 |
 |---|---|
-| **PG 결제** | 스텁. 검증한 것은 상태 머신·멱등성·감사 추적 → [ADR-008](docs/decisions/ADR-008-stub-pg.md) |
-| **읽기 복제본** | 복제본 없음. 커넥션 그룹 분리 + **지연 주입 시뮬레이션** → [ADR-007](docs/decisions/ADR-007-read-write-split.md) |
+| **읽기 복제본** | **실물.** MySQL 프라이머리 + 복제본을 GTID로 띄우고, Lua가 요청마다 읽기 대상을 배정합니다. 지연은 `SOURCE_DELAY`로 키웁니다 → [ADR-007](docs/decisions/ADR-007-read-write-split.md) |
+| **PG 결제** | **테스트 모듈 2개.** 어댑터의 값어치는 구현체가 2개 이상일 때만 증명됩니다. 결제 완료 알림까지 붙입니다 → [ADR-016](docs/decisions/ADR-016-payment-and-notification.md) |
 | 콘텐츠 도메인 | 전환 측정에 필요한 최소 필드만. 뷰어·랭킹·검색 없음 |
+| 광고 매체 | GA4·Meta는 실제 전송(테스트 이벤트 코드). 매체 3번째는 어댑터 주장 검증용 |
 
 ### 다음 단계
 
 - Meta CAPI에 픽셀 `event_id` 중복 제거 실측
 - 채널 3번째 추가로 "변경 파일 2개" 주장 검증
-- 복제본 실물 구성 (인스턴스 상향 시)
+- 커스텀 수집 2종(`/impression`·`/click`)으로 광고 태그 없이 자체 계측
+- CDN 도입 전후의 이미지 응답 시간·오리진 요청 수 비교
 
 ---
 

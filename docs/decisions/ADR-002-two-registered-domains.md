@@ -97,5 +97,5 @@ khan-edge.com    api. (수집 API)
 ## 결과
 
 - **비용**: 도메인 1개 값 추가 (연 1~2만원). 이 프로젝트에서 가장 값싼 지출
-- **운영**: Caddy 한 대가 두 도메인 인증서를 각각 ACME로 발급. DNS A 레코드는 같은 EIP로
+- **운영**: OpenResty 한 대가 두 도메인 인증서를 각각 ACME(certbot webroot)로 발급. DNS A 레코드는 같은 EIP로
 - **위험**: ACME rate limit. 설정 시행착오는 **staging 엔드포인트로 먼저** 검증한다

@@ -21,6 +21,94 @@
 
 ---
 
+## 2026-09-09 (수) · D-12
+
+### 한 일
+
+- `feat/ci3-skeleton` → `main` 병합. 리서치·설계·인프라·도메인 로직이 한 덩어리로 `main`에 올라감
+- **GitHub Actions CI** 추가 — 문법 검사 · 단위 테스트 · 경계 검사 · compose 유효성 · OpenResty 문법
+- **CodeIgniter 3 스켈레톤** 구성 — composer 로 `codeigniter/framework:3.1.13` 설치, `public/index.php` 를 프론트 컨트롤러로
+- **스키마 마이그레이션 7개** 작성하고 실제 MySQL 8.0 에 up → down → up 왕복 검증 (테이블 18개)
+- `MY_Controller` — 읽기 커넥션 배정, 상관 ID, 호스트 검증, RFC 9457 에러 응답
+- 진단 페이지를 `public/index.php` 에서 `Diag` 컨트롤러로 이관
+- EC2 t3.small 생성 절차와 비용 방어 장치를 [setup.md](setup.md) 2·2-1장에 정리
+- **도메인 1개로도 기동되도록 분리** — 추적 도메인 등록이 AWS 쪽 문제로 막혀, `api.` 서버 블록을 조건부 생성으로 뗌
+- EC2 t3.small 생성 절차와 비용 방어 장치를 [setup.md](setup.md) 2·2-1장에 정리
+
+### 막힌 것
+
+**① CI3 를 PHP 8.2 에서 돌리니 요청마다 deprecation 이 쏟아졌다** — [ADR-001](decisions/ADR-001-php-codeigniter.md)이 예고한 마찰의 첫 실물
+
+```
+PHP Deprecated:  Creation of dynamic property CI_URI::$config is deprecated
+                 in .../system/core/URI.php on line 102
+PHP Deprecated:  Creation of dynamic property CI_Router::$uri is deprecated
+                 in .../system/core/Router.php on line 128
+PHP Deprecated:  Creation of dynamic property CI_DB_mysqli_driver::$failover is deprecated
+                 in .../system/database/DB_driver.php on line 372
+PHP Deprecated:  Creation of dynamic property Migrate::$migration is deprecated
+                 in .../system/core/Loader.php on line 1284
+```
+
+- **원인** [확인]: CI3 의 로딩 방식 자체가 동적 프로퍼티다. `$this->load->library('x')` 가 `$this->x` 를 런타임에 만들어 붙인다. 8.2 에서 이건 deprecated 다. **프레임워크 내부(`vendor/`)에서 나는 것과 우리 컨트롤러에서 나는 것 두 종류**가 섞여 있었다
+- **대응**: 두 종류를 다르게 처리했다
+  - 우리 컨트롤러 쪽 — `MY_Controller` 에 `#[\AllowDynamicProperties]`. 상속되므로 한 곳으로 끝난다
+  - 프레임워크 내부 쪽 — `MY_Exceptions` 로 `log_exception()`·`show_php_error()` 를 감싸, **경로가 `vendor/codeigniter/framework/` 인 E_DEPRECATED 만** 걸러낸다
+- **배운 것**: 처음에는 `error_reporting` 에서 `E_DEPRECATED` 를 빼려고 했다. 그러면 **우리가 새로 쓴 코드의 deprecation 까지 같이 사라진다** — 8.2 위에서 CI3 를 돌리며 배우려던 것을 스스로 지우는 짓이다. 억제 조건을 "발생 위치"로 좁히니 우리 코드의 경고는 그대로 보인다. 그리고 억제한 건수는 세어서 `/diag` 에 띄운다. **안 보이게 하는 것과 없는 것처럼 구는 것은 다르다**
+
+**② `migration_table` 이 `NULL` 이었다**
+
+```
+Database error: Error Number: 1096  No tables used
+SELECT *
+```
+
+- **원인** [확인]: `$this->config->item('migration_table')` 이 `NULL`. CI3 의 Migration 라이브러리는 `config/migration.php` 를 **자기 안으로만** 가져가고 `$this->config` 에는 올리지 않는다. `$this->db->get(NULL)` 이 되어 `SELECT *` 만 나갔다
+- **대응**: 컨트롤러에서 `$this->config->load('migration', FALSE, TRUE)` 를 한 번 더 호출. 하드코딩하지 않은 이유는 설정을 바꿨을 때 조용히 어긋나기 때문
+- **배운 것**: CI3 의 "라이브러리가 설정을 먹는다"와 "설정이 전역에 올라간다"는 다른 일이다. 라이브러리 생성자에 `$config` 가 넘어가는 프레임워크에서는 매번 확인해야 한다
+
+**③ 인덱스 실험은 아직 성립하지 않는다**
+
+- `EXPLAIN` 을 인덱스 있음/없음 양쪽에서 떠 봤으나 **양쪽 다 `key: PRIMARY`** 였다
+- **원인** [확인]: 테이블이 비어 있다(`rows: 1`). 옵티마이저가 `ORDER BY id` 만 보고 PK 를 골랐다. 인덱스의 값어치는 **데이터가 있어야** 드러난다
+- **대응**: 인덱스 추가를 별도 마이그레이션(`20260909000700`)으로 떼어 두었으므로, 적재 후 `to 20260909000600` ↔ `latest` 로 왕복하며 다시 측정한다 → [benchmarks.md](benchmarks.md)
+
+
+**④ 엣지 컨테이너가 애초에 뜰 수 없는 상태였다** — 기동 검증을 미룬 대가
+
+```
+/entrypoint.sh: line 21: envsubst: not found
+```
+
+- **증상**: `${SHOP_DOMAIN}` 치환에 `envsubst` 를 쓰고 있었는데, `openresty/openresty:alpine` 에 gettext 가 없다. **설계한 날부터 지금까지 이 구성으로는 엣지가 한 번도 뜰 수 없었다.** 도커가 꺼져 있어 정적 검토로 넘어갔던 그 커밋이다
+- **원인** [확인]: 이미지에 들어 있는 도구를 확인하지 않고 "표준 도구니까 있겠지"로 넘어갔다. 알파인 계열은 gettext 가 기본이 아니다
+- **대응**: `sed` 로 바꿨다. 기동할 때마다 `apk add` 를 하면 네트워크에 의존하게 된다. 도메인 이름은 `|` 를 포함할 수 없어 구분자로 안전하고, 잘못된 값이 설정 파일에 박히지 않도록 형식 검증도 앞에 붙였다
+- **배운 것**: 2026-09-08 기록에 *"정적 검토는 기동 검증을 대신하지 못한다"* 라고 적어 놓고, 그 문장을 쓴 파일이 그대로 하루를 더 갔다. **적어 두는 것과 실행하는 것은 다르다.** 그래서 이번엔 CI 가 `entrypoint.sh` 를 **실제로 실행**하게 만들었다 — 설정 생성 로직을 워크플로에 다시 옮겨 적으면 두 벌이 갈라지고, 갈라진 쪽이 통과하는 CI 는 아무것도 보장하지 않는다
+
+### 결정한 것
+
+| 결정 | 근거 |
+|---|---|
+| CI3 를 **composer 로** 설치 (`system/` 을 저장소에 복사하지 않음) | 업그레이드가 `composer update` 한 줄이 되고, 저장소 diff 에 프레임워크 코드가 섞이지 않는다 |
+| 프론트 컨트롤러는 **`public/index.php` 하나** | 워커도 같은 파일을 쓴다(`php public/index.php cli/dispatch work`). 부트스트랩을 두 벌 두면 언젠가 갈라진다 |
+| 마이그레이션 DDL 을 **원문 SQL 로** (dbforge 아님) | `DATETIME(3)`·`BINARY(16)`·인덱스 컬럼 순서·`COLLATE` 를 dbforge 로는 정확히 못 쓴다. 그리고 [data-model.md](data-model.md)와 한 줄씩 대조할 수 있어야 한다 |
+| **FK 규칙**: 보존기간이 같으면 걸고, 다르면 걸지 않는다 | `users.signup_visit_id` 에 FK 를 걸면 3개월 파기 배치가 막히거나 CASCADE 로 회원이 지워진다. 보존기간이 설계 제약이 되는 자리 |
+| 폴링 인덱스를 **별도 마이그레이션**으로 분리 | 인덱스 있음/없음 두 상태를 명령 한 줄로 오갈 수 있어야 `EXPLAIN` 비교가 재현된다 |
+| CI 에 **경계 검사** 추가 (`src/` 가 CI3 를 참조하면 실패) | [ADR-017](decisions/ADR-017-ci3-application-structure.md)의 경계는 문서로만 두면 지켜지지 않는다. 깨지는 순간 단위 테스트가 통째로 불가능해진다 |
+| CI 에서 **자동 배포하지 않는다** | 서버 한 대다. 잘못 나갔을 때의 손해가 자동화의 이득보다 크다 |
+| 추적 도메인 없이도 기동 | 등록이 늦어진다고 나머지 12일을 놀릴 수 없다. 다만 **무엇이 성립하지 않는지**를 표로 명시해 둔다 — "되는 것처럼" 보이는 게 제일 나쁘다 |
+| t3 크레딧을 `standard` 로 | `unlimited` 는 크레딧 소진 후 vCPU-시간당 별도 과금이다. t3 에서 요금이 새는 유일한 구멍이고, CPU 가 오래 100% 라면 그건 돈으로 덮을 게 아니라 고칠 버그다 |
+
+### 다음
+
+- [ ] 추적용 도메인 재선정 — `khan-edge.com` 등록 거절, AWS 쪽 문제로 재시도 보류. `khwanedge.com` 1순위
+- [ ] EC2 t3.small 기동 + 예산·이상탐지 알림 설정
+- [ ] GA4 속성과 API secret 발급
+- [ ] 채널 어댑터(`src/Channel/`)와 `Channels` 브리지
+- [ ] `track.js` — `fetch` 경로와 `sendBeacon` 경로 두 벌
+
+---
+
 ## 2026-09-08 (화) · D-13
 
 ### 한 일
@@ -100,7 +188,7 @@
 
 ### 다음
 
-- [x] **도메인 2개 등록** — `sshwan.com` · `khan-edge.com` (2026-09-08 결제, 등록 진행 중)
+- [~] **도메인 등록** — `sshwan.com` 확정(09-09 ICANN 인증 완료). `khan-edge.com` 은 **거절**되어 재선정 필요
 - [ ] **ICANN 인증 메일 처리** — 3~15일 내. 놓치면 도메인 정지
 - [ ] DNS 전파 확인 후 A 레코드 4개 생성
 - [ ] AWS 계정 확인 (프리티어 정책이 2025-07-15부로 변경됨)

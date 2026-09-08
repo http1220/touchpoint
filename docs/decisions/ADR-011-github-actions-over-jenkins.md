@@ -32,7 +32,7 @@
 | 이유 | 설명 |
 |---|---|
 | 저장소가 공개형 포트폴리오다 | 채용담당자가 클릭 한 번으로 **CI 통과 배지와 실행 로그**를 본다. Jenkins는 서버에 접속해야 보인다 |
-| Jenkins는 서버 운영이 필요하다 | t3.micro에 Jenkins를 올리면 그것만으로 RAM이 끝난다 |
+| Jenkins는 서버 운영이 필요하다 | t3.small에 Jenkins를 올리면 그것만으로 RAM이 끝난다 |
 | 검증 범위가 같다 | lint + test + 이미지 빌드. 도구가 달라도 검증하는 것은 동일 |
 
 **그리고 이 문서에서 조직 표준이 Jenkins임을 명시한다.** 모르고 안 쓴 것과 알고 안 쓴 것은 다르다.
@@ -42,7 +42,7 @@
 | 단계 | 내용 |
 |---|---|
 | lint | `php-cs-fixer --dry-run`, `phpstan` |
-| test | PHPUnit (CI4 테스트) |
+| test | PHPUnit (`src/` 단위 테스트) + `src/` 의 프레임워크 비의존 경계 검사 |
 | build | `docker build` 성공 여부까지만 |
 | **scan** | Trivy로 이미지 CVE 스캔 (1단계) |
 
@@ -52,7 +52,7 @@
 
 | 대안 | 기각 사유 |
 |---|---|
-| Jenkins를 EC2에 구축 | t3.micro RAM 1GB. Jenkins 하나로 끝난다 |
+| Jenkins를 EC2에 구축 | t3.small RAM 2GB. Jenkins 하나로 상당량이 나간다 |
 | CI 없음 | 테스트가 도는지 보여줄 방법이 없다 |
 | GitLab CI | 저장소가 GitHub에 있다 |
 | Actions에서 SSH 배포까지 | 배포 키를 저장소 시크릿에 넣어야 한다. 포트폴리오 공개 저장소에서 위험 대비 이득이 적음 |

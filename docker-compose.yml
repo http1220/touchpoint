@@ -17,47 +17,42 @@ services:
       - "443:443"
     environment:
       SHOP_DOMAIN: ${SHOP_DOMAIN:?SHOP_DOMAIN 이 필요합니다}
-      TRACK_DOMAIN: ${TRACK_DOMAIN:?TRACK_DOMAIN 이 필요합니다}
+      # 비워 둘 수 있다. 그러면 api. 수집 호스트 없이 뜬다.
+      # 도메인 등록이 늦어져도 광고주 측은 먼저 띄우기 위한 것이고,
+      # 그동안 크로스사이트 실험은 성립하지 않는다. → ADR-002
+      TRACK_DOMAIN: ${TRACK_DOMAIN:-}
     volumes:
       - ./docker/openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.template:ro
+      - ./docker/openresty/templates:/usr/local/openresty/nginx/templates:ro
+      - ./docker/openresty/entrypoint.sh:/entrypoint.sh:ro
       - ./docker/openresty/conf.d:/etc/nginx/conf.d:ro
       - ./docker/openresty/lua:/usr/local/openresty/nginx/lua:ro
       - ./public:/var/www/html/public:ro
       - certbot_conf:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot
-    # nginx.conf 안의 ${SHOP_DOMAIN} 등을 치환한 뒤 기동한다.
-    command: >
-      sh -c "envsubst '$$SHOP_DOMAIN $$TRACK_DOMAIN'
-             < /usr/local/openresty/nginx/conf/nginx.template
-             > /usr/local/openresty/nginx/conf/nginx.conf
-             && exec openresty -g 'daemon off;'"
+    # 설정 생성 후 기동. 조건부 서버 블록 때문에 스크립트가 필요하다.
+    command: ["sh", "/entrypoint.sh"]
     mem_limit: 128m
     depends_on:
       - app
 
   # ── 인증서 발급 (일회성) ──────────────────────────────
   # docker compose --profile cert run --rm certbot
-  # 처음에는 반드시 --staging 을 붙여 검증한다. docs/setup.md 4장
+  # 처음에는 반드시 .env 의 ACME_STAGING 을 채우고 검증한다. docs/setup.md 4장
   certbot:
     profiles: ["cert"]
     image: certbot/certbot:latest
     volumes:
       - certbot_conf:/etc/letsencrypt
       - certbot_www:/var/www/certbot
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "certbot certonly --webroot -w /var/www/certbot
-       --email $${ACME_EMAIL} --agree-tos --no-eff-email
-       -d $${SHOP_DOMAIN} -d lp.$${SHOP_DOMAIN} -d m.$${SHOP_DOMAIN} -d app.$${SHOP_DOMAIN}
-       --cert-name $${SHOP_DOMAIN}
-       && certbot certonly --webroot -w /var/www/certbot
-       --email $${ACME_EMAIL} --agree-tos --no-eff-email
-       -d api.$${TRACK_DOMAIN}
-       --cert-name $${TRACK_DOMAIN}"
+      - ./docker/certbot/issue.sh:/issue.sh:ro
+    entrypoint: ["sh", "/issue.sh"]
     environment:
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL 이 필요합니다}
       SHOP_DOMAIN: ${SHOP_DOMAIN}
-      TRACK_DOMAIN: ${TRACK_DOMAIN}
+      TRACK_DOMAIN: ${TRACK_DOMAIN:-}
+      # 비어 있지 않으면 --staging 이 붙는다.
+      ACME_STAGING: ${ACME_STAGING:-}
 
   # ── 앱 ────────────────────────────────────────────────
   app:
@@ -84,7 +79,7 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     restart: unless-stopped
-    command: ["php", "index.php", "cli/dispatch", "work"]
+    command: ["php", "public/index.php", "cli/dispatch", "work"]
     env_file: [.env]
     volumes:
       - .:/var/www/html

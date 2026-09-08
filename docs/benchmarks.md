@@ -9,7 +9,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 인스턴스 | AWS EC2 t3.micro (2 vCPU burst, 1GB RAM) + swap 2GB |
+| 인스턴스 | AWS EC2 t3.small (2 vCPU burst, 2GB RAM) + swap 2GB |
 | DB | MySQL 8.0, `innodb_buffer_pool_size` = (측정 시 기록) |
 | PHP | 8.3-fpm, `pm.max_children` = (측정 시 기록) |
 | 부하 도구 | (선정 후 기록) |
@@ -156,7 +156,7 @@ WHERE user_id = ? AND remaining > 0 AND expires_at > NOW(3);
 | CPU 크레딧 잔량 | | | ☐ |
 | 디스크 I/O | | | ☐ |
 
-> **t3.micro RAM 1GB에 MySQL + PHP-FPM + Caddy + 워커 4개**는 빠듯하다. swap이 실제로 얼마나 쓰이는지가 이 구성의 성립 여부를 판정한다.
+> **t3.small RAM 2GB에 MySQL 2대 + PHP-FPM + OpenResty + 워커 4개**는 빠듯하다. 메모리 상한 합계가 약 1.2GB이고, swap이 실제로 얼마나 쓰이는지가 이 구성의 성립 여부를 판정한다.
 
 ---
 
