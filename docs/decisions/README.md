@@ -19,6 +19,8 @@
 | [012](ADR-012-observability-scope.md) | 관측 가능성 범위 | 어트리뷰션은 그대로, 계측을 **운영 관점으로 승격**. 인프라 포지션 동시 지원 대응 |
 | [013](ADR-013-caddy-over-nginx.md) | **OpenResty** (Caddy 아님) | 최초 결정을 뒤집음. Lua로 복제본 배정을 구현한다 |
 | [014](ADR-014-stack-alignment.md) | **스택 정렬 원칙** | 다른 모든 ADR을 지배. "이 경험이 그 회사 업무에서 그대로 쓰이는가" |
+| [015](ADR-015-image-pipeline-cdn.md) | 이미지 S3 + CloudFront | **Phase 2.** 웹툰은 이미지가 본체. 미경험 영역이라 학습 가치가 크다 |
+| [016](ADR-016-payment-and-notification.md) | PG 테스트 연동 + 알림 어댑터 | **Phase 2.** 008 개정 — 구현체가 하나면 어댑터가 검증되지 않는다 |
 
 ---
 
