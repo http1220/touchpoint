@@ -49,9 +49,13 @@ $config['directory_trigger']   = 'd';
 |
 | 파일이 아니라 stderr 로 보낸다 — 컨테이너 로그가 곧 애플리케이션 로그다.
 | 12-Factor 의 로그 규칙이고, docker logs 하나로 전 계층을 볼 수 있게 된다.
-| CI3는 log_path 에 파일을 쓰므로, 심각한 것만 남기고 상세는 error_log() 로 보낸다.
+| CI3 는 기본적으로 application/logs/ 에 파일을 쓰는데, 바인드 마운트에서는
+| 권한이 없으면 예외도 없이 로깅이 꺼진다. 그래서 application/core/MY_Log.php 가
+| write_log() 를 덮어 JSON 한 줄을 stderr 로 보낸다.
 */
 $config['log_threshold']       = (ENVIRONMENT === 'production') ? 1 : 4;
+// MY_Log 가 stderr 로 보내므로 이 값은 쓰이지 않는다.
+// 남겨 두는 이유는 MY_Log 를 지웠을 때 기본 동작으로 돌아가게 하기 위함이다.
 $config['log_path']            = '';
 $config['log_file_extension']  = '';
 $config['log_file_permissions'] = 0644;

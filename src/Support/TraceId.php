@@ -17,6 +17,9 @@ namespace App\Support;
  */
 final class TraceId
 {
+    /** 이번 요청의 값. 한 요청 안에서는 항상 같아야 한다. */
+    private static ?string $current = null;
+
     /** nginx 의 $request_id 는 32자 hex 다. 그 형태만 통과시킨다. */
     private const PATTERN = '/\A[0-9a-f]{32}\z/';
 
@@ -35,6 +38,24 @@ final class TraceId
         $raw = strtolower(trim((string) $raw));
 
         return preg_match(self::PATTERN, $raw) === 1 ? $raw : self::generate();
+    }
+
+    /**
+     * 이번 요청의 상관 ID. 처음 부를 때 정해지고 이후로는 같은 값을 준다.
+     *
+     * 매번 fromEdge() 를 부르면, 엣지 값이 없는 경로에서 호출할 때마다
+     * 다른 값이 생긴다. 그러면 응답 헤더의 ID 와 로그 줄의 ID 가 달라져
+     * 상관 ID 가 상관을 못 짓는다.
+     */
+    public static function current(): string
+    {
+        return self::$current ??= self::fromEdge($_SERVER['AB_TRACE_ID'] ?? null);
+    }
+
+    /** 테스트에서 요청 경계를 흉내내기 위한 초기화. */
+    public static function reset(): void
+    {
+        self::$current = null;
     }
 
     /** 엣지가 없는 경로(CLI 워커·테스트)에서 쓴다. */

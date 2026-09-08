@@ -3,7 +3,7 @@
 목표: **광고주 측 호스트(루트 · `lp.` · `m.` · `app.`)가 자물쇠 표시로 열리는 진단 화면.** 여기까지가 D1~D2다.
 그 다음이 CodeIgniter 3 기동과 스키마 마이그레이션이다.
 
-추적 도메인(`api.`)은 등록되면 붙인다. 없어도 여기까지는 전부 진행된다 → [3-1](#3-1-추적-도메인이-아직-없을-때)
+추적 도메인(`api.`)은 등록되면 붙인다. 없어도 여기까지는 전부 진행된다 → [3-2](#3-2-추적-도메인이-아직-없을-때)
 
 ---
 
@@ -11,7 +11,7 @@
 
 | 항목 | 비고 |
 |---|---|
-| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md)<br>광고주 측 1개만 있어도 착수는 된다 (3-1) |
+| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md)<br>광고주 측 1개만 있어도 착수는 된다 (3-2) |
 | AWS 계정 | 없으면 카드 등록·본인인증에 반나절. **결제 알림을 먼저 걸고 인스턴스를 만든다** (2-1) |
 | DNS | 도메인을 Route 53에서 등록했다면 호스팅 영역이 이미 있다. 확인: `dig +short NS <도메인>` 에 **awsdns** 가 나오는지 (1장) |
 | GA4 속성 | `measurement_id` + **API secret** (D12에 필요, 리드타임 대비 미리) |
@@ -170,6 +170,18 @@ echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf
 dnf install -y docker git
 systemctl enable --now docker
 usermod -aG docker ec2-user
+
+# Compose v2 는 AL2023 의 docker 패키지에 들어 있지 않다.
+# dnf 에도 없으므로 공식 릴리스를 CLI 플러그인 디렉터리에 직접 넣는다.
+# 버전을 박아 두지 않고 최신 태그를 받아온다 — 존재하지 않는 버전을
+# 적어 두면 몇 달 뒤 이 스크립트가 조용히 실패한다.
+COMPOSE_VER=$(curl -sI https://github.com/docker/compose/releases/latest \
+  | tr -d "\r" | awk 'tolower($0) ~ /^location:/ {n=split($0,a,"/"); print a[n]}')
+install -d /usr/libexec/docker/cli-plugins
+# t4g(arm64) 라면 파일명이 docker-compose-linux-aarch64 다.
+curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-x86_64" \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 ```
 
 ### 탄력적 IP
@@ -254,26 +266,118 @@ MFA를 켜고, 일상 작업은 IAM 사용자로 한다. **비용이 폭발하�
 ---
 ## 3. 저장소와 환경 설정
 
+**여기부터는 전부 EC2 인스턴스 안에서 한다.** 로컬 PC 가 아니다.
+
 ```bash
-git clone <repo> touchpoint
-cd touchpoint
-cp .env.example .env
-openssl rand -hex 16    # ENCRYPTION_KEY / REPL_PASSWORD 용. 두 번 돌린다
+ssh -i touchpoint.pem ec2-user@<EIP>
 ```
 
-`.env`에서 반드시 채울 것:
+> `Permissions 0644 for 'touchpoint.pem' are too open` 이 나오면 키 파일 권한 문제다. 리눅스·맥은 `chmod 400 touchpoint.pem`. 윈도우 PowerShell 이면 파일 속성 → 보안 → 고급에서 상속을 끊고 본인만 남긴다.
 
-| 키 | 값 |
-|---|---|
-| `SHOP_DOMAIN` | 실제 구매 도메인 |
-| `TRACK_DOMAIN` | 추적 도메인. **아직 없으면 비워 둔다** (아래 3-1) |
-| `ACME_EMAIL` | 인증서 만료 알림 수신 주소 |
-| `MYSQL_ROOT_PASSWORD` / `MYSQL_PASSWORD` | 직접 생성 |
-| `REPL_PASSWORD` | 복제 계정. **나중에 바꾸면 볼륨을 지워야 한다** |
-| `ENCRYPTION_KEY` | CI3 세션·해시 소금. 32자 hex |
-| `ACME_STAGING` | **처음에는 `true`** |
+### 3-0. 사용자 데이터가 제대로 돌았는지
 
-### 3-1. 추적 도메인이 아직 없을 때
+```bash
+free -h                 # Swap 2.0Gi
+docker compose version  # v2.x
+groups                  # docker 가 보여야 한다
+```
+
+`groups` 에 `docker` 가 없으면 **한 번 로그아웃했다 다시 들어온다.** `usermod -aG docker` 는 새 로그인 세션부터 적용된다. 그래도 없으면 사용자 데이터가 실패한 것이니 [2장의 스크립트](#사용자-데이터-선택)를 `sudo` 붙여 손으로 돌린다.
+
+### 3-0-1. `docker: 'compose' is not a docker command`
+
+**Compose v2 는 AL2023 의 `docker` 패키지에 들어 있지 않다.** `dnf` 에도 별도 패키지가 없어서, 공식 릴리스 바이너리를 CLI 플러그인 디렉터리에 직접 넣어야 한다. 사용자 데이터에 이미 넣어 뒀지만, 그 전에 만든 인스턴스라면 지금 한 번 돌린다.
+
+```bash
+COMPOSE_VER=$(curl -sI https://github.com/docker/compose/releases/latest \
+  | tr -d "\r" | awk 'tolower($0) ~ /^location:/ {n=split($0,a,"/"); print a[n]}')
+echo "$COMPOSE_VER"                      # v로 시작하는 태그가 찍히는지 먼저 본다
+
+sudo install -d /usr/libexec/docker/cli-plugins
+sudo curl -fsSL \
+  "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-x86_64" \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+docker compose version
+```
+
+> 버전을 문서에 박아 두지 않는 이유: 존재하지 않는 태그를 적어 두면 몇 달 뒤 이 절차가 404 로 조용히 실패한다. 최신 릴리스 태그를 리다이렉트에서 받아온다.
+>
+> `t4g`(arm64) 인스턴스라면 파일명이 `docker-compose-linux-aarch64` 다. `uname -m` 으로 확인한다.
+
+
+### 3-1. 클론과 `.env`
+
+```bash
+git clone https://github.com/http1220/touchpoint.git
+cd touchpoint
+cp .env.example .env
+chmod 600 .env          # 비밀값이 들어간다
+```
+
+**손으로 고칠 줄은 여섯이다.** 나머지는 기본값 그대로 둔다.
+
+| 줄 | 바꿀 값 | 비고 |
+|---|---|---|
+| `SHOP_DOMAIN` | `sshwan.com` | 이미 맞게 들어 있다 |
+| `TRACK_DOMAIN` | **비운 채로** | 추적 도메인 등록 전 (3-2) |
+| `ACME_EMAIL` | 본인 메일 | 인증서 만료 60·30·7일 전 알림이 여기로 온다 |
+| `ACME_STAGING` | `true` | 이미 들어 있다 |
+| `CI_ENVIRONMENT` | `production` → **`development`** | 구축 중에만. 공개 전 되돌린다 |
+| `ENCRYPTION_KEY` | `openssl rand -hex 16` | |
+| `MYSQL_ROOT_PASSWORD` | `openssl rand -hex 16` | |
+| `MYSQL_PASSWORD` | `openssl rand -hex 16` | |
+| `REPL_PASSWORD` | `openssl rand -hex 16` | **한 번 정하면 바꾸지 않는다** |
+
+vim 으로 하나씩 고쳐도 되지만, 비밀값 넷은 손으로 옮겨 적다 틀리기 쉽다. 한 번에 채우려면:
+
+```bash
+sed -i \
+  -e "s|^ACME_EMAIL=.*|ACME_EMAIL=본인메일@example.com|" \
+  -e "s|^CI_ENVIRONMENT=.*|CI_ENVIRONMENT=development|" \
+  -e "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 16)|" \
+  -e "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)|" \
+  -e "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=$(openssl rand -hex 16)|" \
+  -e "s|^REPL_PASSWORD=.*|REPL_PASSWORD=$(openssl rand -hex 16)|" \
+  .env
+```
+
+`ACME_EMAIL` 만 실제 주소로 바꿔서 붙여 넣는다. 비밀값은 **서버에서 생성되고 서버에만 남는다** — 어디에도 옮겨 적지 않는다.
+
+### 채워졌는지 확인
+
+```bash
+sh scripts/check-env.sh
+```
+
+```
+  필수 값이 모두 채워졌습니다
+```
+
+가 나와야 한다. 이 검사는 컨테이너를 띄우기 전에 도는데, 이유는 두 값의 실패 방식이 고약해서다 — `MYSQL_ROOT_PASSWORD` 가 비면 MySQL 컨테이너가 아예 안 뜨고, `ENCRYPTION_KEY` 가 비면 **아무 에러 없이** 세션이 깨진다.
+
+눈으로 보고 싶으면 비밀값을 가린 채 출력한다.
+
+```bash
+grep -E '^(SHOP_DOMAIN|TRACK_DOMAIN|ACME_EMAIL|ACME_STAGING|CI_ENVIRONMENT|MYSQL_DATABASE|MYSQL_USER)=' .env
+grep -cE '^(ENCRYPTION_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|REPL_PASSWORD)=.+' .env   # 4 가 나와야 한다
+```
+
+> **값 뒤 인라인 주석은 그대로 둬도 된다.** `APP_TIMEZONE=UTC   # 저장·연산은 UTC` 같은 줄에서 Compose 의 dotenv 파서가 주석을 떼고 `UTC` 만 넘긴다. 컨테이너 안에서 실측해 확인했다.
+>
+> 다만 **값 자체에 공백이나 `#` 이 들어가면 따옴표로 감싸야 한다.** 이 프로젝트의 값은 전부 hex·도메인·불리언이라 해당 없다.
+
+> ### `CI_ENVIRONMENT` 를 언제 바꾸는가
+>
+> `development` 는 PHP 에러를 **화면에 그대로 출력한다.** 파일 경로와 스택 트레이스가 방문자에게 보인다는 뜻이다. 구축 중에는 그게 있어야 원인을 빨리 찾지만, 링크를 남에게 주기 전에는 반드시 `production` 으로 바꾸고 컨테이너를 재기동한다.
+>
+> ```bash
+> sed -i 's/^CI_ENVIRONMENT=.*/CI_ENVIRONMENT=production/' .env
+> docker compose up -d --force-recreate app
+> ```
+
+### 3-2. 추적 도메인이 아직 없을 때
 
 `TRACK_DOMAIN`을 비워 두면 `api.` 수집 호스트 없이 뜬다. 광고주 측(`lp.` `m.` `app.`)은 전부 정상 동작한다.
 
@@ -312,14 +416,21 @@ docker compose up -d --force-recreate openresty
 ```bash
 # .env 에 ACME_STAGING=true 인지 확인
 docker compose up -d openresty          # 80 포트로 ACME 챌린지를 받는다
+```
+
+> 이 명령이 `app` 컨테이너 이미지를 처음 빌드한다. PHP 확장을 컴파일하므로 **5~10분** 걸린다. 인증서만 받을 것이라 앱이 아직 비어 있어도(=`vendor/` 없음) 상관없다 — ACME 챌린지는 nginx 가 정적 파일로 응답한다.
+
+```bash
 docker compose --profile cert run --rm certbot
 ```
 
 `SHOP_DOMAIN`(루트 + `lp.` `m.` `app.`)에 하나. `TRACK_DOMAIN` 이 채워져 있으면 `api.` 에 하나 더 발급된다. 비어 있으면 건너뛴다는 메시지가 나오고 정상 종료한다.
 
 ```bash
-curl -kI https://lp.<SHOP_DOMAIN>
-# 200 이 오면 성공. 인증서 경고(-k)는 스테이징 CA라 정상이다.
+curl -kI https://lp.<SHOP_DOMAIN> 2>&1 | head -1
+# 여기서 확인하는 것은 TLS 핸드셰이크가 되느냐다.
+# 502 가 나와도 정상이다 — 아직 composer install 전이라 앱이 비어 있다(6-1).
+# 인증서 경고(-k)도 스테이징 CA라 정상이다.
 ```
 
 > 발급 실패 시 `openresty` 컨테이너 로그에서 `/.well-known/acme-challenge/` 요청이 **200 으로** 찍혔는지 본다. 404 라면 DNS 나 webroot 볼륨 문제다.
@@ -352,22 +463,80 @@ docker compose restart openresty
 
 ## 6. 애플리케이션 기동과 마이그레이션
 
+### 6-1. 의존성 — 이걸 빼먹으면 전부 500 이다
+
+`vendor/` 는 저장소에 없다(`.gitignore`). CodeIgniter 자체가 composer 의존성이므로, **클론 직후에는 프레임워크가 아예 없는 상태다.**
+
 ```bash
-docker compose up -d
+docker compose run --rm --no-deps --user "$(id -u):$(id -g)" \
+  app composer install --no-dev --optimize-autoloader
+```
+
+| 옵션 | 왜 |
+|---|---|
+| `--no-deps` | MySQL 을 띄우지 않는다. 의존성 설치에 DB 가 필요 없다 |
+| `--user $(id -u):$(id -g)` | 없으면 `vendor/` 가 root 소유로 생겨 나중에 손댈 때 sudo 가 필요해진다 |
+| `--no-dev` | PHPUnit 은 서버에 필요 없다. 테스트는 CI 가 돌린다 |
+| `--optimize-autoloader` | 클래스맵을 미리 만든다. 요청마다 파일을 찾지 않는다 |
+
+`ls vendor/codeigniter/framework/system` 이 나오면 성공이다.
+
+### 6-2. 기동
+
+```bash
+docker compose up -d --build
+docker compose ps        # openresty · app · mysql-primary · mysql-replica 넷이 Up
+```
+
+> 첫 `--build` 는 PHP 확장(`intl`·`mysqli`·`opcache`…)을 컴파일하므로 t3.small 에서 **5~10분** 걸린다. 두 번째부터는 캐시된다. 여기서 멈춘 것처럼 보여도 기다린다.
+
+### 6-3. 마이그레이션
+
+```bash
 docker compose exec app php public/index.php cli/migrate latest
 docker compose exec app php public/index.php cli/migrate current   # 20260909000700
 ```
 
-복제가 붙었는지 확인한다. **여기서 `Slave_IO_Running`/`Slave_SQL_Running` 이 둘 다 `Yes` 가 아니면 읽기 분리 실험 전체가 성립하지 않는다.**
+테이블 18개 + `ci_migrations` 가 생긴다.
 
 ```bash
-docker compose exec mysql-replica \
-  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS\G" \
-  | grep -E "Replica_IO_Running|Replica_SQL_Running|Seconds_Behind_Source"
+docker compose exec mysql-primary sh -c \
+  'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -D "$MYSQL_DATABASE" -e "SHOW TABLES"'
+```
+
+### 6-4. 복제 확인
+
+**둘 다 `Yes` 가 아니면 읽기 분리 실험 전체가 성립하지 않는다.** MySQL 8.0.22 부터 항목 이름이 `Slave_*` 에서 `Replica_*` 로 바뀌었다.
+
+```bash
+docker compose exec mysql-replica sh -c \
+  'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS\G"' \
+  | grep -E "Replica_IO_Running|Replica_SQL_Running|Seconds_Behind_Source|Last_Error"
+```
+
+붙지 않았다면 원인은 십중팔구 `REPL_PASSWORD` 불일치다. `.env` 를 나중에 고쳤다면 볼륨을 지우고 처음부터 초기화해야 한다.
+
+```bash
+docker compose down
+docker volume rm touchpoint_mysql_primary touchpoint_mysql_replica
+docker compose up -d
+```
+
+### 6-5. 로그 보기
+
+앱 로그는 파일이 아니라 **컨테이너 stdout/stderr** 로 나온다. 엣지와 앱을 한 화면에서 볼 수 있다.
+
+```bash
+docker compose logs -f openresty app
+```
+
+앱 로그는 JSON 한 줄이고 `trace_id` 가 붙어 있다. 엣지 로그의 `trace_id` 와 같은 값이므로, 느린 요청 하나를 잡아 양쪽을 이어서 볼 수 있다.
+
+```bash
+docker compose logs app | grep '"trace_id":"<그 값>"'
 ```
 
 ---
-
 ## 7. 검증 — 여기까지가 D1~D2 완료 조건
 
 | # | 확인 | 방법 |
@@ -405,7 +574,13 @@ done
 | 루트 도메인에서 인증서 경고 | 서버 블록 누락 | 루트(`${SHOP_DOMAIN}`) 블록이 있어야 첫 443 블록으로 새지 않는다 |
 | MySQL 컨테이너가 반복 재시작 | RAM 부족 | swap 확인. `docker compose logs mysql-primary` 에 OOM 흔적 |
 | 복제가 안 붙음 | `REPL_PASSWORD` 불일치 | `.env` 를 바꿨다면 두 볼륨을 모두 지우고 다시 초기화해야 한다 |
+| MySQL 이 안 뜬다 | `MYSQL_ROOT_PASSWORD` 가 비었다 | `sh scripts/check-env.sh` (3-1) |
+| 세션이 유지되지 않는다 | `ENCRYPTION_KEY` 가 비었다. **에러 없이** 깨진다 | 위와 같다 |
 | `.env` 값이 반영 안 됨 | compose 가 캐시된 설정 사용 | `docker compose up -d --force-recreate` |
+| `docker: 'compose' is not a docker command` | AL2023 의 docker 패키지에 Compose v2 가 없다 | 3-0-1 |
+| 모든 요청이 500 | **`composer install` 을 안 했다.** `vendor/` 가 없으면 CodeIgniter 자체가 없다 | 6-1 |
+| `Class "CI_Controller" not found` | 위와 같다 | 6-1 |
+| `vendor/` 를 지울 수 없다(Permission denied) | `--user` 없이 composer 를 돌려 root 소유로 생겼다 | `sudo rm -rf vendor` 후 6-1 을 다시 |
 | 502 Bad Gateway | `app` 컨테이너 미기동 | `docker compose ps`, `logs app` |
 | 마이그레이션이 `(없음)` 에서 안 올라감 | `migration_version` 을 안 올렸다 | 새 마이그레이션을 추가하면 `config/migration.php` 의 목표 버전도 올린다 |
 | 로그인이 간헐적으로 풀림 | 세션 조회가 복제본으로 갔다 | `database.php` 의 `$active_group` 이 `write` 인지 확인 |
