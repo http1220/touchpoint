@@ -1,0 +1,125 @@
+# touchpoint · CI
+#
+# 여기서 도는 것은 셋뿐이다 — 문법, 단위 테스트, 구성 파일 유효성.
+# 배포는 하지 않는다. 서버가 한 대뿐이라 자동 배포의 이득보다
+# 잘못 나갔을 때의 손해가 크다. → docs/decisions/ADR-011-github-actions-over-jenkins.md
+#
+# 로컬은 PHP 8.2-fpm-alpine, 여기는 8.2 CLI 다. 런타임 버전을 맞춰 두지 않으면
+# "내 컴퓨터에서는 됩니다"가 CI 통과 여부로 바뀔 뿐이다.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# 같은 브랜치에 연달아 푸시하면 앞의 실행을 취소한다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: 문법 · 단위 테스트
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          # 로컬 Dockerfile 이 설치하는 확장과 맞춘다.
+          extensions: mbstring, intl, bcmath, mysqli, pdo_mysql
+          coverage: none
+          ini-values: date.timezone=UTC, error_reporting=E_ALL
+
+      - name: composer 캐시
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      # --no-scripts: composer.json 에 스크립트가 늘어났을 때
+      # CI 가 조용히 그걸 실행하는 일이 없도록 명시적으로 막는다.
+      - name: 의존성 설치
+        run: composer install --prefer-dist --no-progress --no-interaction --no-scripts
+
+      # 문법 검사는 src/ 뿐 아니라 application/ 도 본다.
+      # CI3 컨트롤러는 단위 테스트가 닿지 않는 영역이라
+      # 문법 오류를 잡아 주는 곳이 여기밖에 없다.
+      - name: 문법 검사
+        run: |
+          set -e
+          files=$(find src tests application public -name '*.php' -type f | sort)
+          echo "$files" | wc -l | xargs echo "검사 대상:"
+          for f in $files; do php -l "$f" > /dev/null; done
+          echo "문법 오류 없음"
+
+      - name: 단위 테스트
+        run: vendor/bin/phpunit --colors=never
+
+      # ADR-017 의 경계가 실제로 지켜지는지 확인한다.
+      # src/ 가 CI3 를 참조하기 시작하면 그 순간 단위 테스트가 불가능해지고,
+      # 그러면 어댑터·원장·멱등성 로직의 검증 수단이 통째로 사라진다.
+      # 문서로만 적어 둔 규칙은 지켜지지 않는다 — 그래서 여기서 강제한다.
+      - name: 경계 검사 (src/ 는 CodeIgniter 를 모른다)
+        run: |
+          if grep -rnE '\b(CI_Controller|CI_Model|CI_Migration|get_instance|\$this->load)\b' src/; then
+            echo "src/ 에서 CodeIgniter 를 참조했습니다. 도메인 로직은 프레임워크에 의존하지 않습니다 (ADR-017)."
+            exit 1
+          fi
+          echo "경계 유지됨"
+
+  infra:
+    name: 인프라 구성 파일
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 값이 없으면 ${VAR:?} 때문에 검증 자체가 실패한다.
+      # 자리만 채우는 더미 값이고, 실제 값은 서버의 .env 에만 있다.
+      - name: 더미 .env
+        run: |
+          cp .env.example .env
+          {
+            echo 'MYSQL_ROOT_PASSWORD=ci-dummy'
+            echo 'MYSQL_PASSWORD=ci-dummy'
+            echo 'REPL_PASSWORD=ci-dummy'
+            echo 'ENCRYPTION_KEY=00000000000000000000000000000000'
+            echo 'ACME_EMAIL=ci@example.invalid'
+          } >> .env
+
+      - name: docker compose 유효성
+        run: docker compose config --quiet
+
+      # nginx.conf 는 envsubst 를 거쳐야 문법이 완성된다.
+      # listen 443 ssl 은 인증서가 없으면 -t 자체가 실패하므로
+      # 자체서명 인증서를 만들어 경로만 갈아 끼운다.
+      # 확인하려는 것은 블록 구조와 Lua 지시어이지 인증서가 아니다.
+      - name: OpenResty 문법
+        run: |
+          set -e
+          export SHOP_DOMAIN=example.com TRACK_DOMAIN=example.net
+          mkdir -p /tmp/ngx/lua /tmp/ngx/conf.d /tmp/ngx/cert
+          cp docker/openresty/lua/*.lua /tmp/ngx/lua/
+          cp docker/openresty/conf.d/*.conf /tmp/ngx/conf.d/
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=ci.invalid' \
+            -keyout /tmp/ngx/cert/privkey.pem \
+            -out /tmp/ngx/cert/fullchain.pem 2>/dev/null
+          envsubst '$SHOP_DOMAIN $TRACK_DOMAIN' < docker/openresty/nginx.conf \
+            | sed -E 's#/etc/letsencrypt/live/[^/]+/#/etc/ngx-cert/#' > /tmp/ngx/nginx.conf
+          docker run --rm \
+            -v /tmp/ngx/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro \
+            -v /tmp/ngx/lua:/usr/local/openresty/nginx/lua:ro \
+            -v /tmp/ngx/conf.d:/etc/nginx/conf.d:ro \
+            -v /tmp/ngx/cert:/etc/ngx-cert:ro \
+            openresty/openresty:alpine openresty -t
