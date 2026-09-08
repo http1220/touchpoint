@@ -39,6 +39,20 @@ local function next_target()
 end
 
 function _M.assign()
+    -- 한 요청에 두 번 돌지 않게 막는다.
+    --
+    -- try_files 가 /index.php 로 내부 리다이렉트하면 nginx 는 위치를 다시 찾고
+    -- access 단계를 한 번 더 실행한다. 그대로 두면 요청 하나당 카운터가 2씩
+    -- 올라가 (n % 2) 가 언제나 같은 값이 되고, 라운드로빈이 한쪽으로만 간다.
+    -- 실제로 쿠키 없는 요청 8번이 전부 rdb1 로 갔다.
+    --
+    -- ngx.ctx 는 내부 리다이렉트에서 폐기되지만 nginx 변수는 유지된다.
+    -- 그래서 판별을 변수로 한다.
+    local assigned = ngx.var.read_target
+    if assigned and assigned ~= "" then
+        return
+    end
+
     local cookie = ngx.var["cookie_" .. COOKIE_NAME]
     local target
 
