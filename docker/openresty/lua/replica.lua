@@ -1,7 +1,7 @@
 -- 읽기 복제본 배정
 --
 -- 대상 조직에서 관측한 동작을 그대로 구현한다.
---   쿠키 없음  → 라운드로빈으로 배정하고 쿠키를 내려준다
+--   쿠키 없음  → 복제본 하나를 배정하고 쿠키를 내려준다
 --   쿠키 있음  → 그 복제본에 고정한다 (재발급하지 않는다)
 --
 -- 관측 근거: 쿠키 없이 8회 요청 시 sdb1~sdb5가 분산 배정됐고,
@@ -27,32 +27,31 @@ local function is_known(name)
     return false
 end
 
--- 라운드로빈. 공유 딕셔너리 카운터를 워커 간에 공유한다.
-local function next_target()
-    local dict = ngx.shared.replica_rr
-    local n, err = dict:incr("cursor", 1, 0)
-    if not n then
-        ngx.log(ngx.WARN, "replica: incr failed (", err, "), 첫 대상으로 폴백")
-        return READ_TARGETS[1]
+-- 배정은 요청 ID에서 결정한다. 공유 카운터를 쓰지 않는다.
+--
+-- 왜 카운터를 버렸나
+--
+--   try_files가 /index.php로 내부 리다이렉트하면 nginx는 위치를 다시 찾고
+--   access 단계를 한 번 더 실행한다. 카운터라면 요청 하나가 2씩 올리므로
+--   (n % 2)가 언제나 같은 값이 되어 한쪽 복제본으로만 간다.
+--   실제로 그랬다 — 쿠키 없는 요청 12번이 전부 rdb1이었다.
+--
+--   "이미 배정됐으면 건너뛴다"로 막으려 했지만 안 된다.
+--   서버 블록의 set $read_target "" 도 내부 리다이렉트에서 다시 실행되어
+--   플래그가 매번 지워지기 때문이다.
+--
+--   $request_id는 요청당 한 번 생성되고 내부 리다이렉트를 넘어 유지된다.
+--   그래서 두 번 실행돼도 답이 같다. 공유 메모리 쓰기도 사라진다.
+--   엄밀한 라운드로빈은 아니지만, 필요한 성질은 "고르게 갈린다"뿐이다.
+local function pick(request_id)
+    local sum = 0
+    for i = 1, #request_id do
+        sum = sum + request_id:byte(i)
     end
-    return READ_TARGETS[(n % #READ_TARGETS) + 1]
+    return READ_TARGETS[(sum % #READ_TARGETS) + 1]
 end
 
 function _M.assign()
-    -- 한 요청에 두 번 돌지 않게 막는다.
-    --
-    -- try_files 가 /index.php 로 내부 리다이렉트하면 nginx 는 위치를 다시 찾고
-    -- access 단계를 한 번 더 실행한다. 그대로 두면 요청 하나당 카운터가 2씩
-    -- 올라가 (n % 2) 가 언제나 같은 값이 되고, 라운드로빈이 한쪽으로만 간다.
-    -- 실제로 쿠키 없는 요청 8번이 전부 rdb1 로 갔다.
-    --
-    -- ngx.ctx 는 내부 리다이렉트에서 폐기되지만 nginx 변수는 유지된다.
-    -- 그래서 판별을 변수로 한다.
-    local assigned = ngx.var.read_target
-    if assigned and assigned ~= "" then
-        return
-    end
-
     local cookie = ngx.var["cookie_" .. COOKIE_NAME]
     local target
 
@@ -60,7 +59,7 @@ function _M.assign()
         -- 고정. Set-Cookie를 내리지 않는다 — 관측된 동작과 같다.
         target = cookie
     else
-        target = next_target()
+        target = pick(ngx.var.request_id or "")
         -- 세션 성격이라 first-party로 충분하다. 크로스사이트로 나갈 이유가 없다.
         ngx.header["Set-Cookie"] = COOKIE_NAME .. "=" .. target ..
             "; Path=/; Max-Age=86400; SameSite=Lax; Secure; HttpOnly"
