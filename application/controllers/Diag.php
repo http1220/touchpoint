@@ -24,6 +24,13 @@ class Diag extends MY_Controller
 
 		$this->issueProbeCookies($role[0], $shop, $track);
 
+		// CI3 는 Exceptions 클래스를 "에러가 났을 때" 처음 로드한다.
+		// production 에서는 억제할 deprecation 자체가 안 나므로 로드되지 않고,
+		// 그 상태에서 MY_Exceptions::suppressed() 를 부르면 이 페이지가 500 이 된다.
+		// 진단 페이지가 진단 대상 때문에 죽는 셈이라 명시적으로 로드한다.
+		load_class("Exceptions", "core");
+		$suppressed = class_exists("MY_Exceptions") ? MY_Exceptions::suppressed() : 0;
+
 		$data = array(
 			'role'  => $role,
 			'host'  => $host,
@@ -42,7 +49,7 @@ class Diag extends MY_Controller
 				'PHP'            => PHP_VERSION,
 				'CodeIgniter'    => CI_VERSION,
 				'환경'           => ENVIRONMENT,
-				'억제된 deprecation' => MY_Exceptions::suppressed().'건 (프레임워크 내부)',
+				'억제된 deprecation' => $suppressed.'건 (프레임워크 내부)',
 				'서버 시각(UTC)' => tp_now_utc(),
 			),
 		);
