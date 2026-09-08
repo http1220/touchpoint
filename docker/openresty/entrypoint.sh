@@ -1,22 +1,29 @@
 #!/bin/sh
 # OpenResty 기동 전 설정 생성.
 #
-# 하는 일은 둘이다.
-#   ① nginx.template 의 ${SHOP_DOMAIN} 치환
-#   ② TRACK_DOMAIN 이 있을 때만 api. 서버 블록 생성
+# 두 가지 조건에 따라 서버 블록을 만들거나 만들지 않는다.
 #
-# ②가 이 스크립트가 존재하는 이유다. 추적 도메인 등록이 늦어져도
-# 광고주 측 호스트는 먼저 띄울 수 있어야 하는데, nginx 는 조건부 블록이
-# 없어서 설정 파일 자체를 나눠야 한다.
+#   ① TRACK_DOMAIN 이 있는가   — 없으면 api. 수집 호스트가 없다
+#   ② 인증서가 실재하는가      — 없으면 그 도메인의 443 블록을 만들지 않는다
+#
+# ②가 이 스크립트의 핵심이다. nginx 는 ssl_certificate 파일이 없으면
+# 설정 파싱 단계에서 기동을 거부한다. 그런데 인증서를 받으려면
+# ACME 챌린지를 80번으로 받아야 하고, 그 80번 블록도 같은 설정 파일에 있다.
+#
+#   인증서가 없다 → nginx 가 안 뜬다 → 80번이 안 열린다 → 인증서를 못 받는다
+#
+# 이 순환을 끊으려고 443 블록을 별도 파일로 뺐다. 첫 기동은 HTTP 로만 뜨고,
+# certbot 이 인증서를 받은 뒤 엣지를 재기동하면 HTTPS 가 붙는다.
 #
 # 치환에 envsubst 를 쓰지 않는다. openresty/openresty:alpine 에 gettext 가
-# 없어서 "envsubst: not found" 로 죽는다. 기동할 때마다 apk add 를 하면
-# 네트워크에 의존하게 되므로 sed 로 한다. 도메인 이름은 sed 구분자로
-# 쓰는 '|' 를 포함할 수 없어 안전하다.
+# 없어서 "envsubst: not found" 로 죽는다. 도메인 이름은 sed 구분자로 쓰는
+# '|' 를 포함할 수 없어 안전하다.
 set -eu
 
 NGX_HOME=/usr/local/openresty/nginx
-SERVERS_DIR="$NGX_HOME/servers"
+SERVERS="$NGX_HOME/servers"
+TEMPLATES="$NGX_HOME/templates"
+LE=/etc/letsencrypt/live
 
 : "${SHOP_DOMAIN:?SHOP_DOMAIN 이 필요합니다}"
 TRACK_DOMAIN="${TRACK_DOMAIN:-}"
@@ -32,27 +39,58 @@ for d in "$SHOP_DOMAIN" ${TRACK_DOMAIN:+$TRACK_DOMAIN}; do
 	esac
 done
 
-mkdir -p "$SERVERS_DIR"
+mkdir -p "$SERVERS"
+rm -f "$SERVERS"/*.https.conf "$SERVERS/http-root.inc"
 
 sed "s|\${SHOP_DOMAIN}|$SHOP_DOMAIN|g" \
 	< "$NGX_HOME/conf/nginx.template" \
 	> "$NGX_HOME/conf/nginx.conf"
 
-if [ -n "$TRACK_DOMAIN" ]; then
-	sed "s|\${TRACK_DOMAIN}|$TRACK_DOMAIN|g" \
-		< "$NGX_HOME/templates/track.template" \
-		> "$SERVERS_DIR/track.conf"
-	echo "openresty: 추적 호스트 api.$TRACK_DOMAIN 활성화"
+has_cert() { [ -s "$LE/$1/fullchain.pem" ] && [ -s "$LE/$1/privkey.pem" ]; }
+
+https=0
+
+# ── 광고주 측: 루트 · lp. · m. · app. ──────────────────────
+if has_cert "$SHOP_DOMAIN"; then
+	sed "s|\${SHOP_DOMAIN}|$SHOP_DOMAIN|g" \
+		< "$TEMPLATES/shop.template" > "$SERVERS/shop.https.conf"
+	echo "openresty: HTTPS 활성 — $SHOP_DOMAIN (루트 · lp. · m. · app.)"
+	https=1
 else
-	# 빈 파일이 아니라 이유를 적어 둔다. 나중에 왜 api. 가 없는지
-	# 찾을 때 이 파일이 첫 단서가 된다.
-	cat > "$SERVERS_DIR/track.conf" <<-INNER
-	# TRACK_DOMAIN 이 비어 있어 수집 호스트를 만들지 않았습니다.
-	# 크로스사이트 실험(서드파티 쿠키·CORS preflight·SameSite=None)은
-	# 이 상태에서 성립하지 않습니다. 등록 도메인이 두 개여야 합니다.
-	#   → docs/decisions/ADR-002-two-registered-domains.md
-	INNER
-	echo "openresty: TRACK_DOMAIN 미설정 — 수집 호스트 없이 기동합니다"
+	echo "openresty: $SHOP_DOMAIN 인증서가 없어 HTTP 로만 뜹니다."
+	echo "openresty:   docker compose --profile cert run --rm certbot"
+	echo "openresty:   docker compose restart openresty"
+fi
+
+# ── 추적 측: api. ──────────────────────────────────────────
+if [ -z "$TRACK_DOMAIN" ]; then
+	echo "openresty: TRACK_DOMAIN 미설정 — 수집 호스트 없이 뜹니다 (ADR-002)"
+elif has_cert "$TRACK_DOMAIN"; then
+	sed "s|\${TRACK_DOMAIN}|$TRACK_DOMAIN|g" \
+		< "$TEMPLATES/track.template" > "$SERVERS/track.https.conf"
+	echo "openresty: HTTPS 활성 — api.$TRACK_DOMAIN"
+	https=1
+else
+	echo "openresty: api.$TRACK_DOMAIN 인증서가 없어 건너뜁니다."
+fi
+
+# ── 80번 블록의 기본 경로 ──────────────────────────────────
+# 인증서가 하나도 없는데 https 로 리다이렉트하면 사용자는 연결 실패만 본다.
+# 무엇이 덜 됐는지 말해 주는 편이 낫다.
+if [ "$https" = 1 ]; then
+	cat > "$SERVERS/http-root.inc" <<'INNER'
+location / {
+    return 301 https://$host$request_uri;
+}
+INNER
+else
+	cat > "$SERVERS/http-root.inc" <<'INNER'
+location / {
+    default_type text/plain;
+    add_header Cache-Control "no-store" always;
+    return 503 "TLS certificate not issued yet.\nRun: docker compose --profile cert run --rm certbot\nThen: docker compose restart openresty\n";
+}
+INNER
 fi
 
 exec openresty -g 'daemon off;'

@@ -456,13 +456,22 @@ docker compose up -d --force-recreate openresty
 
 ```bash
 # .env 에 ACME_STAGING=true 인지 확인
-docker compose up -d openresty          # 80 포트로 ACME 챌린지를 받는다
+docker compose up -d openresty
 ```
 
-> 이 명령이 `app` 컨테이너 이미지를 처음 빌드한다. PHP 확장을 컴파일하므로 **5~10분** 걸린다. 인증서만 받을 것이라 앱이 아직 비어 있어도(=`vendor/` 없음) 상관없다 — ACME 챌린지는 nginx 가 정적 파일로 응답한다.
+> **첫 기동은 HTTP 로만 뜬다.** 인증서가 아직 없기 때문이다. `docker compose logs openresty` 에 이렇게 찍힌다.
+>
+> ```
+> openresty: sshwan.com 인증서가 없어 HTTP 로만 뜹니다.
+> ```
+>
+> 이게 정상이고, 이 상태여야 ACME 챌린지를 받을 수 있다. nginx 는 `ssl_certificate` 파일이 없으면 **기동 자체를 거부**하는데, 443 블록을 같은 파일에 두면 80번 블록까지 같이 죽어서 인증서를 영영 못 받는 교착에 빠진다. 그래서 443 블록을 별도 파일로 빼고, 인증서가 실재할 때만 생성한다 → `docker/openresty/entrypoint.sh`
+
+> 이 명령이 `app` 컨테이너 이미지를 처음 빌드한다. PHP 확장을 컴파일하므로 t3.small 에서 **5~10분** 걸린다. 멈춘 것처럼 보여도 기다린다.
 
 ```bash
 docker compose --profile cert run --rm certbot
+docker compose restart openresty      # 인증서를 읽어 443 블록을 만든다
 ```
 
 `SHOP_DOMAIN`(루트 + `lp.` `m.` `app.`)에 하나. `TRACK_DOMAIN` 이 채워져 있으면 `api.` 에 하나 더 발급된다. 비어 있으면 건너뛴다는 메시지가 나오고 정상 종료한다.

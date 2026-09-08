@@ -1,0 +1,82 @@
+# ── 광고주 측 호스트 (루트 · lp. · m. · app.) ────────────────
+#
+# 이 파일은 ${SHOP_DOMAIN} 의 인증서가 실재할 때만 생성된다.
+# 없는데 만들면 nginx 가 기동 자체를 거부하고, 그러면 ACME 챌린지를 받을
+# 80번 블록까지 같이 죽어서 인증서를 영원히 못 받는다.
+# → docker/openresty/entrypoint.sh
+    # ── 루트 도메인 ──────────────────────────────────────────
+    # 서버 블록이 없으면 첫 443 블록이 응답해 인증서 불일치 경고가 난다.
+    # 이 프로젝트 기간에는 랜딩으로 넘긴다.
+    # 나중에 개인 사이트를 올리면 이 블록만 교체하면 된다.
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name ${SHOP_DOMAIN};
+
+        ssl_certificate     /etc/letsencrypt/live/${SHOP_DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
+        include /etc/nginx/conf.d/tls-common.conf;
+
+        return 302 https://lp.${SHOP_DOMAIN}$request_uri;
+    }
+
+    # ── lp. 랜딩 · 브리지 (광고주 측) ────────────────────────
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name lp.${SHOP_DOMAIN};
+
+        ssl_certificate     /etc/letsencrypt/live/${SHOP_DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
+        include /etc/nginx/conf.d/tls-common.conf;
+
+        set $read_target "";
+
+        # 모바일이면 m. 으로 302. 쿼리스트링은 그대로 넘긴다.
+        # (넘긴다고 해서 유실이 없는 것은 아니다 — 실험 대상이다)
+        if ($is_mobile) {
+            return 302 https://m.${SHOP_DOMAIN}$request_uri;
+        }
+
+        access_by_lua_block {
+            require("replica").assign()
+        }
+
+        include /etc/nginx/conf.d/php-app.conf;
+
+        # 브리지는 캐시되면 안 된다. 301을 쓰지 않는 것과 같은 이유.
+        location /go {
+            add_header Cache-Control "no-store" always;
+            include /etc/nginx/conf.d/php-pass.conf;
+        }
+    }
+
+    # ── m. 모바일 (같은 앱, 다른 뷰) ─────────────────────────
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name m.${SHOP_DOMAIN};
+
+        ssl_certificate     /etc/letsencrypt/live/${SHOP_DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
+        include /etc/nginx/conf.d/tls-common.conf;
+
+        set $read_target "";
+        access_by_lua_block { require("replica").assign() }
+        include /etc/nginx/conf.d/php-app.conf;
+    }
+
+    # ── app. 서비스 · 전환 (광고주 측) ───────────────────────
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name app.${SHOP_DOMAIN};
+
+        ssl_certificate     /etc/letsencrypt/live/${SHOP_DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
+        include /etc/nginx/conf.d/tls-common.conf;
+
+        set $read_target "";
+        access_by_lua_block { require("replica").assign() }
+        include /etc/nginx/conf.d/php-app.conf;
+    }
