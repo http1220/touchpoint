@@ -20,6 +20,7 @@ server {
     set $read_target "";
     access_by_lua_block { require("replica").assign() }
 
+    # 수집 경로를 별도 location 으로 두지 않는다.
     #
     # php-pass.conf 가 SCRIPT_FILENAME 을 $document_root$fastcgi_script_name 으로
     # 만들기 때문에, /collect 같은 가상 경로는 실제 파일을 가리키게 되어
