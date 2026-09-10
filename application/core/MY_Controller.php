@@ -104,23 +104,34 @@ class MY_Controller extends CI_Controller
 	 * 수집 엔드포인트가 광고주 도메인에서도 열리면 first-party 가 되어
 	 * 크로스사이트 실험 자체가 성립하지 않는다. 실험 조건을 코드로 고정한다.
 	 *
-	 * @param string $role 'lp' | 'm' | 'app' | 'api'
+	 * @param string|array $roles lp | m | app | api 또는 그 배열
 	 */
-	protected function requireHost($role)
+	protected function requireHost($roles)
 	{
-		$shop  = getenv('SHOP_DOMAIN') ?: '';
-		$track = getenv('TRACK_DOMAIN') ?: '';
-		$host  = strtolower($this->server('HTTP_HOST'));
-
-		$expected = ($role === 'api') ? 'api.'.$track : $role.'.'.$shop;
-
-		// 도메인이 설정되지 않은 로컬 개발에서는 검사하지 않는다.
-		if ($shop === '' OR ($role === 'api' && $track === ''))
+		// CLI 에는 호스트가 없다. 워커나 마이그레이션이 컨트롤러를 거칠 때
+		// 여기서 막히면 진단할 방법이 사라진다.
+		if (is_cli())
 		{
 			return;
 		}
 
-		if ($host !== $expected)
+		$shop  = getenv('SHOP_DOMAIN') ?: '';
+		$track = getenv('TRACK_DOMAIN') ?: '';
+		$host  = strtolower($this->server('HTTP_HOST'));
+
+		$allowed = array();
+		foreach ((array) $roles as $role)
+		{
+			$allowed[$role] = ($role === 'api') ? 'api.'.$track : $role.'.'.$shop;
+		}
+
+		// 도메인이 설정되지 않은 로컬 개발에서는 검사하지 않는다.
+		if ($shop === '' OR (isset($allowed['api']) && $track === ''))
+		{
+			return;
+		}
+
+		if ( ! in_array($host, $allowed, TRUE))
 		{
 			$this->problem(404, 'not-found', '이 호스트에는 없는 경로입니다.');
 		}

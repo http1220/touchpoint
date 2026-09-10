@@ -44,11 +44,16 @@
 
         include /etc/nginx/conf.d/php-app.conf;
 
-        # 브리지는 캐시되면 안 된다. 301을 쓰지 않는 것과 같은 이유.
-        location /go {
-            add_header Cache-Control "no-store" always;
-            include /etc/nginx/conf.d/php-pass.conf;
-        }
+        # /go 를 별도 location 으로 두지 않는다.
+        #
+        # 두었을 때 이렇게 깨졌다. php-pass.conf 는 SCRIPT_FILENAME 을
+        # $document_root$fastcgi_script_name 으로 만드는데, /go 는 실제 파일이
+        # 아니므로 /var/www/html/public/go 를 가리키게 되고 PHP-FPM 이
+        # "File not found" 로 404 를 낸다. 프론트 컨트롤러를 거치지 않은 것이다.
+        #
+        # 그래서 위의 try_files 에 맡긴다. no-store 는 앱이 직접 붙인다 —
+        # 캐시 정책은 그 응답이 무엇인지 아는 쪽이 정하는 게 맞고,
+        # 이미 CORS 를 같은 이유로 앱에 맡기고 있다.
     }
 
     # ── m. 모바일 (같은 앱, 다른 뷰) ─────────────────────────

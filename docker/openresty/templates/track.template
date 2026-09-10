@@ -20,13 +20,15 @@ server {
     set $read_target "";
     access_by_lua_block { require("replica").assign() }
 
-    # CORS 헤더는 여기서 붙이지 않는다.
-    # 오리진을 정확히 반향하고 Vary를 붙이는 판단은 앱이 해야 한다.
-    # docs/api-spec.md 3장
-    location ~ ^/(collect|conversion|impression|click)$ {
-        add_header Cache-Control "no-store" always;
-        include /etc/nginx/conf.d/php-pass.conf;
-    }
+    # 수집 경로를 별도 location 으로 두지 않는다.
+    #
+    # php-pass.conf 가 SCRIPT_FILENAME 을 $document_root$fastcgi_script_name 으로
+    # 만들기 때문에, /collect 같은 가상 경로는 실제 파일을 가리키게 되어
+    # PHP-FPM 이 404 를 낸다. 프론트 컨트롤러를 거치지 않는다.
+    # shop.template 의 /go 에서 실제로 겪었다.
+    #
+    # CORS 도 no-store 도 앱이 붙인다. 오리진을 정확히 반향하고 Vary 를
+    # 붙이는 판단은 요청을 이해하는 쪽이 해야 한다 → docs/api-spec.md 3장
 
     include /etc/nginx/conf.d/php-app.conf;
 }
