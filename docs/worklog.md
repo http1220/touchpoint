@@ -21,6 +21,88 @@
 
 ---
 
+## 2026-09-11 (금) · D-10
+
+### 한 일
+
+로드맵 **M2 ①②** — 광고 클릭이 방문과 접점으로 남는 경로를 끝에서 끝까지 연결했다.
+
+```
+GET /go?work=8733&pid=Google&utm_source=Google&gclid=..
+  → 방문 확인/생성 · ab_vid 발급
+  → 접점 판정 (first 보존 · last 갱신)
+  → 302 → /l/8733?vid=..
+```
+
+- `src/` (프레임워크 비의존, 테스트 있음)
+  - `BridgeDestination` — 목적지 URL. `vid` / `passthru` 두 방식
+  - `AcceptLanguage` — 헤더 → ISO 639-1 두 글자
+- `application/` (CI3 관용구)
+  - `Visit_model` · `Visitor` · `Bridge` · `Landing`
+- 랜딩 화면에 기록된 first/last 를 그대로 노출 — 확인하려고 DB 를 열지 않게
+
+기본값을 `vid` 로 둔 이유는 **공유**다. `passthru` 로 보내면 사용자가 주소창을 복사해 보내는 순간 그 방문이 원래 사용자의 광고 클릭으로 집계된다. 유입 하나가 여러 건으로 불어나고 매체 정산이 틀어진다.
+
+### 막힌 것
+
+**① `/go` 가 404, 로그는 어디에도 없었다**
+
+- **증상**: nginx 로그에도 CI3 로그에도 아무것도 안 남고 404 만
+- **원인** [확인]: `php-pass.conf` 가 `SCRIPT_FILENAME` 을 `$document_root$fastcgi_script_name` 으로 만든다. `/go` 는 실제 파일이 아니므로 `/var/www/html/public/go` 를 가리키고 PHP-FPM 이 "File not found" 로 404 를 낸다. **프론트 컨트롤러를 아예 거치지 않으니** CI3 로그가 남을 리가 없었다
+- **아이러니**: `no-store` 를 붙이려고 만든 `location /go` 가 정작 그 응답을 못 만들게 하고 있었다
+- **대응**: 지우고 `try_files` 에 맡긴다. 캐시 정책은 그 응답이 무엇인지 아는 쪽(앱)이 정한다. `api.` 의 `/collect` `/conversion` `/impression` `/click` 도 같은 모양이라 같이 지웠다 — **아직 호출해 본 적이 없어 드러나지 않았을 뿐이다**
+
+**② BINARY(16) 을 이스케이프 끄고 넣고 있었다** — 이번 최대 실수
+
+```
+Error Number: 1064
+... near '??? ?s??ǫ????  LIMIT 1'
+SELECT `id` FROM `visits` WHERE visit_uid =  ��� �s��ǫ����  LIMIT 1
+```
+
+- **원인** [확인]: `->where('visit_uid', hex2bin($uidHex), FALSE)`. 세 번째 인자 `FALSE` 는 이스케이프를 끈다. 바이너리 16바이트가 SQL 문자열에 그대로 박혔다
+- **더 중요한 것**: 이건 구문 오류로 끝난 게 **운이 좋았던 것**이다. 값이 쿠키에서 오고, 바이트를 고르면 쿼리를 조작할 수 있는 자리였다. 500 이 안 났으면 그대로 배포됐다
+- **대응**: `UNHEX(?)` 에 hex 문자열 바인딩. SQL 로 나가는 것은 32자 hex 뿐이고 변환은 MySQL 이 한다. `create()` 도 같은 방식으로 맞췄다 — 같은 컬럼을 두 방식으로 다루면 다음 사람이 어느 쪽이 맞는지 알 수 없다
+- **배운 것**: **"이스케이프를 끈다"는 옵션이 있으면 언젠가 쓰게 된다.** 바이너리를 넣으려다 껐는데, 애초에 바이너리를 SQL 에 넣지 않는 방법(`UNHEX`)이 있었다. 옵션을 끄기 전에 그 옵션이 필요 없는 방법부터 찾는다
+
+**③ CLI 로 재현할 수 없었다**
+
+- `requireHost()` 가 CLI 를 404 로 막고 있었다. CLI 에는 `HTTP_HOST` 가 없다
+- 그 바람에 ② 를 CLI 로 재현하지 못하고 개발 환경으로 잠깐 전환해서야 원문을 봤다
+- **대응**: `is_cli()` 면 통과. 진단 경로를 막는 방어는 방어가 아니다
+
+### 확인한 동작 (운영, production)
+
+| 시험 | 결과 |
+|---|---|
+| `pid=Google` → 저장 | `google` (집계 축은 소문자 정규화) |
+| `utm_campaign=romance_sep` | 원문 보존 (자유 텍스트) |
+| 파라미터 없이 재방문 | first `kept` · last `kept` — **직접 유입이 광고 성과를 덮지 않는다** |
+| 다른 매체로 재유입 | first 는 `google` 유지, last 만 `meta` |
+| `mode=passthru` | 화이트리스트만 전달. `work`·`mode`·`ref` 탈락 |
+| `work=abc` / `work=https://evil.example` | 400 |
+| UTF-8 파라미터 | `%EB%84%A4%EC%9D%B4%EB%B2%84` 그대로 통과 |
+| `app.sshwan.com/go` | 404 (호스트 검증 동작) |
+| `m.sshwan.com/go` | 302 (모바일 허용) |
+
+### 결정한 것
+
+| 결정 | 근거 |
+|---|---|
+| 가상 경로에 **별도 location 을 두지 않는다** | `SCRIPT_FILENAME` 이 없는 파일을 가리켜 프론트 컨트롤러를 건너뛴다. 캐시·CORS 헤더는 앱이 붙인다 |
+| BINARY 컬럼은 **`UNHEX(?)` 바인딩으로만** | 이스케이프를 끄는 경로를 코드에서 없앤다 |
+| 랜딩에 접점을 **화면으로 노출** | 확인 비용이 낮아야 실험을 자주 한다. 면접에서도 이 화면 하나로 규칙을 설명할 수 있다 |
+| `requireHost` 는 **CLI 를 통과** | 진단 경로를 막으면 재현이 불가능해진다 |
+
+### 다음
+
+- [ ] 추적 도메인 확보(AWS 외 등록기관) → `api.` 붙이고 크로스사이트 실험(M3)
+- [ ] `track.js` — `fetch` 와 `sendBeacon` 두 경로
+- [ ] 커스텀 수집 `/impression` · `/click`
+- [ ] 아웃박스 + GA4 채널
+
+---
+
 ## 2026-09-09 (수) · D-12
 
 ### 한 일
