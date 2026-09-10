@@ -21,6 +21,16 @@ class Visit_model extends CI_Model
 	/**
 	 * 쿠키의 방문 식별자로 방문을 찾는다.
 	 *
+	 * BINARY(16) 을 다루는 방법이 두 가지인데 한쪽은 함정이다.
+	 *
+	 *   ✗ where('visit_uid', hex2bin($hex), FALSE)
+	 *       세 번째 인자 FALSE 는 이스케이프를 끈다. 바이너리가 SQL 문자열에
+	 *       그대로 박혀 구문 오류가 나고(실제로 1064 를 봤다), 동시에
+	 *       임의 바이트를 쿼리에 넣는 통로가 된다.
+	 *
+	 *   ✓ UNHEX(?) 에 hex 문자열을 바인딩
+	 *       SQL 로 나가는 것은 32자 hex 뿐이다. 변환은 MySQL 이 한다.
+	 *
 	 * @param string $uidHex 32자 hex
 	 * @return int|null 방문 id
 	 */
@@ -32,9 +42,7 @@ class Visit_model extends CI_Model
 		}
 
 		$row = $this->db
-			->select('id')
-			->where('visit_uid', hex2bin($uidHex), FALSE)
-			->get(self::TABLE, 1)
+			->query('SELECT id FROM '.self::TABLE.' WHERE visit_uid = UNHEX(?) LIMIT 1', array($uidHex))
 			->row();
 
 		return $row ? (int) $row->id : NULL;
@@ -52,23 +60,32 @@ class Visit_model extends CI_Model
 	 */
 	public function create(array $ctx)
 	{
-		$uidBin = tp_uuid7();
+		$uidHex = bin2hex(tp_uuid7());
 
-		$this->db->insert(self::TABLE, array(
-			'visit_uid'     => $uidBin,
-			'first_seen_at' => tp_now_utc(),
-			'landing_path'  => mb_substr((string) $ctx['landing_path'], 0, 512),
-			'referrer'      => isset($ctx['referrer']) && $ctx['referrer'] !== ''
-				? mb_substr((string) $ctx['referrer'], 0, 512) : NULL,
-			'ua_hash'       => tp_hash($ctx['ua'] ?? NULL),
-			'ip_hash'       => tp_hash($ctx['ip'] ?? NULL),
-			'country'       => $ctx['country'] ?? NULL,
-			'lang'          => $ctx['lang'] ?? NULL,
-		));
+		// 여기도 UNHEX 바인딩이다. insert() 에 바이너리를 넘기면 동작은 하지만,
+		// 같은 컬럼을 두 방식으로 다루게 되어 다음 사람이 헷갈린다.
+		$this->db->query(
+			'INSERT INTO '.self::TABLE.' (
+				visit_uid, first_seen_at, landing_path, referrer,
+				ua_hash, ip_hash, country, lang
+			) VALUES (UNHEX(?), ?, ?, ?, ?, ?, ?, ?)',
+			array(
+				$uidHex,
+				tp_now_utc(),
+				mb_substr((string) $ctx['landing_path'], 0, 512),
+				isset($ctx['referrer']) && $ctx['referrer'] !== ''
+					? mb_substr((string) $ctx['referrer'], 0, 512)
+					: NULL,
+				tp_hash($ctx['ua'] ?? NULL),
+				tp_hash($ctx['ip'] ?? NULL),
+				$ctx['country'] ?? NULL,
+				$ctx['lang'] ?? NULL,
+			)
+		);
 
 		return array(
 			'id'      => (int) $this->db->insert_id(),
-			'uid_hex' => bin2hex($uidBin),
+			'uid_hex' => $uidHex,
 		);
 	}
 

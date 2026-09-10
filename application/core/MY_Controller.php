@@ -108,6 +108,13 @@ class MY_Controller extends CI_Controller
 	 */
 	protected function requireHost($roles)
 	{
+		// CLI 에는 호스트가 없다. 워커나 마이그레이션이 컨트롤러를 거칠 때
+		// 여기서 막히면 진단할 방법이 사라진다.
+		if (is_cli())
+		{
+			return;
+		}
+
 		$shop  = getenv('SHOP_DOMAIN') ?: '';
 		$track = getenv('TRACK_DOMAIN') ?: '';
 		$host  = strtolower($this->server('HTTP_HOST'));
