@@ -150,7 +150,9 @@ class Channels
 			$id,
 			$secret,
 			tp_env_bool('GA4_DEBUG'),
-			(int) (getenv('DISPATCH_TIMEOUT_MS') ?: 3000)
+			(int) (getenv('DISPATCH_TIMEOUT_MS') ?: 3000),
+			NULL,
+			trim((string) (getenv('GA4_TRAFFIC_TYPE') ?: ''))
 		);
 	}
 }

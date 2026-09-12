@@ -36,6 +36,11 @@ final class Ga4Channel implements ChannelInterface
     private const MAX_NAME_LEN = 40;
     private const MAX_VALUE_LEN = 100;
 
+    /**
+     * @param string $trafficType 비우면 보내지 않는다. 값이 있으면 모든 이벤트에
+     *                            `traffic_type` 파라미터로 붙는다 — GA4 가 내부
+     *                            트래픽 필터에 쓰는 예약 파라미터다.
+     */
     public function __construct(
         private readonly HttpClient $http,
         private readonly string $measurementId,
@@ -43,6 +48,7 @@ final class Ga4Channel implements ChannelInterface
         private readonly bool $debug = false,
         private readonly int $timeoutMs = 3000,
         private readonly ?BackoffPolicy $backoff = null,
+        private readonly string $trafficType = '',
     ) {
     }
 
@@ -111,6 +117,20 @@ final class Ga4Channel implements ChannelInterface
 
         if (isset($c['session_id'])) {
             $params['session_id'] = (string) $c['session_id'];
+        }
+
+        /*
+         * 부하·검증으로 만든 트래픽에 표를 붙인다.
+         *
+         * `traffic_type` 은 GA4 예약 파라미터다. 값이 "internal" 이면
+         * 관리 > 데이터 스트림 > 내부 트래픽 정의에서 만든 규칙과 맞물려
+         * 보고서에서 걸러낼 수 있다. 단 **규칙을 GA4 쪽에 만들어 둬야**
+         * 실제로 걸러진다 — 파라미터만 붙이고 필터가 없으면 그냥 집계된다.
+         *
+         * 검증 트래픽을 지울 방법 없이 운영 속성에 쏟아붓지 않으려고 둔다.
+         */
+        if ($this->trafficType !== '') {
+            $params['traffic_type'] = $this->trafficType;
         }
 
         $payload = [
