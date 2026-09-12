@@ -6,7 +6,7 @@
 | # | 결정 | 한 줄 |
 |---|---|---|
 | [001](ADR-001-php-codeigniter.md) | PHP 8.2 + **CodeIgniter 3** | 대상은 CI 2.x. CI3가 관용구가 같고 공식 마이그레이션 경로상 **다음 단계** |
-| [002](ADR-002-two-registered-domains.md) | **등록 도메인 2개** | 서브도메인 3개로는 same-site라 서드파티 쿠키 실험이 성립하지 않음 |
+| [002](ADR-002-two-registered-domains.md) | ~~등록 도메인 2개~~ | **철회 → [018](ADR-018-single-registered-domain.md).** eTLD+1 분석은 유효하고 구매 결정만 뒤집힘 |
 | [003](ADR-003-mysql-outbox.md) | MySQL 아웃박스 | 전환과 전송 지시를 **한 트랜잭션**에. Redis·SQS는 정합성 구멍 |
 | [004](ADR-004-skip-locked.md) | `FOR UPDATE SKIP LOCKED` | 중복 전송을 사후 차단이 아니라 **DB가 예방** |
 | [005](ADR-005-channel-adapter.md) | 채널 어댑터 | 매체 **10종 이상** 실측. 신규 매체 = 클래스 1개 + 설정 1줄 |
@@ -22,16 +22,18 @@
 | [015](ADR-015-image-pipeline-cdn.md) | 이미지 S3 + CloudFront | **Phase 2.** 웹툰은 이미지가 본체. 미경험 영역이라 학습 가치가 크다 |
 | [016](ADR-016-payment-and-notification.md) | PG 테스트 연동 + 알림 어댑터 | **Phase 2.** 008 개정 — 구현체가 하나면 어댑터가 검증되지 않는다 |
 | [017](ADR-017-ci3-application-structure.md) | **CI3 앱 구조** | CI3 관용구 + Composer PSR-4 병용. `src/`는 프레임워크 독립이라 테스트가 성립 |
+| [018](ADR-018-single-registered-domain.md) | **등록 도메인 1개** | 002 철회. 잃는 것은 A-1·A-2 둘뿐 — **CORS 는 오리진 기준이라 그대로 걸린다** |
 
 ---
 
-## 리서치가 뒤집은 결정 3개
+## 뒤집힌 결정 4개
 
-초안을 그대로 갔으면 틀렸을 항목들이다.
+초안이나 이전 판단을 그대로 갔으면 틀렸을 항목들이다.
 
 | ADR | 초안 | 실제 |
 |---|---|---|
-| **002** | 서브도메인 3개면 충분 | same-site라 **실험 자체가 성립 안 함** |
+| **002** | 서브도메인 3개면 충분 | same-site라 서드파티 쿠키 실험이 성립 안 함 |
+| **018** | 002: 도메인 2개는 **필수** | 공고 원문 대조 결과 **우대**. 그리고 CORS 는 1개로도 걸린다 |
 | **004** | `dedup_key`로 사후 차단 | 전송 중복은 못 막음 → `SKIP LOCKED`로 예방 |
 | **011** | "Jenkins 조직이라 CI 공백" | **공백이 아니라 조직 표준.** 명분을 교체 |
 

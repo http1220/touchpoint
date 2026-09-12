@@ -79,6 +79,10 @@ flowchart TB
 
 등록 도메인 2개를 고집한 근거가 공고 본문에 있었다. **다만 필수가 아니라 우대다** — 우대 5개 중 1개를 증거로 채우는 값이다.
 
+> **2026-09-12 확정: 두 번째 도메인을 사지 않는다** → [ADR-018](decisions/ADR-018-single-registered-domain.md)
+>
+> 수집은 `api.sshwan.com` 에 둔다. 사이트는 같고 오리진은 다르므로 **`CORS` 와 `Redirect` 는 그대로 증명되고**, 잃는 것은 서드파티 쿠키와 `SameSite=None` 둘뿐이다. 못 하는 것은 [failure-scenarios A장](failure-scenarios.md)에 이유와 함께 남긴다.
+
 **#2(인프라 운영) 대응 범위는 [ADR-012](decisions/ADR-012-observability-scope.md)로 못박았다** — 어트리뷰션은 건드리지 않고, 이미 있던 계측을 운영 관점(구조화 로그·`/health`·`/metrics`·장애 탐지 경로)으로 승격시키는 선에서 멈춘다. 자체 지표 화면을 버리고 그 시간을 여기 쓰므로 일정 순증은 0.5일이다.
 
 ### 세 지원서를 잇는 축
@@ -164,8 +168,8 @@ flowchart LR
 |---|---|
 | `PHP` `CodeIgniter` | **CI 3** — 대상의 CI 2.x와 관용구 동일 |
 | `MySQL` | 스키마 · 인덱스 · `SKIP LOCKED` · **실물 복제 + Lua 배정** |
-| `Cookie` `Domain` | 등록 도메인 2개 + 쿠키 정책표 |
-| `CORS` | 크로스사이트 수집 API |
+| `Cookie` `Domain` | 쿠키 정책표 + 서브도메인 간 데이터 전달(cross-origin) |
+| `CORS` | cross-origin 수집 API (`lp.` → `api.`) |
 | `Redirect` | 브리지 302 + **UA 302 다단** |
 | `API` `SDK` | 채널 어댑터 + `track.js` |
 | `Google Analytics` | GA4 Measurement Protocol |
@@ -179,7 +183,7 @@ flowchart LR
 
 | 설계 | 근거 |
 |---|---|
-| 등록 도메인 2개 | same-site는 eTLD+1 기준 — 서브도메인으로는 실험이 성립하지 않음 |
+| 등록 도메인 1개 | 002 철회 → [ADR-018](decisions/ADR-018-single-registered-domain.md). CORS 는 오리진 기준이라 서브도메인으로도 걸린다 |
 | 채널 어댑터 | 대상 서비스에 매체 **10종 이상** 실측 |
 | 코인 원장 | 약관의 **유료 5년 / 무료 1년** — 잔액 컬럼으로 구현 불가 |
 | 보존기간 테이블 분리 | 방문 3개월 / 결제 5년 — **법적 이유의 정규화** |
@@ -269,7 +273,7 @@ gantt
     ② 브리지 302 + UA 302 다단        :2026-09-14, 2d
 
     section 추적
-    ③ 크로스사이트 수집 · CORS 격파    :2026-09-15, 2d
+    ③ cross-origin 수집 · CORS 격파  :2026-09-15, 2d
     커스텀 수집 2개 (노출·클릭)        :2026-09-16, 1d
     아웃박스 + GA4 채널               :2026-09-17, 2d
 
@@ -285,7 +289,7 @@ gantt
 |---|---|---|
 | **M1** 정렬 인프라 | 09-09~11 | 호스트 4개 HTTPS · **Lua가 복제본을 배정하고 쿠키로 고정** · 복제 동작 확인 |
 | **M2** 앱·여정 | 09-11~15 | CI3 기동 · `utm/gclid/pid` 파싱 → 적재 · **302 두 단(UA + 브리지) 통과** |
-| **M3** 크로스사이트 | 09-15~17 | preflight 관측 · `Allow-Origin:*` 실패 재현 · **브라우저별 차단 매트릭스 실측** |
+| **M3** cross-origin 수집 | 09-15~17 | preflight 관측 · `Vary: Origin` · **`Allow-Origin:*` + credentials 실패 재현** |
 | **M4** 수집·전송 | 09-16~19 | **노출/클릭 커스텀 수집 동작** · 아웃박스 → GA4 전송 · 워커 4개에서 중복 0 |
 
 ### 커스텀 수집 2개 — 정렬도가 가장 높은 항목
@@ -350,7 +354,7 @@ flowchart TD
 | 4 | 실물 복제본 → 지연 주입 시뮬레이션 | 정렬 후퇴. 최후 수단 |
 | 5 | **Lua 배정 → 앱 레이어** | 정렬 후퇴. 최후 수단 |
 
-**절대 버리지 않는 것**: ③ 크로스사이트 실험, 그리고 **OpenResty 자체**.
+**절대 버리지 않는 것**: ③ cross-origin 수집(CORS), 그리고 **OpenResty 자체**.
 스택 정렬을 버리면 [ADR-014](decisions/ADR-014-stack-alignment.md)의 존재 이유가 사라진다.
 
 ## 의존성 — 리드타임이 있는 것

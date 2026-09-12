@@ -85,3 +85,30 @@
         access_by_lua_block { require("replica").assign() }
         include /etc/nginx/conf.d/php-app.conf;
     }
+
+    # ── api. 수집 (같은 등록 도메인, 다른 오리진) ────────────
+    #
+    # 등록 도메인을 1개로 정하면서 수집 호스트가 여기로 왔다 → ADR-018
+    #
+    # lp.${SHOP_DOMAIN} → api.${SHOP_DOMAIN} 은
+    #   same-site   등록 도메인이 같다 → 서드파티 쿠키 차단이 일어나지 않는다
+    #   cross-origin 서브도메인이 다르다 → CORS 는 그대로 적용된다
+    #
+    # 그래서 preflight·Vary: Origin·Allow-Origin:* 와 credentials 충돌은
+    # 여전히 재현된다. 잃은 것은 A-1(서드파티 쿠키)과 A-2(SameSite=None) 뿐이다.
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name api.${SHOP_DOMAIN};
+
+        ssl_certificate     /etc/letsencrypt/live/${SHOP_DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
+        include /etc/nginx/conf.d/tls-common.conf;
+
+        set $read_target "";
+        access_by_lua_block { require("replica").assign() }
+
+        # CORS 도 no-store 도 앱이 붙인다. 오리진을 정확히 반향하고 Vary 를
+        # 붙이는 판단은 요청을 이해하는 쪽이 해야 한다 → docs/api-spec.md 3장
+        include /etc/nginx/conf.d/php-app.conf;
+    }

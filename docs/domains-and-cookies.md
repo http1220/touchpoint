@@ -1,23 +1,33 @@
 # 도메인과 쿠키
 
-> **이 문서가 프로젝트의 척추다.** 여기 적힌 도메인 구성이 없으면 나머지 실험이 전부 성립하지 않는다.
+> **이 문서가 프로젝트의 척추다.** 도메인 배치가 어떤 실험을 가능하게 하고 어떤 실험을 막는지가 여기서 정해진다.
 
 ---
 
-## 1. 왜 등록 도메인이 2개여야 하는가
+## 1. 사이트와 오리진은 다른 축이다
 
-브라우저의 same-site 판정 기준은 **오리진이 아니라 등록 도메인(eTLD+1)** 이다. 서브도메인만 나누면 이렇게 된다.
+이 프로젝트가 등록 도메인 1개로 가면서, **무엇이 남고 무엇이 빠지는지**를 먼저 못박는다 → [ADR-018](decisions/ADR-018-single-registered-domain.md)
 
-| 구성 | CORS preflight | `SameSite=None` 필요 | 서드파티 쿠키 차단 재현 |
-|---|---|---|---|
-| `lp.` / `api.` / `app.example.com` (서브도메인 3개) | 발생 | **불필요** — `Lax`로 전송됨 | **불가능** |
-| `lp.sshwan.com` → `api.khan-edge.com` (**등록 도메인 2개**) | 발생 | **필요** | **가능** |
+브라우저는 두 가지 경계를 따로 본다.
 
-> 서브도메인 3개는 cross-**origin**이지만 same-**site**다. 광고 어트리뷰션의 핵심 난제(서드파티 쿠키)를 하나도 겪을 수 없다.
-> 상세 근거 → [ADR-002](decisions/ADR-002-two-registered-domains.md)
+| | 기준 | 무엇을 좌우하는가 |
+|---|---|---|
+| **오리진** | scheme + host + port | **CORS** — preflight, `Allow-Origin`, credentials |
+| **사이트** | 등록 도메인(**eTLD+1**) | **쿠키** — 서드파티 차단, `SameSite` |
+
+`lp.sshwan.com` → `api.sshwan.com` 은 **사이트는 같고 오리진은 다르다.**
+
+| | 이 구성 | 등록 도메인 2개였다면 |
+|---|---|---|
+| CORS preflight | **발생** | 발생 |
+| `Vary: Origin` 필요 | **필요** | 필요 |
+| `Allow-Origin: *` + credentials 충돌 | **재현됨** | 재현됨 |
+| `SameSite=None` 필요 | 불필요 (`Lax`로 전송) | 필요 |
+| 서드파티 쿠키 차단 | **재현 불가** | 재현 가능 |
+
+> **"크로스사이트가 아니면 CORS도 없다"는 흔한 오해다.** CORS는 오리진 기준이라 서브도메인만 달라도 그대로 걸린다. 처음에 나도 둘을 묶어서 **잃는 실패 시나리오를 4개로 과대평가했다. 실제로는 2개다**(A-1·A-2).
 
 ---
-
 ## 2. 도메인 배치
 
 ```
@@ -26,15 +36,15 @@
   app.sshwan.com     서비스 · 가입 · 결제 · 지표
 
 ── 추적 사업자 측 (third-party) ──────────
-  api.khan-edge.com     수집 API · 전환 등록
+  api.sshwan.com     수집 API · 전환 등록
 ```
 
 | 호출 | 관계 | 역할 |
 |---|---|---|
-| `lp.sshwan.com` → `api.khan-edge.com` | **cross-site** | **실험군** — 여기서 모든 문제가 발생한다 |
-| `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | **대조군** — 같은 CORS인데 쿠키는 통과한다 |
+| `lp.sshwan.com` → `api.sshwan.com` | same-site, **cross-origin** | **실험군** — CORS 가 여기서 발생한다 |
+| `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | **대조군** — 같은 구조. 수집과 서비스를 가른 것은 역할 분리다 |
 
-> **대조군이 있다는 게 이 설계의 값어치다.** "cross-site면 막히고 same-site면 통과한다"를 나란히 보여줘야 원인이 오리진이 아니라 사이트라는 게 증명된다.
+> **수집을 `api.` 로 가른 것은 역할 분리다.** 같은 사이트라 쿠키는 세 호스트에 다 붙지만, 오리진이 달라 CORS 는 걸린다 — 그래서 `/collect` 는 preflight 를 띄우고 `/l/{work}` 는 띄우지 않는다. **그 대비가 이 배치의 값어치다.**
 
 ### DNS
 
@@ -43,7 +53,7 @@
 ```
 lp.sshwan.com    A  <EIP>
 app.sshwan.com   A  <EIP>
-api.khan-edge.com   A  <EIP>
+api.sshwan.com   A  <EIP>
 ```
 
 > ACME는 **staging 엔드포인트로 먼저 검증**한다. 설정 시행착오로 Let's Encrypt rate limit에 걸리면 일주일을 날린다.
@@ -56,7 +66,7 @@ api.khan-edge.com   A  <EIP>
 |---|---|---|---|---|---|---|---|---|
 | `ab_vid` | `lp.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | **visit_uid만** (UUIDv7) |
 | `ab_sid` | `app.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 세션 | 로그인 세션 |
-| `ab_tid` | `api.khan-edge.com` | `.khan-edge.com` | **`None`** | ✅ | ✅ | ✅ | 1년 | **추적 ID (서드파티)** |
+| `ab_tid` | `api.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | 수집 측 식별자 |
 | `ab_g4cid` | `app.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ❌ | — | 2년 | GA4 client_id 복제 |
 
 ### 설계 결정 4가지
@@ -64,8 +74,10 @@ api.khan-edge.com   A  <EIP>
 **1. 쿠키에는 `visit_uid`만 담는다.**
 어트리뷰션 본체(utm, gclid, pid…)는 서버 DB에 둔다. 클라이언트가 값을 바꿔도 데이터가 오염되지 않는다. 플랫폼 A도 자체 방문자 ID 쿠키만 쿠키에 두고 나머지는 서버에서 처리한다.
 
-**2. `ab_tid`만 `SameSite=None; Secure; Partitioned`.**
-크로스사이트에서 전송되어야 하는 유일한 쿠키다. `Partitioned`(CHIPS)는 `SameSite=None; Secure`와 **반드시 함께** 써야 효력이 있다.
+**2. `ab_tid` 도 `SameSite=Lax` 다.**
+등록 도메인이 하나라 `api.` 로 가는 요청도 same-site 다. `None` 을 쓸 이유가 없고, 쓰면 오히려 필요 없는 노출을 만든다.
+
+> 원래 계획은 이 쿠키를 `SameSite=None; Secure; Partitioned` 로 두고 브라우저별 차단을 재는 것이었다. `Partitioned`(CHIPS)는 `None; Secure` 와 **반드시 함께** 써야 효력이 있다 — 이 사실은 조사로 확인했지만 **이 구성에서는 검증할 수 없다** → [ADR-018](decisions/ADR-018-single-registered-domain.md)
 
 **3. `ab_g4cid`는 `HttpOnly`가 아니다.**
 GA4 클라이언트 스크립트가 읽고 써야 하고, 서버도 읽어야 한다. Measurement Protocol 전송에 `client_id`가 필요하기 때문이다. 플랫폼 A 글로벌의 `g4_client_id`와 같은 목적이다.
@@ -101,22 +113,21 @@ GA4 클라이언트 스크립트가 읽고 써야 하고, 서버도 읽어야 �
 
 ---
 
-## 5. 브라우저별 예상 동작 — 실험 매트릭스
+## 5. 브라우저별 동작 — 하지 않는다
 
-`failure-scenarios.md`에서 이 표를 **실측으로 채운다.** 지금은 가설이다.
+원래 이 장에는 Chrome·Safari·Firefox의 서드파티 쿠키 차단 매트릭스가 들어갈 예정이었다. **등록 도메인 1개에서는 성립하지 않는다** → [ADR-018](decisions/ADR-018-single-registered-domain.md) · [failure-scenarios A장](failure-scenarios.md)
 
-| 브라우저 | 설정 | `ab_vid` (first-party) | `ab_tid` (third-party) | 예상 |
-|---|---|---|---|---|
-| Chrome | 기본 | 통과 | ? | 서드파티 쿠키 유지(2025 철회) → 통과 예상 |
-| Chrome | 서드파티 차단 ON | 통과 | ? | 차단 예상 |
-| Safari | 기본 (ITP) | 통과 | ? | **차단 예상** |
-| Firefox | 기본 (TCP) | 통과 | ? | **차단 예상** |
-| Chrome | `Partitioned` 적용 시 | 통과 | ? | 파티션 단위로 통과 예상 |
+조사로 확인한 사실만 남긴다. 이건 도메인과 무관하게 유효하다.
 
-> **중요**: Chrome은 2025년에 서드파티 쿠키 폐지를 **철회**했고 Privacy Sandbox도 종료했다. 그래서 이 실험의 주제는 *"쿠키가 사라진다"* 가 아니라 ***"브라우저마다 다르다"*** 다. 상세 → [조사 요약](research-method.md)
+| 사실 | 출처 |
+|---|---|
+| Chrome은 서드파티 쿠키 폐지를 **철회**했다 (2024-07, 2025-04) | [조사 요약](research-method.md) |
+| Privacy Sandbox는 2025-10-17 종료 | 〃 |
+| Safari(ITP)·Firefox(TCP)는 **계속 차단** | 〃 |
+
+> **그래서 이 문제는 "사라지는 문제"가 아니라 "브라우저 편차 문제"다.** 이 재정의가 조사의 산출물이고, 실측을 못 한다고 해서 바뀌지 않는다. 다만 **실측하지 않은 것을 실측한 것처럼 쓰지 않는다.**
 
 ---
-
 ## 6. 서버사이드 전송이 필요한 이유 (재정의)
 
 | 흔한 설명 | 이 프로젝트의 설명 |
@@ -134,8 +145,9 @@ GA4 클라이언트 스크립트가 읽고 써야 하고, 서버도 읽어야 �
 
 | 항목 | 방법 |
 |---|---|
-| 쿠키 속성 | DevTools → Application → Cookies에서 `Domain`·`SameSite`·`Secure`·`Partitioned` 육안 확인 |
-| cross-site 판정 | `lp.sshwan.com` → `api.khan-edge.com` 요청에 `ab_tid`가 붙는지 |
-| same-site 대조 | `lp.sshwan.com` → `app.sshwan.com` 요청에 `ab_vid`가 붙는지 |
-| preflight | Network 탭에 **OPTIONS 요청이 실제로 뜨는지** |
-| 차단 재현 | 브라우저별 설정을 바꿔가며 5장 매트릭스를 채운다 |
+| 쿠키 속성 | DevTools → Application → Cookies 에서 `Domain`·`SameSite`·`Secure` 육안 확인 |
+| **cross-origin 판정** | `lp.sshwan.com` → `api.sshwan.com` 요청이 **OPTIONS preflight 를 띄우는지** |
+| **same-origin 대조** | 같은 요청을 `lp.` 자기 자신에게 보내면 preflight 가 **뜨지 않는지** |
+| `Vary: Origin` | 응답 헤더에 붙는지. 없으면 캐시가 오리진을 섞는다 |
+| credentials 충돌 | `Allow-Origin: *` 로 바꾸면 `credentials: 'include'` 요청이 **실패하는지** |
+| 쿠키 전송 | 세 호스트 모두 same-site 이므로 `Lax` 로 전송된다 — **이게 정상이고, 차단 실험은 하지 않는다** |

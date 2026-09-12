@@ -11,51 +11,35 @@
 
 ---
 
-## A. 쿠키 · 크로스사이트
+## A. 쿠키 — 범위에서 뺀 구간
 
-### A-1. 서드파티 쿠키 차단 — 브라우저별
+**A-1·A-2는 하지 않는다.** 등록 도메인을 1개로 정했기 때문이다 → [ADR-018](decisions/ADR-018-single-registered-domain.md)
+설계와 이유는 남겨 둔다. 못 한 것과 모르는 것은 다르다.
 
-| 브라우저 | 설정 | `ab_vid`(1st) | `ab_tid`(3rd) | 예상 | 결과 |
+### A-1. 서드파티 쿠키 차단 — 브라우저별 ✗ 범위 밖
+
+원래 계획은 Chrome(기본/차단ON/`Partitioned`) · Safari(ITP) · Firefox(TCP)에서 first-party 쿠키와 third-party 쿠키의 전송 여부를 나란히 재는 것이었다.
+
+**성립하지 않는 이유**: 브라우저는 same-site를 **eTLD+1**로 판정한다. `lp.sshwan.com` → `api.sshwan.com`은 같은 사이트이므로 서드파티 쿠키 차단이 **발동할 조건 자체가 없다.** 서브도메인으로는 흉내도 되지 않는다.
+
+> 2025년 현황만 적어 둔다 — Chrome은 서드파티 쿠키 폐지를 **철회**했고(2024-07, 2025-04), Privacy Sandbox는 2025-10-17에 종료됐다. Safari·Firefox는 계속 차단한다. **그래서 이 문제는 "사라지는 문제"가 아니라 "브라우저 편차 문제"다.** 이 인식은 조사에서 얻은 것이고 도메인과 무관하게 유효하다.
+
+### A-2. `SameSite` 설정 누락 ✗ 범위 밖
+
+`SameSite=None`이 필요한 상황은 cross-site 요청에서만 생긴다. same-site에서는 `Lax`로 충분하므로 **실패가 일어나지 않는다.**
+
+`Partitioned`(CHIPS) 역시 `SameSite=None; Secure`와 함께여야 효력이 있으므로 같이 빠진다.
+
+### A-3. same-site · cross-origin 대조 ✅ 이건 한다
+
+| 호출 | 사이트 | 오리진 | 쿠키 | CORS | 결과 |
 |---|---|---|---|---|---|
-| Chrome | 기본 | | | 통과 (2025 폐지 철회) | ☐ |
-| Chrome | 서드파티 차단 ON | | | `ab_tid` 차단 | ☐ |
-| Chrome | + `Partitioned` | | | 파티션 단위 통과 | ☐ |
-| Safari | 기본 (ITP) | | | **차단** | ☐ |
-| Firefox | 기본 (TCP) | | | **차단** | ☐ |
+| `lp.sshwan.com` → `app.sshwan.com` | 같음 | 같음(호스트만 다름) | `Lax`로 전송 | **적용됨** | ☐ |
+| `lp.sshwan.com` → `api.sshwan.com` | 같음 | **다름** | `Lax`로 전송 | **적용됨** | ☐ |
 
-**재현 절차**
-1. `https://lp.sshwan.com/go?work=1&pid=test` 접속
-2. DevTools → Application → Cookies에서 두 도메인의 쿠키 확인
-3. Network 탭에서 `POST api.khan-edge.com/collect` 요청 헤더에 `Cookie: ab_tid`가 붙는지 확인
-4. 브라우저 설정을 바꿔 2~3 반복
-
-**확인할 것**: 어트리뷰션이 **어느 지점에서 끊기는가.** 쿠키가 없어도 `visit_uid`가 URL로 전달되면 살아남는지.
+> **이 표가 [ADR-018](decisions/ADR-018-single-registered-domain.md)의 요지다.** 사이트가 같아도 오리진이 다르면 CORS는 그대로 걸린다. "크로스사이트가 아니면 CORS도 없다"는 흔한 오해이고, 나도 처음에 그렇게 묶어서 잃는 시나리오를 4개로 과대평가했다. 실제로는 2개다.
 
 ---
-
-### A-2. `SameSite` 설정 누락
-
-| 설정 | 예상 | 결과 |
-|---|---|---|
-| `ab_tid`에 `SameSite=Lax` | cross-site 요청에 **미전송** | ☐ |
-| `SameSite=None` + `Secure` 누락 | 브라우저가 **쿠키 자체를 거부** | ☐ |
-| `Partitioned` + `SameSite=Lax` | `Partitioned` **무효** | ☐ |
-
-**재현**: `.env`의 쿠키 속성을 바꿔 재배포 → DevTools 콘솔 경고 메시지 원문 기록.
-
----
-
-### A-3. same-site 대조군
-
-| 호출 | 관계 | 쿠키 전송 | 결과 |
-|---|---|---|---|
-| `lp.sshwan.com` → `api.khan-edge.com` | cross-site | `SameSite=None` 필요 | ☐ |
-| `lp.sshwan.com` → `app.sshwan.com` | **same-site** | `Lax`로도 전송 | ☐ |
-
-> **이 표가 [ADR-002](decisions/ADR-002-two-registered-domains.md)의 증명이다.** 같은 CORS 상황인데 쿠키만 다르게 동작하는 것을 나란히 보여준다.
-
----
-
 ## B. CORS
 
 ### B-1. preflight 발생 조건
@@ -214,9 +198,7 @@ SELECT outbox_id, COUNT(*) FROM dispatch_log
 
 | # | 시나리오 | 무엇이 깨지는가 | 어떻게 막았는가 |
 |---|---|---|---|
-| A-1 | 서드파티 쿠키 차단 | | |
-| A-2 | `SameSite` 누락 | | |
-| B-2 | `Allow-Origin: *` | | |
+| B-2 | `Allow-Origin: *` + credentials | | |
 | B-3 | `sendBeacon` 헤더 불가 | | |
 | C-1 | 301 캐시 | | |
 | C-2 | 리다이렉트 파라미터 유실 | | |
@@ -224,3 +206,30 @@ SELECT outbox_id, COUNT(*) FROM dispatch_log
 | D-2 | 매체 타임아웃 | | |
 | E-1 | 복제 지연 | | |
 | E-2 | 보존기간 파기 | | |
+
+---
+
+## 하지 않기로 한 것 — A-1 · A-2
+
+**등록 도메인을 1개로 정하면서 두 시나리오를 범위에서 뺐다** → [ADR-018](decisions/ADR-018-single-registered-domain.md)
+
+| # | 시나리오 | 왜 못 하는가 |
+|---|---|---|
+| A-1 | 서드파티 쿠키 차단 (브라우저별 매트릭스) | 브라우저는 same-site를 **eTLD+1**로 판정한다. `lp.sshwan.com` → `api.sshwan.com`은 같은 사이트라 차단이 애초에 발동하지 않는다 |
+| A-2 | `SameSite=None` 누락 | same-site 요청에는 `Lax`로 충분하다. `None`이 필요한 상황 자체가 만들어지지 않는다 |
+
+### 남은 것은 무엇인가
+
+수집 호스트를 `api.sshwan.com`에 두면 `lp.` → `api.` 는
+
+- **same-site** (등록 도메인 동일) → 서드파티 쿠키 차단 없음
+- **cross-origin** (서브도메인 상이) → **CORS는 그대로 적용**
+
+그래서 **B-2와 B-3은 계속 재현된다.** preflight도, `Vary: Origin`도, `Allow-Origin: *`와 `credentials: include`의 충돌도 오리진 기준이지 사이트 기준이 아니기 때문이다.
+
+> **이 구분을 정확히 아는 것 자체가 이 항목의 산출물이다.**
+> "크로스사이트가 아니면 CORS도 없다"는 흔한 오해이고, 처음에는 나도 그렇게 묶어서 **잃는 시나리오를 4개로 과대평가했다.** 실제로는 2개다.
+
+### 되돌리는 조건
+
+추적 도메인이 생기면 `.env`의 `TRACK_DOMAIN` 한 줄 + DNS A 레코드 + certbot 재발급으로 붙는다. 엣지는 `TRACK_DOMAIN`이 비어 있어도 뜨도록 만들어 뒀고 CI가 두 경우를 모두 검사한다. **코드는 준비돼 있고 도메인만 없다.**

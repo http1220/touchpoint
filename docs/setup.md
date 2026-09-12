@@ -3,7 +3,7 @@
 목표: **광고주 측 호스트(루트 · `lp.` · `m.` · `app.`)가 자물쇠 표시로 열리는 진단 화면.** 여기까지가 D1~D2다.
 그 다음이 CodeIgniter 3 기동과 스키마 마이그레이션이다.
 
-추적 도메인(`api.`)은 등록되면 붙인다. 없어도 여기까지는 전부 진행된다 → [3-2](#3-2-추적-도메인이-아직-없을-때)
+수집 호스트 `api.` 는 **같은 등록 도메인의 서브도메인**이다 → [ADR-018](decisions/ADR-018-single-registered-domain.md). 별도 추적 도메인은 쓰지 않는다.
 
 ---
 
@@ -11,7 +11,7 @@
 
 | 항목 | 비고 |
 |---|---|
-| **등록 도메인 2개** | 서브도메인만 나누면 실험이 성립하지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md) · 등록 절차는 [domain-setup.md](domain-setup.md)<br>광고주 측 1개만 있어도 착수는 된다 (3-2) |
+| **등록 도메인 1개** | `sshwan.com`. 루트 + `lp.` `m.` `app.` `api.` → [ADR-018](decisions/ADR-018-single-registered-domain.md) |
 | AWS 계정 | 없으면 카드 등록·본인인증에 반나절. **결제 알림을 먼저 걸고 인스턴스를 만든다** (2-1) |
 | DNS | 도메인을 Route 53에서 등록했다면 호스팅 영역이 이미 있다. 확인: `dig +short NS <도메인>` 에 **awsdns** 가 나오는지 (1장) |
 | GA4 속성 | `measurement_id` + **API secret** (D12에 필요, 리드타임 대비 미리) |
@@ -48,7 +48,7 @@ dig +short NS sshwan.com
 | `lp` | A | `<EIP>` | 랜딩·브리지 |
 | `m` | A | `<EIP>` | 모바일 (UA 302 대상) |
 | `app` | A | `<EIP>` | 서비스·전환 |
-| `api` | A | `<EIP>` | 수집. **추적 도메인의** 호스팅 영역에 만든다 |
+| `api` | A | `<EIP>` | 수집 API. cross-origin 실험 대상 |
 
 **트래픽 라우팅 대상**은 드롭다운에서 **"IP 주소 또는 다른 값에 대한 별칭이 아님"** 을 고르고 EIP를 붙여 넣는다.
 
@@ -80,7 +80,7 @@ done
 ### 전파 확인
 
 ```bash
-dig +short sshwan.com lp.sshwan.com m.sshwan.com app.sshwan.com
+dig +short sshwan.com lp.sshwan.com m.sshwan.com app.sshwan.com api.sshwan.com
 ```
 
 > **모든 줄이 같은 EIP를 뱉을 때까지 다음 단계로 넘어가지 않는다.** DNS가 안 된 상태로 certbot을 돌리면 ACME 검증이 실패하면서 rate limit만 소모한다.
@@ -430,9 +430,9 @@ grep -cE '^(ENCRYPTION_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|REPL_PASSWORD)=.+'
 > docker compose up -d --force-recreate app
 > ```
 
-### 3-2. 추적 도메인이 아직 없을 때
+### 3-2. 추적 도메인 — 지금은 쓰지 않는다
 
-`TRACK_DOMAIN`을 비워 두면 `api.` 수집 호스트 없이 뜬다. 광고주 측(`lp.` `m.` `app.`)은 전부 정상 동작한다.
+`TRACK_DOMAIN` 을 채우면 **별도 등록 도메인**에 수집 호스트가 하나 더 생긴다. 지금은 비워 둔다 — 수집은 `api.<SHOP_DOMAIN>` 이 맡는다.
 
 **대신 이 상태에서 성립하지 않는 것을 분명히 해 둔다.**
 
@@ -443,17 +443,19 @@ grep -cE '^(ENCRYPTION_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|REPL_PASSWORD)=.+'
 | 결제·코인 원장·전환 기록 | ✅ | ✅ |
 | 아웃박스 워커·매체 전송(GA4/Meta) | ✅ | ✅ |
 | 읽기 복제본 배정·복제 지연 | ✅ | ✅ |
-| **CORS preflight · `SameSite=None`** | ❌ | ✅ |
-| **서드파티 쿠키 차단 · CHIPS** | ❌ | ✅ |
-| **`track.js` 서드파티 서빙** | ❌ | ✅ |
+| **CORS preflight · `Vary: Origin`** | ✅ (api. 서브도메인) | ✅ |
+| **서드파티 쿠키 차단 · `SameSite=None` · CHIPS** | ❌ | ✅ |
+| **`track.js` 서드파티 서빙** | ❌ (같은 사이트) | ✅ |
 
-서브도메인으로 대체하지 않는다. 브라우저는 same-site를 **eTLD+1**로 판정하므로 `api.sshwan.com`은 `lp.sshwan.com`과 같은 사이트이고, 거기서는 차단도 `SameSite=None`도 재현되지 않는다 → [ADR-002](decisions/ADR-002-two-registered-domains.md)
+**현재는 도메인 1개로 확정했다** → [ADR-018](decisions/ADR-018-single-registered-domain.md)
+
+수집은 `api.sshwan.com` 에 둔다. 브라우저는 same-site 를 **eTLD+1** 로 판정하므로 `lp.` 와 `api.` 는 같은 사이트다 — 쿠키 차단은 일어나지 않는다. 그러나 **오리진은 다르므로 CORS 는 그대로 걸린다.** 잃는 것은 서드파티 쿠키와 `SameSite=None` 둘뿐이다.
 
 도메인을 등록한 뒤 붙이는 절차는 세 줄이다.
 
 ```bash
 # 1) .env 의 TRACK_DOMAIN 을 채운다
-# 2) DNS A 레코드 api.<TRACK_DOMAIN> → 같은 EIP, 전파 확인
+# 2) DNS A 레코드 api.<TRACK_DOMAIN> → 같은 EIP, 전파 확인 (지금은 해당 없음)
 # 3) 인증서 발급 후 엣지 재기동
 docker compose --profile cert run --rm certbot
 docker compose up -d --force-recreate openresty
@@ -486,7 +488,7 @@ docker compose --profile cert run --rm certbot
 docker compose restart openresty      # 인증서를 읽어 443 블록을 만든다
 ```
 
-`SHOP_DOMAIN`(루트 + `lp.` `m.` `app.`)에 하나. `TRACK_DOMAIN` 이 채워져 있으면 `api.` 에 하나 더 발급된다. 비어 있으면 건너뛴다는 메시지가 나오고 정상 종료한다.
+`SHOP_DOMAIN`(루트 + `lp.` `m.` `app.` `api.`)에 인증서 하나가 발급된다. `TRACK_DOMAIN` 이 채워져 있으면 거기에 하나 더 — 비어 있으면 건너뛴다는 메시지가 나오고 정상 종료한다.
 
 ```bash
 curl -kI https://lp.<SHOP_DOMAIN> 2>&1 | head -1
@@ -603,12 +605,12 @@ docker compose logs app | grep '"trace_id":"<그 값>"'
 
 | # | 확인 | 방법 |
 |---|---|---|
-| 1 | 호스트가 **자물쇠 표시**로 열림 | 루트 · `lp.` · `m.` · `app.` (추적 도메인이 있으면 `api.` 까지) |
+| 1 | 호스트가 **자물쇠 표시**로 열림 | 루트 · `lp.` · `m.` · `app.` · `api.` |
 | 2 | 진단 페이지의 **역할 판별**이 맞음 | `/diag` 에서 `lp` / `m` / `app` / `api` 로 표시되는지 |
 | 3 | 인증서가 도메인별로 발급됨 | `curl -vI https://... 2>&1 \| grep -i "issuer\|subject"` |
 | 4 | HTTP/2 로 응답 | `/diag` 의 `HTTP 버전` 행 |
 | 5 | **쿠키 속성이 정책표와 일치** | DevTools → Application → Cookies 에서 `tp_probe_*` |
-| 6 | `api.` 쿠키에 `Partitioned` 가 붙음 | 위와 동일. `SameSite=None; Secure` 와 함께여야 효력 |
+| 6 | `api.` 응답이 **preflight 를 띄우는지** | Network 탭에 OPTIONS 요청이 뜨는지 |
 | 7 | **읽기 대상이 요청마다 갈림** | 쿠키를 지우고 `/diag` 를 여러 번 → `읽기 대상` 이 rdb1/rdb2 로 번갈아 |
 | 8 | 쓰기·읽기 커넥션 모두 살아있음 | `curl -s https://app.<SHOP_DOMAIN>/readyz` |
 | 9 | swap 이 실제로 잡힘 | `free -h` |
@@ -616,7 +618,7 @@ docker compose logs app | grep '"trace_id":"<그 값>"'
 
 ```bash
 # 6번을 헤더로 직접 확인
-curl -sI https://api.<TRACK_DOMAIN>/diag | grep -i set-cookie
+curl -sI https://api.<SHOP_DOMAIN>/diag | grep -i set-cookie
 
 # 7번 — 쿠키 없이 5번 요청해 배정이 갈리는지
 for i in $(seq 5); do
@@ -654,5 +656,5 @@ done
 | 단계 | 할 일 |
 |---|---|
 | 다음 | 랜딩 파라미터 파싱 → 쿠키 발급, 브리지 302 |
-| 그 다음 | CORS 격파, `sendBeacon` 비교, 서드파티 쿠키 차단 실험 |
+| 그 다음 | CORS 격파(`api.` cross-origin), `sendBeacon` 비교 |
 | 그 다음 | 채널 어댑터 + 아웃박스 워커 (`docker compose --profile worker up -d --scale worker=4`) |

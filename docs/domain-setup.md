@@ -3,13 +3,13 @@
 > **작업자가 직접 수행한다.** 로그인·결제·등록자 정보 입력이 필요하다.
 > 이 문서는 무엇을 왜 고르는지와 절차, 그리고 놓치기 쉬운 지점을 정리한 것이다.
 
-관련: [ADR-002 등록 도메인 2개](decisions/ADR-002-two-registered-domains.md) · [setup.md](setup.md) · [worklog.md](worklog.md)
+관련: [ADR-018 등록 도메인 1개](decisions/ADR-018-single-registered-domain.md) · [ADR-002(철회)](decisions/ADR-002-two-registered-domains.md) · [setup.md](setup.md) · [worklog.md](worklog.md)
 
 ---
 
 ## 1. 무엇을 사는가
 
-**등록 도메인 2개.** 서브도메인으로는 실험이 성립하지 않는다.
+**등록 도메인 1개**(`sshwan.com`)로 확정했다. 아래 2개 전제 서술은 2026-09-12 이전 판단이며, TLD 선택 기준은 여전히 유효하다 → [ADR-018](decisions/ADR-018-single-registered-domain.md)
 
 | 역할 | 호스트 | 성격 |
 |---|---|---|
@@ -49,7 +49,7 @@
 | **추적 도메인** | **`.com` (또는 `.net`)** | 평판이 중립적이어야 한다. 타협 불가 |
 | **광고주 도메인** | **`.com` 권장** | 대조군이므로 조건을 같게 둔다. 한쪽만 저가 TLD면 비교가 흐려진다 |
 
-> **여기서 아끼면 프로젝트가 무의미해진다.** 등록 도메인 2개를 사는 이유 자체가 실험이고, 그 실험을 오염시키는 절약은 절약이 아니다.
+> **TLD를 아끼면 실험 변수가 는다.** 저가 TLD를 피하는 이유 자체가 실험이고, 그 실험을 오염시키는 절약은 절약이 아니다.
 
 ---
 
@@ -219,7 +219,7 @@ whois <TRACK_DOMAIN> | grep -i "status\|registrar"
 | 등록기관 | AWS Route 53 | EC2와 같은 콘솔. 도구를 늘리지 않는다 |
 | 도메인 수 | **2개** | [ADR-002](decisions/ADR-002-two-registered-domains.md) |
 | **광고주 측** | **`sshwan.com`** | `lp.` · `m.` · `app.` |
-| **추적 측** | **`khan-edge.com`** | `api.` |
+| **추적 측** | **`sshwan.com`** | `api.` |
 | TLD | **`.com`** (양쪽) | 위 2장 — TLD 평판이 실험 변수가 되는 것을 막는다 |
 | 기간 | 1년 | 최소 단위 |
 | 프라이버시 | 켬 | 무료. 개인 주소가 WHOIS에 공개되는 것을 막는다 |
@@ -231,7 +231,7 @@ whois <TRACK_DOMAIN> | grep -i "status\|registrar"
 
 - 이 서버는 면접이 끝나면 내린다. 그런데 **도메인은 1년을 산다**
 - 웹툰 색이 있는 이름은 프로젝트가 끝나면 쓸 데가 없다
-- 별명 기반 이름은 개인 인프라로 남는다 — `sshwan.com` 은 개인 사이트로, `khan-edge.com` 은 API·정적 자산 전반으로
+- 별명 기반 이름은 개인 인프라로 남는다 — `sshwan.com` 은 개인 사이트로, `sshwan.com` 은 API·정적 자산 전반으로
 
 **역할은 등록 도메인이 아니라 서브도메인이 말한다.** `lp.` 와 `api.` 가 이미 그 일을 하므로 이름에 역할을 또 넣을 필요가 없다.
 
@@ -251,7 +251,7 @@ whois <TRACK_DOMAIN> | grep -i "status\|registrar"
   app.sshwan.com      서비스 · 가입 · 결제
 
 ── 추적 측 (third-party) ──────────────
-  api.khan-edge.com   수집 API · track.js 서빙
+  api.sshwan.com   수집 API · track.js 서빙
 ```
 
 인증서는 도메인별로 두 장이다. `sshwan.com` 쪽은 **루트를 포함해 4개 호스트**를 한 장에 담는다.

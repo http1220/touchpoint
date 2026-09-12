@@ -78,6 +78,39 @@
 | `CLAUDE.md` 를 저장소 **밖에** | 회사명·서버 주소가 들어간다. `mio/web/` 은 git 저장소가 아니다 |
 | 두 번째 도메인은 **선택** | 우대 1개. 사면 CORS·서드파티 쿠키가 열리고, 안 사면 ADR-002 대로 주장을 내린다 |
 
+
+### 추가 (2026-09-12 오후) · 등록 도메인 1개로 확정
+
+두 번째 도메인을 사지 않기로 했다 → [ADR-018](decisions/ADR-018-single-registered-domain.md)
+
+**그 과정에서 내가 틀린 것을 하나 더 찾았다.** 나는 "도메인 1개면 크로스사이트 실험 4개(A-1·A-2·B-2·B-3)를 잃는다"고 말했는데 **과대평가였다.**
+
+| | 기준 | 좌우하는 것 |
+|---|---|---|
+| **오리진** | scheme + host + port | **CORS** |
+| **사이트** | 등록 도메인(eTLD+1) | **쿠키** |
+
+`lp.sshwan.com` → `api.sshwan.com` 은 **사이트는 같고 오리진은 다르다.** CORS 는 오리진 기준이므로 preflight 도 `Vary: Origin` 도 `Allow-Origin:*` + credentials 충돌도 **그대로 일어난다.** 잃는 것은 A-1(서드파티 쿠키 차단)과 A-2(`SameSite=None`) **둘뿐이다.**
+
+- **원인** [확인]: "크로스사이트 = CORS + 쿠키 차단" 으로 두 축을 하나로 묶어서 생각하고 있었다. 흔한 오해이고, 내가 그 오해를 하고 있었다
+- **대응**: 수집 호스트를 `api.sshwan.com` 으로 옮기고(같은 인증서 SAN 에 추가), 문서 전체에서 `cross-site` 를 `cross-origin` 으로 정정했다. A-1·A-2 는 지우지 않고 **"하지 않기로 한 것"** 으로 옮겨 이유를 적었다
+- **배운 것**: 범위를 줄일 때 **정확히 무엇이 빠지는지 세어 보지 않으면 필요 이상으로 포기하게 된다.** 두 배를 포기할 뻔했다
+
+### 문서에서 내린 주장
+
+[ADR-002](decisions/ADR-002-two-registered-domains.md)에 *"1개로 간다면 주장도 함께 내린다"* 고 적어 뒀고, 그대로 지켰다.
+
+| 문서 | 내린 것 |
+|---|---|
+| README | 실패 시나리오 표에서 서드파티 쿠키·`SameSite` 두 줄 삭제 + "범위에서 뺀 것" 명시 |
+| `failure-scenarios.md` | A 장 전체를 "범위에서 뺀 구간" 으로. A-3 은 same-site × cross-origin 대조로 재정의 |
+| `domains-and-cookies.md` | 1장을 "사이트와 오리진은 다른 축" 으로 재작성. 5장(브라우저 매트릭스) 철회 |
+| `architecture.md` · `api-spec.md` | `cross-site` → `cross-origin`, `SameSite=None` → `Lax` |
+| `.env.example` | `COOKIE_TID_SAMESITE=None` → `Lax`, `PARTITIONED=false` |
+| ADR-002 | 상태를 **철회**로. 본문의 eTLD+1 분석은 그대로 둔다 — 뒤집힌 것은 구매 결정뿐이다 |
+
+> **증거 없는 주장을 남겨두는 것이 도메인을 아끼는 것보다 훨씬 큰 손해다.** — ADR-002 에 미리 적어 둔 문장
+
 ### 다음
 
 - [ ] 도메인 결정 (가비아). 사면 저녁에 `api.` 붙이기

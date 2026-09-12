@@ -18,21 +18,21 @@
 ```mermaid
 flowchart LR
     AD["광고 매체"] -->|"클릭"| BR
-    subgraph SHOP["sshwan.com — 광고주"]
+    subgraph SITE["sshwan.com — 하나의 사이트, 네 개의 오리진"]
         BR["lp. /go<br/>브리지 302"] --> LP["lp. /l/{work}<br/>랜딩"]
         APP["app. 가입·결제"]
         MET["app. /metrics"]
-    end
-    subgraph TRACK["khan-edge.com — 추적"]
         API["api. /collect /conversion"]
     end
-    LP -->|"cross-site<br/>CORS + SameSite=None"| API
+    LP -->|"cross-origin<br/>preflight · Vary: Origin"| API
     LP --> APP --> API
     API --> DB[("MySQL")] --> W["워커<br/>SKIP LOCKED"]
     W --> GA["GA4 MP"]
     W --> META["Meta CAPI"]
     DB --> MET
 ```
+
+**사이트는 하나, 오리진은 넷입니다.** CORS는 오리진 기준이라 그대로 걸리고, 쿠키 차단은 사이트(eTLD+1) 기준이라 걸리지 않습니다. 그 경계를 정확히 구분하는 것이 이 배치의 산출물입니다 → [ADR-018](docs/decisions/ADR-018-single-registered-domain.md)
 
 상세 → [docs/architecture.md](docs/architecture.md)
 
@@ -68,7 +68,7 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 **도메인·EC2·TLS 구축 절차 → [docs/setup.md](docs/setup.md)**
 
-> ⚠️ **로컬에서는 핵심 실험이 성립하지 않습니다.** `*.localhost`는 same-site라 서드파티 쿠키 차단과 `SameSite=None`을 재현할 수 없습니다. 등록 도메인 2개가 필요한 이유 → [ADR-002](docs/decisions/ADR-002-two-registered-domains.md)
+> ⚠️ **로컬에서는 실험 조건이 달라집니다.** 인증서가 없어 `Secure` 쿠키와 HTTP/2 조건이 성립하지 않습니다. 실제 호스트에서 확인합니다.
 >
 > ⚠️ **ACME는 반드시 스테이징으로 먼저 검증하세요.** Let's Encrypt 프로덕션은 도메인당 주 5회 제한이라, 설정 시행착오로 소모하면 일주일을 기다려야 합니다.
 
@@ -80,7 +80,7 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 |---|---|---|
 | 1 | `lp./go` 브리지 | **302** 리다이렉트, 파라미터 전달 2방식 비교 |
 | 2 | `visits` + `touchpoints(first)` | 쿠키에는 `visit_uid`만. 본체는 서버 |
-| 3 | `api./collect` | **cross-site** — preflight, `Allow-Credentials`, `Vary: Origin` |
+| 3 | `api./collect` | **cross-origin** — preflight, `Allow-Credentials`, `Vary: Origin` |
 | 4 | `app./signup` | 유입 경로를 `users`에 **스냅샷** (원본은 3개월 후 파기) |
 | 5 | `app./purchase` | `captured`에서만 전환 발화. 코인은 **원장(lot)** 에 적립 |
 | 6 | 워커 | `FOR UPDATE SKIP LOCKED`, 지수 백오프, 구간별 계측 |
@@ -110,8 +110,6 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 | 시나리오 | 무엇이 깨지는가 | 어떻게 막았는가 |
 |---|---|---|
-| 서드파티 쿠키 차단 (브라우저별) | — | — |
-| `SameSite` 설정 누락 | — | — |
 | `Allow-Origin: *` + credentials | — | — |
 | `sendBeacon`의 헤더 제약 | — | — |
 | 301 캐시로 목적지 고착 | — | — |
@@ -120,6 +118,8 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 | 매체 API 타임아웃 | — | — |
 | **복제 지연 (read-after-write)** | — | — |
 | 보존기간 파기 후 유입경로 조회 | — | — |
+
+**범위에서 뺀 것**: 서드파티 쿠키 차단과 `SameSite=None` 누락. 등록 도메인이 하나라 브라우저가 그 경로를 차단할 조건 자체가 만들어지지 않습니다. 설계와 이유는 [failure-scenarios A장](docs/failure-scenarios.md)에 남겨 뒀습니다 — **못 한 것과 모르는 것은 다릅니다.**
 
 ---
 
@@ -140,11 +140,11 @@ FOR UPDATE SKIP LOCKED;
 
 ## 7. 기술 선택과 근거 — 채택하지 않은 것 포함
 
-**17개 결정을 ADR로 기록했습니다** → [docs/decisions/](docs/decisions/)
+**18개 결정을 ADR로 기록했습니다** → [docs/decisions/](docs/decisions/)
 
 | # | 결정 | 왜 |
 |---|---|---|
-| [002](docs/decisions/ADR-002-two-registered-domains.md) | **등록 도메인 2개** | 서브도메인 3개는 same-site라 실험이 성립 안 함 |
+| [018](docs/decisions/ADR-018-single-registered-domain.md) | **등록 도메인 1개** | 002 철회. 잃는 것은 쿠키 차단 실험 둘뿐 — CORS는 오리진 기준이라 그대로 걸림 |
 | [003](docs/decisions/ADR-003-mysql-outbox.md) | Redis·SQS **안 씀** | 전환과 전송 지시를 한 트랜잭션에. 브로커는 정합성 구멍 |
 | [004](docs/decisions/ADR-004-skip-locked.md) | `SKIP LOCKED` | 중복 전송을 사후 차단이 아니라 DB가 **예방** |
 | [005](docs/decisions/ADR-005-channel-adapter.md) | 채널 어댑터 | 대상 서비스에 매체가 **10종 이상** 붙어 있음 (실측) |
@@ -159,7 +159,7 @@ FOR UPDATE SKIP LOCKED;
 
 | | 처음 생각 | 조사 후 |
 |---|---|---|
-| 도메인 | 서브도메인 3개면 충분 | **same-site라 서드파티 쿠키 실험 불가** |
+| 도메인 | 서브도메인 3개면 충분 | **사이트와 오리진은 다른 축.** CORS는 걸리고 쿠키 차단은 안 걸림 |
 | 워커 중복 | `dedup_key`로 사후 차단 | **전송 중복은 못 막음** → `SKIP LOCKED` |
 | 서드파티 쿠키 | "곧 사라진다" | **Chrome이 2025년에 폐지 철회.** 문제는 *브라우저 편차* |
 
@@ -209,7 +209,7 @@ AWS Well-Architected 6기둥 기준입니다.
 
 | | |
 |---|---|
-| **조사가 바꾼 설계 결정 9개** | 서브도메인 3개 → 등록 도메인 2개, "서드파티 쿠키가 사라진다" 전제 붕괴, 매체 10종 이상 → 채널 어댑터, 약관의 재화 만료 규칙 → 원장, 보존기간 20배 차이 → 테이블 분리, 읽기 복제본 운영 흔적 → 복제 지연 재현 … |
+| **조사가 바꾼 설계 결정 9개** | 사이트(eTLD+1)와 오리진의 구분, "서드파티 쿠키가 사라진다" 전제 붕괴, 매체 10종 이상 → 채널 어댑터, 약관의 재화 만료 규칙 → 원장, 보존기간 20배 차이 → 테이블 분리, 읽기 복제본 운영 흔적 → 복제 지연 재현 … |
 | **대조군에서 얻은 스키마 판단** | 다대다 작가·role, 연재요일 배열, 연령등급 enum, 전역 ID + 순번, 표시용 문자열 날짜의 반면교사, 개인화 필드와 캐시 |
 | **반박된 전제** | "웹툰이면 조회수·별점이 기본" — **두 플랫폼 모두 조회수 비공개** |
 | **표준은 기억이 아니라 확인으로** | 서드파티 쿠키 현황, PCI DSS v4.0.1, IAB TCF v2.3, CHIPS |

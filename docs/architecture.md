@@ -18,12 +18,12 @@ flowchart LR
         MET["app. /metrics<br/>지표"]
     end
 
-    subgraph TRACK["khan-edge.com — 추적 측 (third-party)"]
+    subgraph TRACK["sshwan.com — 추적 측 (third-party)"]
         API["api. /collect /conversion<br/>수집 API"]
     end
 
     BR --> LP
-    LP -->|"cross-site XHR<br/>CORS + SameSite=None"| API
+    LP -->|"cross-origin XHR<br/>preflight · Vary: Origin"| API
     LP --> APP
     APP -->|"전환 등록"| API
     API --> DB[("MySQL 8.0")]
@@ -85,7 +85,7 @@ sequenceDiagram
     autonumber
     participant U as 브라우저
     participant LP as lp.sshwan.com (광고주)
-    participant API as api.khan-edge.com (추적)
+    participant API as api.sshwan.com (추적)
     participant APP as app.sshwan.com (서비스)
     participant DB as MySQL
     participant W as 워커
@@ -95,8 +95,8 @@ sequenceDiagram
     LP->>DB: visits + touchpoints(first) 저장
     LP-->>U: 302 → /l/{work} + Set-Cookie ab_vid
     U->>LP: GET /l/{work} (랜딩)
-    U->>API: POST /collect  (cross-site, preflight 발생)
-    Note over U,API: SameSite=None; Secure; Partitioned
+    U->>API: POST /collect  (cross-origin, preflight 발생)
+    Note over U,API: same-site 라 쿠키는 Lax 로 전송된다
     API->>DB: touchpoints(last) 갱신
     U->>APP: POST /signup
     APP->>DB: users + signup_touchpoint 스냅샷
@@ -126,7 +126,7 @@ sequenceDiagram
 
 | 호출 | 관계 | 무슨 일이 벌어지나 |
 |---|---|---|
-| `lp.sshwan.com` → `api.khan-edge.com` | **cross-site + cross-origin** | preflight + `SameSite=None; Secure` + 브라우저별 차단 |
+| `lp.sshwan.com` → `api.sshwan.com` | same-site, **cross-origin** | preflight + `Vary: Origin`. 쿠키는 `Lax` 로 전송 → [ADR-018](decisions/ADR-018-single-registered-domain.md) |
 | `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | CORS는 필요, 쿠키는 `Lax`로 전송 |
 | `app.sshwan.com` 내부 | same-origin | 아무 제약 없음 |
 
@@ -179,7 +179,7 @@ classDiagram
 | 환경 | 도메인 | 용도 |
 |---|---|---|
 | 로컬 | `*.localhost` | 개발. 크로스사이트 실험은 불가(same-site) |
-| 운영 | `sshwan.com` / `khan-edge.com` | **실험은 여기서만 성립** |
+| 운영 | `sshwan.com` / `sshwan.com` | **실험은 여기서만 성립** |
 
 > `.example`은 문서용 placeholder다. 실제 구매 도메인으로 치환한다 (`.env`의 `SHOP_DOMAIN` / `TRACK_DOMAIN`).
 

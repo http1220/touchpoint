@@ -24,12 +24,13 @@ issue() {
 		--cert-name "$name" "$@"
 }
 
-echo "== $SHOP_DOMAIN (루트 + lp. + m. + app.) =="
+echo "== $SHOP_DOMAIN (루트 + lp. + m. + app. + api.) =="
 issue "$SHOP_DOMAIN" \
 	-d "$SHOP_DOMAIN" \
 	-d "lp.$SHOP_DOMAIN" \
 	-d "m.$SHOP_DOMAIN" \
-	-d "app.$SHOP_DOMAIN"
+	-d "app.$SHOP_DOMAIN" \
+	-d "api.$SHOP_DOMAIN"
 
 if [ -z "$TRACK_DOMAIN" ]; then
 	echo "== 추적 도메인 미설정 — 건너뜁니다 =="

@@ -12,8 +12,8 @@
 |---|---|---|---|---|
 | 1 | GET | `/go` | `lp.sshwan.com` | 브리지 리다이렉트 |
 | 2 | GET | `/l/{work}` | `lp.sshwan.com` | 랜딩 |
-| 3 | POST | `/collect` | **`api.khan-edge.com`** | 크로스사이트 수집 |
-| 4 | POST | `/conversion` | **`api.khan-edge.com`** | 전환 등록 |
+| 3 | POST | `/collect` | **`api.sshwan.com`** | 크로스사이트 수집 |
+| 4 | POST | `/conversion` | **`api.sshwan.com`** | 전환 등록 |
 | 5 | POST | `/signup` | `app.sshwan.com` | 가입 |
 | 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(스텁) |
 | 7 | GET | `/metrics` | `app.sshwan.com` | 지표 화면 |
@@ -92,7 +92,7 @@ Host: lp.sshwan.com
 
 ## 3. `POST api./collect` — 크로스사이트 수집 ★ 핵심
 
-**`lp.sshwan.com` → `api.khan-edge.com`** 이므로 **cross-site + cross-origin**이다. 여기서 이 프로젝트의 모든 문제가 발생한다.
+**`lp.sshwan.com` → `api.sshwan.com`** 은 **same-site 이면서 cross-origin** 이다. 사이트가 같으므로 쿠키는 `Lax` 로 전송되고, 오리진이 다르므로 **CORS 는 그대로 걸린다** → [ADR-018](decisions/ADR-018-single-registered-domain.md)
 
 ### preflight
 
@@ -121,10 +121,10 @@ Vary: Origin
 
 ```
 POST /collect
-Host: api.khan-edge.com
+Host: api.sshwan.com
 Origin: https://lp.sshwan.com
 Content-Type: application/json
-Cookie: ab_tid=...          ← SameSite=None; Secure; Partitioned 이어야 전송됨
+Cookie: ab_tid=...          ← same-site 라 SameSite=Lax 로 전송됨
 
 {
   "visit_uid": "01J8XK...",
@@ -139,8 +139,7 @@ HTTP/1.1 200 OK
 Access-Control-Allow-Origin: https://lp.sshwan.com
 Access-Control-Allow-Credentials: true
 Vary: Origin
-Set-Cookie: ab_tid=...; Domain=.khan-edge.com; SameSite=None; Secure;
-            HttpOnly; Partitioned; Max-Age=31536000
+Set-Cookie: ab_tid=...; Domain=.sshwan.com; SameSite=Lax; Secure; HttpOnly
 
 { "ok": true }
 ```
