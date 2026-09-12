@@ -155,6 +155,72 @@ https://lp.sshwan.com:8443            포트 추가
 
 마지막 항목이 B-2 의 재료다. **서버는 200 을 주고 막는 쪽은 브라우저다** — 그 오류 원문을 브라우저로 받아 적는 것이 다음 할 일이다.
 
+
+### 추가 (2026-09-12 밤) · `track.js` 와 B-2 실측
+
+`track.js` 를 붙이고 브라우저로 실제 동작을 봤다. **예상과 다른 것이 하나 나왔고, 그게 오늘 최고 수확이다.**
+
+### ① `Max-Age` 가 실제로 왕복을 줄인다
+
+엣지 로그에서 메서드만 뽑은 것이다. DevTools 가 아니라 서버 기록이다.
+
+```
+OPTIONS /collect → 204     page_view (fetch) — 첫 요청이라 preflight
+POST    /collect → 200     page_view 본 요청
+POST    /collect → 200     click (fetch) — preflight 캐시되어 OPTIONS 없음
+POST    /collect → 200     click (beacon) — 애초에 preflight 없음
+```
+
+세 번째 줄이 `Access-Control-Max-Age: 600` 의 값어치다. 없으면 수집 한 건마다 왕복이 두 번이다.
+
+### ② CORS 는 요청을 막지 않는다 — 응답을 읽는 것을 막는다
+
+`CORS_ALLOW_ORIGIN_WILDCARD=true` 로 깨진 조합을 내보냈다. 콘솔 원문:
+
+```
+Access to fetch at 'https://api.sshwan.com/collect' from origin 'https://lp.sshwan.com'
+has been blocked by CORS policy: The value of the 'Access-Control-Allow-Origin' header
+in the response must not be the wildcard '*' when the request's credentials mode is 'include'.
+```
+
+여기까지는 예상대로였다. **그런데 같은 시각 DB 에 그 요청이 들어와 있었다.**
+
+```
+id  event      transport  received_at
+ 7  page_view  fetch      2026-09-12 08:18:04.748   ← 브라우저가 "차단" 한 그 요청
+```
+
+- 요청은 서버에 **도달했고 처리됐다.** 막힌 것은 응답을 읽는 쪽이다
+- 스크립트가 받은 것은 `TypeError: Failed to fetch` 뿐이다. **CORS 라는 말이 없다**
+- 그래서 재시도를 붙이면 **서버에는 이미 들어간 건이 한 번 더 들어간다**
+
+> **증상이 "데이터 없음" 이 아니라 "데이터 두 배" 다.** 실무에서 이 설정은 "CORS 가 안 되네" 하고 `*` 로 바꿨다가 생기는데, 증상이 중복이라 원인을 CORS 로 의심하지 않게 된다.
+>
+> *"`*` 와 credentials 는 같이 못 쓴다"* 는 문서로 안다. **그 설정이 데이터를 어떻게 오염시키는지는 해 봐야 안다.**
+
+### ③ `sendBeacon` 은 같은 상황에서 통과했다
+
+```
+id  event  transport  received_at                 상태
+ 8  click  beacon     2026-09-12 08:18:20.760     와일드카드 ON 중 — 통과
+```
+
+응답을 읽지 않으므로 브라우저가 막을 이유가 없다. 반대로 **성공했는지 확인할 방법도 없다** — `sendBeacon()` 의 반환값은 "큐에 넣었다" 이지 "서버가 받았다" 가 아니다.
+
+| | 결과를 안다 | CORS 에 걸린다 | 이탈 중 |
+|---|---|---|---|
+| `fetch` | ✅ | ✅ | 취소될 수 있음 |
+| `sendBeacon` | ❌ | ❌ | 보장 |
+
+**어느 쪽도 클라이언트에서 확인이 안 된다.** 수집 파이프라인이 서버 큐(아웃박스)를 두는 이유가 여기에도 있다.
+
+### 설계에 반영한 것
+
+- `Blob` 의 type 을 `text/plain` 으로 고정. `application/json` 으로 두면 단순 요청이 아니게 되어 preflight 가 필요해지는데, `sendBeacon` 은 preflight 를 기다릴 수 없어 그대로 실패한다. **서버가 `Content-Type` 이 아니라 본문 내용으로 파싱하는 이유**
+- 이탈 감지를 `unload` 가 아니라 `pagehide` + `visibilitychange` 로. 모바일 사파리는 탭을 백그라운드로 보낼 때 `unload` 를 부르지 않는다
+- `ab_vid` 는 HttpOnly 라 스크립트가 못 읽는다. 일부러 그렇다 — 읽을 수 있으면 XSS 하나로 방문 이력이 샌다. 쿠키는 브라우저가 `credentials: 'include'` 로 싣고 서버가 읽는다
+- `track.js` 를 `public/` 이 아니라 컨트롤러로 서빙. `public/` 에 두면 nginx 가 모든 호스트에서 내주고, 스크립트가 자기 오리진을 수집 주소로 삼으므로 `lp.` 에서 로드되면 same-origin 이 되어 **CORS 가 사라진다**
+
 ### 다음
 
 - [ ] 도메인 결정 (가비아). 사면 저녁에 `api.` 붙이기

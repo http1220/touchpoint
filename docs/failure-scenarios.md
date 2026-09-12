@@ -42,44 +42,96 @@
 ---
 ## B. CORS
 
-### B-1. preflight 발생 조건
+측정 환경: `lp.sshwan.com` → `api.sshwan.com` (same-site, **cross-origin**), Chromium, 2026-09-12.
+
+### B-1. preflight 발생 조건 ✅ 실측
 
 | 요청 | preflight | 결과 |
 |---|---|---|
-| `fetch` + `Content-Type: application/json` | **발생** | ☐ |
-| `fetch` + `text/plain` | 없음 | ☐ |
-| `navigator.sendBeacon` | **없음** (`text/plain` 고정) | ☐ |
-| `fetch` + 커스텀 헤더 `X-Trace-Id` | 발생 | ☐ |
+| `fetch` + `Content-Type: application/json` | **발생** | ✅ `OPTIONS /collect → 204` |
+| `navigator.sendBeacon` (`text/plain` 고정) | 없음 | ✅ `POST` 만 기록됨 |
+| 같은 `fetch` 를 10분 안에 재호출 | **없음** | ✅ `Access-Control-Max-Age: 600` 이 먹는다 |
+
+엣지 로그(JSON)에서 메서드만 뽑은 것이다. 브라우저 DevTools 가 아니라 **서버 쪽 기록**이라 조작 여지가 없다.
+
+```
+OPTIONS /collect → 204     page_view (fetch) — 첫 요청이라 preflight
+POST    /collect → 200     page_view 본 요청
+POST    /collect → 200     click (fetch) — preflight 캐시되어 OPTIONS 없음
+POST    /collect → 200     click (beacon) — 애초에 preflight 없음
+```
+
+> **세 번째 줄이 `Max-Age` 의 값어치다.** 이게 없으면 수집 한 건마다 왕복이 두 번이다.
 
 ---
 
-### B-2. `Allow-Origin: *` 로 바꾸면
+### B-2. `Allow-Origin: *` 로 바꾸면 ✅ 실측 — **가장 중요한 발견**
 
-| 설정 | 예상 | 결과 |
-|---|---|---|
-| `Allow-Origin: *` + `credentials: 'include'` | **브라우저가 응답을 거부.** 쿠키 전송 불가 | ☐ |
-| 정확한 오리진 + `Allow-Credentials: true` | 정상 | ☐ |
-| 오리진 반향하면서 **`Vary: Origin` 누락** | CDN·프록시가 **다른 오리진 응답을 캐시** | ☐ |
+`.env` 의 `CORS_ALLOW_ORIGIN_WILDCARD=true` 로 일부러 깨진 조합을 내보냈다.
 
-**기록할 것**: 브라우저 콘솔 에러 메시지 원문. `The value of the 'Access-Control-Allow-Origin' header ... must not be the wildcard '*' when the request's credentials mode is 'include'`
+**브라우저 콘솔 원문**
+
+```
+Access to fetch at 'https://api.sshwan.com/collect' from origin 'https://lp.sshwan.com'
+has been blocked by CORS policy: The value of the 'Access-Control-Allow-Origin' header
+in the response must not be the wildcard '*' when the request's credentials mode is 'include'.
+```
+
+여기까지는 예상대로다. **그런데 같은 시각 DB 를 보니 그 요청이 기록돼 있었다.**
+
+```
+id  event      transport  received_at
+ 7  page_view  fetch      2026-09-12 08:18:04.748   ← 브라우저가 "차단" 한 그 요청
+```
+
+| | |
+|---|---|
+| **CORS 는 요청을 막지 않는다** | 요청은 서버에 도달했고 처리됐다. 막히는 것은 **응답을 읽는 것**이다 |
+| **스크립트는 이유를 모른다** | `catch` 에 온 것은 `TypeError: Failed to fetch` 뿐이다. CORS 라는 말이 없다 |
+| **그래서 재시도하면 중복된다** | 클라이언트는 실패로 알고 다시 보내는데 서버에는 이미 들어가 있다 |
+
+```js
+// track.js 가 실제로 받은 것
+[touchpoint] collect 오류 TypeError: Failed to fetch
+```
+
+> **이것이 이 실험의 진짜 산출물이다.** *"`*` 와 credentials 는 같이 못 쓴다"* 는 문서를 읽으면 안다. **그 설정으로 데이터가 어떻게 오염되는지**는 해 봐야 안다 — 수집은 되는데 클라이언트는 실패로 알고, 재시도가 붙으면 전환이 부풀려진다.
+>
+> 실무에서 이 조합은 "CORS 가 안 되네" 하고 `*` 로 바꿨다가 생긴다. 증상이 "데이터가 없음" 이 아니라 **"데이터가 두 배"** 라서 원인을 CORS 로 의심하지 않게 된다.
+
+| 설정 | 결과 |
+|---|---|
+| `Allow-Origin: *` + `credentials: 'include'` | ✅ 브라우저 차단 · **서버는 기록함** |
+| 정확한 오리진 + `Allow-Credentials: true` | ✅ 정상 |
+| 오리진 반향 + `Vary: Origin` 누락 | ☐ 중간 캐시가 필요해 미측정. 정책 코드에는 `Vary` 를 강제하고 테스트로 못박아 뒀다 |
 
 ---
 
-### B-3. `sendBeacon` 트레이드오프
+### B-3. `sendBeacon` 트레이드오프 ◐ 부분 실측
 
 | 항목 | `fetch` | `sendBeacon` | 결과 |
 |---|---|---|---|
-| preflight | 발생 | 없음 | ☐ |
-| 커스텀 헤더 | 가능 | **불가** | ☐ |
-| 페이지 이탈 중 전송 | 취소될 수 있음 | **보장** | ☐ |
-| 페이로드 크기 제한 | 큼 | 브라우저별 제한(약 64KB) | ☐ |
+| preflight | 발생 | 없음 | ✅ B-1 참조 |
+| 커스텀 헤더 | 가능 | **불가** | ✅ `Content-Type` 도 `text/plain` 고정 |
+| **CORS 오설정 시** | **차단** | **통과** | ✅ 아래 |
+| 페이지 이탈 중 전송 | 취소될 수 있음 | **보장** | ☐ 100회 반복 측정 미실시 |
+| 페이로드 크기 | 큼 | 약 64KB | ☐ |
 
-**재현**: 랜딩에서 즉시 다른 페이지로 이동하며 두 방식의 도달률 비교. 100회 반복해 수치로.
+**세 번째 줄이 예상 밖이었다.** B-2 의 와일드카드 상태에서 `fetch` 는 전부 막혔는데 `sendBeacon` 은 그대로 들어왔다.
 
-> **실제로 부딪힌 사람만 아는 내용이라 면접에서 바로 티가 난다.**
+```
+id  event  transport  received_at                 상태
+ 8  click  beacon     2026-09-12 08:18:20.760     와일드카드 ON 중 — 통과
+```
+
+이유는 단순하다. **`sendBeacon` 은 응답을 읽지 않는다.** 읽지 않으므로 브라우저가 CORS 로 막을 이유가 없다. 반대로 말하면 **성공했는지 확인할 방법도 없다** — `navigator.sendBeacon()` 의 반환값은 "큐에 넣었다" 는 뜻이지 "서버가 받았다" 가 아니다.
+
+> 트레이드오프가 이렇게 갈린다.
+> **`fetch`** 는 결과를 알 수 있지만 CORS 에 걸리고 이탈 중 취소된다.
+> **`sendBeacon`** 은 잘 나가지만 나갔는지 알 수 없다.
+> 수집 파이프라인이 서버 큐(아웃박스)를 두는 이유가 여기에도 있다 — **클라이언트 전송은 어느 쪽이든 확인이 안 된다.**
 
 ---
-
 ## C. 리다이렉트
 
 ### C-1. 301 vs 302
@@ -198,8 +250,8 @@ SELECT outbox_id, COUNT(*) FROM dispatch_log
 
 | # | 시나리오 | 무엇이 깨지는가 | 어떻게 막았는가 |
 |---|---|---|---|
-| B-2 | `Allow-Origin: *` + credentials | | |
-| B-3 | `sendBeacon` 헤더 불가 | | |
+| B-2 | `Allow-Origin: *` + credentials | 브라우저가 응답을 차단. **그런데 서버는 기록한다** → 재시도가 붙으면 전환이 부풀려짐 | 오리진을 정확히 반향 + `Vary: Origin`. 정책을 `src/Http/CorsPolicy` 로 빼고 테스트 16건으로 못박음 |
+| B-3 | `sendBeacon` 헤더 불가 | 헤더를 못 붙이고 **성공 여부도 알 수 없다**. 대신 CORS 오설정에도 통과 | 두 경로를 모두 구현해 `transport` 로 구분 적재. 확인은 서버 큐가 담당 |
 | C-1 | 301 캐시 | | |
 | C-2 | 리다이렉트 파라미터 유실 | | |
 | D-1 | 워커 중복 실행 | | |
