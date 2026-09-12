@@ -170,6 +170,29 @@ class Verify extends MY_Controller
         $this->line('');
         $this->line(sprintf('  **반영률 %.1f%%**  (전송 성공률과 다른 숫자다)', $r->reflectionRate() * 100));
 
+        /*
+         * 관측된 것이 적으면 통째로 찍는다.
+         *
+         * 반영률이 낮게 나왔을 때 알아야 하는 것은 "몇 개가 빠졌나" 가 아니라
+         * **"들어간 것은 무엇이었나"** 다. 그게 원인을 가른다 — 들어간 것이
+         * 전부 특정 시각 이전이면 처리 지연이고, 특정 표식이 없는 것뿐이면
+         * 필터이며, 뒤죽박죽이면 진짜 유실이다.
+         */
+        if ($r->observedCount > 0 && $r->observedCount <= 50)
+        {
+            $this->line('');
+            $this->line('  매체에 들어간 것 (전부):');
+
+            foreach ($observed as $id => $n)
+            {
+                $this->line(sprintf(
+                    '    %s  %d회%s',
+                    $id, $n,
+                    in_array($id, $r->matched, TRUE) ? '' : '  ← 우리가 보낸 것이 아니다'
+                ));
+            }
+        }
+
         foreach (array_slice($r->missing, 0, 5) as $id)
         {
             $this->line('    누락 예: '.$id);
