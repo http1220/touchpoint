@@ -119,16 +119,37 @@ class MY_Controller extends CI_Controller
 		$track = getenv('TRACK_DOMAIN') ?: '';
 		$host  = strtolower($this->server('HTTP_HOST'));
 
+		// 도메인이 설정되지 않은 로컬 개발에서는 검사하지 않는다.
+		if ($shop === '')
+		{
+			return;
+		}
+
 		$allowed = array();
 		foreach ((array) $roles as $role)
 		{
-			$allowed[$role] = ($role === 'api') ? 'api.'.$track : $role.'.'.$shop;
-		}
+			if ($role === 'api')
+			{
+				/*
+				 * 수집 호스트는 두 자리에 있을 수 있다.
+				 *
+				 *   TRACK_DOMAIN 있음 → api.<추적도메인>   (cross-site)
+				 *   없음              → api.<광고주도메인> (same-site, cross-origin)
+				 *
+				 * 지금은 후자다 → ADR-018. 둘 다 허용해 두면 나중에
+				 * 추적 도메인을 붙일 때 이 함수를 고칠 일이 없다.
+				 */
+				$allowed[] = 'api.'.$shop;
 
-		// 도메인이 설정되지 않은 로컬 개발에서는 검사하지 않는다.
-		if ($shop === '' OR (isset($allowed['api']) && $track === ''))
-		{
-			return;
+				if ($track !== '')
+				{
+					$allowed[] = 'api.'.$track;
+				}
+
+				continue;
+			}
+
+			$allowed[] = $role.'.'.$shop;
 		}
 
 		if ( ! in_array($host, $allowed, TRUE))
