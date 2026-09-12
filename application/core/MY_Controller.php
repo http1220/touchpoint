@@ -168,7 +168,9 @@ class MY_Controller extends CI_Controller
 	protected function problem($status, $type, $detail, array $extra = array())
 	{
 		$body = array_merge(array(
-			'type'     => 'https://'.(getenv('TRACK_DOMAIN') ?: 'example.invalid').'/problems/'.$type,
+			// 문제 유형 URI 는 광고주 도메인 기준이다 — 수집 호스트가
+			// api.<광고주도메인> 이기 때문이다 (ADR-018).
+			'type'     => 'https://'.(getenv('SHOP_DOMAIN') ?: 'example.invalid').'/problems/'.$type,
 			'title'    => $type,
 			'status'   => (int) $status,
 			'detail'   => $detail,
