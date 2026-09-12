@@ -42,8 +42,7 @@ class Track extends MY_Controller
 			->set_header('ETag: '.$etag)
 			// 스크립트는 오리진을 가리지 않고 내준다. 여기엔 비밀이 없고,
 			// 어느 페이지에서든 로드될 수 있어야 한다.
-			->set_header('Access-Control-Allow-Origin: *')
-			->set_header('X-Content-Type-Options: nosniff');
+			->set_header('Access-Control-Allow-Origin: *');
 
 		// 조건부 요청. 안 바뀌었으면 본문을 보내지 않는다.
 		if (trim($this->server('HTTP_IF_NONE_MATCH')) === $etag)
