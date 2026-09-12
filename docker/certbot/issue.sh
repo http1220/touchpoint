@@ -15,12 +15,18 @@ TRACK_DOMAIN="${TRACK_DOMAIN:-}"
 STAGING=""
 [ -n "${ACME_STAGING:-}" ] && STAGING="--staging"
 
+# --expand          기존 인증서에 도메인을 더할 때 필요하다
+# --non-interactive cron 으로도 도는 경로라 확인 프롬프트에서 멈추면 안 된다
+#
+# 줄 연결(백슬래시) 사이에 주석을 넣지 않는다. 연결이 먼저 일어나 그 뒤가 통째로
+# 주석이 되고, sh -n 은 그걸 잡아내지 못한다.
 issue() {
 	name="$1"
 	shift
 	# shellcheck disable=SC2086
 	certbot certonly --webroot -w /var/www/certbot $STAGING \
 		--email "$ACME_EMAIL" --agree-tos --no-eff-email \
+		--non-interactive --expand \
 		--cert-name "$name" "$@"
 }
 
