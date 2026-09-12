@@ -53,6 +53,12 @@ class Landing extends MY_Controller
 		// 유입이 이어졌는지 확인하려고 DB 를 열어 보는 일을 없애기 위해서다.
 		$touchpoints = $this->visit_model->touchpoints($visit['id']);
 
+		// 수집 이벤트는 **배정받은 복제본에서** 읽는다.
+		// 방금 track.js 가 보낸 건이 여기 안 보일 수 있다 — 그게 복제 지연이고,
+		// 이 화면이 그걸 눈으로 보는 자리다 → docs/failure-scenarios.md E-1
+		$this->load->model('collect_model');
+		$events = $this->collect_model->recent($this->read(), $visit['id'], 10);
+
 		$this->output->set_header('Cache-Control: no-store');
 		$this->load->view('landing/work', array(
 			'work'        => (string) $id,
@@ -60,6 +66,8 @@ class Landing extends MY_Controller
 			'is_new'      => $visit['is_new'],
 			'result'      => $result,
 			'touchpoints' => $touchpoints,
+			'events'      => $events,
+			'api_host'    => getenv('SHOP_DOMAIN') ? 'api.'.getenv('SHOP_DOMAIN') : '',
 			'read_target' => $this->readTarget(),
 			'trace_id'    => $this->trace_id,
 		));

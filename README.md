@@ -106,12 +106,12 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 ## 5. 실패 시나리오와 대응
 
-> 🚧 구현 후 채웁니다 → [docs/failure-scenarios.md](docs/failure-scenarios.md)
+> 2개 실측 완료, 6개 진행 중 → [docs/failure-scenarios.md](docs/failure-scenarios.md)
 
 | 시나리오 | 무엇이 깨지는가 | 어떻게 막았는가 |
 |---|---|---|
-| `Allow-Origin: *` + credentials | — | — |
-| `sendBeacon`의 헤더 제약 | — | — |
+| `Allow-Origin: *` + credentials | 브라우저는 차단, **서버는 기록** → 재시도 시 전환 중복 | 오리진 정확 반향 + `Vary: Origin`, 테스트 16건 |
+| `sendBeacon`의 헤더 제약 | 헤더 불가 + **성공 확인 불가**. 대신 CORS 오설정에도 통과 | 두 경로 모두 구현, `transport` 로 구분 적재 |
 | 301 캐시로 목적지 고착 | — | — |
 | 리다이렉트 중 파라미터 유실 | — | — |
 | 워커 중복 실행 | — | — |
