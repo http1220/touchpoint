@@ -33,7 +33,7 @@ flowchart LR
 2026-09-12 의 [B-2·B-3 실측](failure-scenarios.md)이 나머지 반을 줬다.
 
 | 실측 | 뜻 |
-|---|---|
+|---|---|---|
 | CORS 로 차단된 `fetch` 요청이 **서버에는 기록돼 있었다** | 클라이언트는 실패로 아는데 서버는 성공이다 |
 | 스크립트가 받은 것은 `TypeError: Failed to fetch` 뿐 | **왜 실패했는지 알 수 없다** |
 | `sendBeacon` 의 반환값은 "큐에 넣었다" 이지 "받았다" 가 아니다 | **성공했는지 알 수 없다** |
@@ -401,14 +401,14 @@ docker compose exec mysql-primary sh -c \
   'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -D "$MYSQL_DATABASE" -e "EXPLAIN SELECT id FROM dispatch_outbox WHERE status = 0x70656E64696E67 AND next_retry_at <= NOW(3) ORDER BY id LIMIT 100\G"'
 ```
 
-| # | 완료 조건 |
-|---|---|
-| 1 | 전환 1건 → 채널 수만큼 `pending` 행 |
-| 2 | 워커가 집어 `sent` 로. 검증 엔드포인트가 `validationMessages: []` |
-| 3 | 워커 4개에서 **중복 전송 0** — `dispatch_log` 의 `(outbox_id, attempt)` 가 유일 |
-| 4 | 실패가 백오프 간격대로 재시도되고 결국 `dead` |
-| 5 | `EXPLAIN` 이 `type: range`, `key: ix_poll` |
-| 6 | GA4 실시간 보고서에 이벤트가 보인다 |
+| # | 완료 조건 | 결과 |
+|---|---|---|
+| 1 | 전환 1건 → 채널 수만큼 `pending` 행 | ✅ |
+| 2 | 워커가 집어 `sent` 로. 검증 엔드포인트가 `validationMessages: []` | ✅ |
+| 3 | 워커 4개에서 **중복 전송 0** | ✅ 2000건 · 중복 쌍 0 |
+| 4 | 실패가 백오프 간격대로 재시도되고 결국 `dead` | ◐ 재시도·지터 확인. 소진까지는 미측정 |
+| 5 | `EXPLAIN` 이 `type: range`, `key: ix_poll` | ✅ **분포에 따라 갈린다** → [benchmarks](benchmarks.md) 1-1 |
+| 6 | GA4 실시간 보고서에 이벤트가 보인다 | ✅ 2026-09-12. **이것으로만 api_secret 이 맞다는 게 증명된다** |
 
 > **5번은 데이터가 적으면 실패한다.** 행이 몇 개뿐이면 옵티마이저가 풀스캔이 더 싸다고 판단해 `PRIMARY` 를 고른다. 수만 건을 먼저 적재하고 재라. 이건 인덱스가 안 먹는 게 아니라 **옵티마이저가 맞는 판단을 한 것**이다.
 

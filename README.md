@@ -6,7 +6,7 @@
 
 > 이건 웹툰 서비스가 아닙니다. 어트리뷰션 파이프라인이고, 도메인(회원·코인·회차)은 **전환을 측정할 대상이 필요해서** 최소한만 두었습니다. 그 도메인은 상상해서 만든 것이 아니라 **공개 자료를 조사해 역추론**했습니다 → [조사 요약](docs/research-method.md)
 
-- **상태**: **배포 완료** — https://lp.sshwan.com 가동 중. CI3 · 스키마 18테이블 · MySQL 복제 · 읽기 분리 동작 확인 (2026-09-09)
+- **상태**: **파이프라인 관통** — 광고 클릭 → 방문·접점 적재 → 수집(CORS) → 전환 → 아웃박스 → 워커 → **GA4 도달 확인** (2026-09-12)
 - **스택**: PHP 8.2 · **CodeIgniter 3** · MySQL 8.0(프라이머리+복제본) · **OpenResty(Nginx+Lua)** · Docker · AWS EC2 t3.small
 - **왜 이 스택인가**: 대상 조직이 쓰는 것에 맞췄습니다 → [ADR-014](docs/decisions/ADR-014-stack-alignment.md)
 - **로드맵**: [docs/roadmap.md](docs/roadmap.md) — 의도 → 기획 → 계획 3층 구조
@@ -108,7 +108,7 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 ## 5. 실패 시나리오와 대응
 
-> 2개 실측 완료, 6개 진행 중 → [docs/failure-scenarios.md](docs/failure-scenarios.md)
+> 3개 실측 완료, 5개 진행 중 → [docs/failure-scenarios.md](docs/failure-scenarios.md) · 수치 → [docs/benchmarks.md](docs/benchmarks.md)
 
 | 시나리오 | 무엇이 깨지는가 | 어떻게 막았는가 |
 |---|---|---|
@@ -116,7 +116,7 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 | `sendBeacon`의 헤더 제약 | 헤더 불가 + **성공 확인 불가**. 대신 CORS 오설정에도 통과 | 두 경로 모두 구현, `transport` 로 구분 적재 |
 | 301 캐시로 목적지 고착 | — | — |
 | 리다이렉트 중 파라미터 유실 | — | — |
-| 워커 중복 실행 | — | — |
+| 워커 중복 실행 | 같은 건이 두 번 전송되면 전환이 부풀려짐 | 선점과 상태 변경을 한 트랜잭션에. **워커 4개 2000건에서 중복 0** |
 | 매체 API 타임아웃 | — | — |
 | **복제 지연 (read-after-write)** | — | — |
 | 보존기간 파기 후 유입경로 조회 | — | — |
