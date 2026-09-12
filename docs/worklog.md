@@ -439,11 +439,19 @@ ADR-018 로 결정을 뒤집으면서 문서를 훑어 고쳤다고 생각했는
 
 ### 다음
 
-- [ ] **D-2 매체 타임아웃 → `dead` 까지.** 실패 경로를 한 번도 끝까지 안 가 봤다 — 지금 지표가 전부 100%인 이유
+- [x] ~~D-2 매체 타임아웃 → `dead` 까지~~ **완료** — 5xx·4xx·타임아웃·복구 네 경로 전부
 - [ ] E-1 복제 지연 read-after-write (`SOURCE_DELAY`)
 - [ ] E-2 3개월 파기 — 어트리뷰션 보존율이 실제로 깨지는 자리
 - [ ] 커스텀 수집 `/impression` · `/click`
-- [ ] 저장소 **Topics** 설정 (`gh` 미설치 → 웹 UI 에서)
+- [ ] 저장소 **Topics** 설정 — `gh` 미설치라 웹 UI(저장소 우측 About ⚙)에서. 붙여넣을 값:
+
+  ```
+  attribution  ad-tracking  ga4  measurement-protocol  cors  http-redirect
+  outbox-pattern  skip-locked  php  codeigniter  codeigniter3  mysql
+  nginx  openresty  lua  docker  aws-ec2
+  ```
+
+  About 설명문: `광고 유입 → 전환 → 매체 재전송 파이프라인. PHP 8.2 · CodeIgniter 3 · MySQL 복제 · OpenResty. 실패 시나리오 12건 중 8건을 운영 서버에서 실측했습니다.`
 - [ ] `research/postings/shots/` 에 공고 PNG 저장 (내가 못 함)
 
 ---
