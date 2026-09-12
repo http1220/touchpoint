@@ -48,7 +48,7 @@
 
 ### DNS
 
-두 도메인의 A 레코드를 **같은 EIP**로 향하게 한다. Caddy 한 대가 호스트네임 3개를 받고 ACME HTTP-01로 각각 인증서를 발급한다.
+세 호스트의 A 레코드를 **같은 EIP**로 향하게 한다. OpenResty 한 대가 셋을 다 받고, certbot 이 ACME HTTP-01 로 인증서를 발급한다.
 
 ```
 lp.sshwan.com    A  <EIP>

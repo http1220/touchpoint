@@ -122,7 +122,7 @@ sequenceDiagram
 
 ---
 
-## 4. 두 도메인이 만드는 세 가지 상황
+## 4. 한 사이트 · 네 오리진이 만드는 세 가지 상황
 
 | 호출 | 관계 | 무슨 일이 벌어지나 |
 |---|---|---|
@@ -130,7 +130,9 @@ sequenceDiagram
 | `lp.sshwan.com` → `app.sshwan.com` | same-site, cross-origin | CORS는 필요, 쿠키는 `Lax`로 전송 |
 | `app.sshwan.com` 내부 | same-origin | 아무 제약 없음 |
 
-> **대조군이 있어야 실험이 성립한다.** 서브도메인만 나누면 첫 행이 사라지고, 그러면 이 프로젝트의 존재 이유가 없어진다 → [domains-and-cookies](domains-and-cookies.md)
+> **첫 행이 이 배치의 산출물이다.** 등록 도메인이 하나라 서브도메인만 다른데도 **CORS 는 그대로 걸린다** — 오리진 기준이기 때문이다. 실제로 [B-1·B-2·B-3](failure-scenarios.md)을 여기서 실측했다.
+>
+> 반대로 쿠키 차단은 사이트(eTLD+1) 기준이라 걸리지 않는다. 그 두 축을 한 줄에 묶어 "서브도메인이면 CORS 도 없다" 로 읽는 것이 흔한 오해고, 나도 한 번 했다 → [domains-and-cookies](domains-and-cookies.md) · [research-method 3-1](research-method.md)
 
 ---
 
@@ -176,12 +178,12 @@ classDiagram
 
 ## 7. 환경
 
-| 환경 | 도메인 | 용도 |
+| 환경 | 호스트 | 용도 |
 |---|---|---|
-| 로컬 | `*.localhost` | 개발. 크로스사이트 실험은 불가(same-site) |
-| 운영 | `sshwan.com` / `sshwan.com` | **실험은 여기서만 성립** |
+| 로컬 | `*.localhost` | 개발. 인증서가 없어 `Secure` 쿠키·HTTP/2 조건이 성립하지 않는다 |
+| 운영 | `lp.` · `app.` · `api.` + 루트 (`SHOP_DOMAIN`) | **CORS·리다이렉트 실험은 여기서만 성립** |
 
-> `.example`은 문서용 placeholder다. 실제 구매 도메인으로 치환한다 (`.env`의 `SHOP_DOMAIN` / `TRACK_DOMAIN`).
+> 등록 도메인은 **하나**다(`.env` 의 `SHOP_DOMAIN`). `TRACK_DOMAIN` 은 비워 두며, 채우면 `api.$TRACK_DOMAIN` 블록이 추가로 생성된다 — 코드는 준비돼 있고 도메인만 없다 → [ADR-018](decisions/ADR-018-single-registered-domain.md)
 
 ---
 

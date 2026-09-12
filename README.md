@@ -7,6 +7,8 @@
 > 이건 웹툰 서비스가 아닙니다. 어트리뷰션 파이프라인이고, 도메인(회원·코인·회차)은 **전환을 측정할 대상이 필요해서** 최소한만 두었습니다. 그 도메인은 상상해서 만든 것이 아니라 **공개 자료를 조사해 역추론**했습니다 → [조사 요약](docs/research-method.md)
 
 - **상태**: **파이프라인 관통** — 광고 클릭 → 방문·접점 적재 → 수집(CORS) → 전환 → 아웃박스 → 워커 → **GA4 도달 확인** (2026-09-12)
+- **실측**: 실패 시나리오 **12건 중 7건**, 계측 **7장 중 5장**. 전부 운영 중인 t3.small 에서 잰 값입니다
+- **읽을 것이 하나라면**: [예상이 틀린 곳 셋](#5-실패-시나리오와-대응) — 301이 위험한 진짜 이유, `SKIP LOCKED` 가 처리량을 안 벌어 준 이유, 오픈 리다이렉트의 과녁이 `Host` 였던 이유
 - **스택**: PHP 8.2 · **CodeIgniter 3** · MySQL 8.0(프라이머리+복제본) · **OpenResty(Nginx+Lua)** · Docker · AWS EC2 t3.small
 - **왜 이 스택인가**: 대상 조직이 쓰는 것에 맞췄습니다 → [ADR-014](docs/decisions/ADR-014-stack-alignment.md)
 - **로드맵**: [docs/roadmap.md](docs/roadmap.md) — 의도 → 기획 → 계획 3층 구조
@@ -41,7 +43,7 @@ flowchart LR
 ## 2. 실행 방법
 
 ```bash
-cp .env.example .env      # SHOP_DOMAIN / TRACK_DOMAIN / DB·복제 비밀번호
+cp .env.example .env      # SHOP_DOMAIN · DB·복제 비밀번호 (TRACK_DOMAIN 은 비워 둡니다)
 docker compose up -d      # openresty · app · mysql-primary · mysql-replica
 docker compose exec app php public/index.php cli/migrate latest
 ```
@@ -78,12 +80,12 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 | # | 단계 | 기술적 쟁점 |
 |---|---|---|
-| 1 | `lp./go` 브리지 | **302** 리다이렉트, 파라미터 전달 2방식 비교 |
+| 1 | `lp./go` 브리지 | **302** 리다이렉트 — 301 은 롤백이 안 됩니다([C-1](docs/failure-scenarios.md)). 파라미터 전달 2방식은 **둘 다 틀리고 방향이 다릅니다**([C-2](docs/failure-scenarios.md)) |
 | 2 | `visits` + `touchpoints(first)` | 쿠키에는 `visit_uid`만. 본체는 서버 |
 | 3 | `api./collect` | **cross-origin** — preflight, `Allow-Credentials`, `Vary: Origin` |
 | 4 | `app./signup` | 유입 경로를 `users`에 **스냅샷** (원본은 3개월 후 파기) |
 | 5 | `app./purchase` | `captured`에서만 전환 발화. 코인은 **원장(lot)** 에 적립 |
-| 6 | 워커 | `FOR UPDATE SKIP LOCKED`, 지수 백오프, 구간별 계측 |
+| 6 | 워커 | 선점+상태변경 한 트랜잭션, HTTP 는 트랜잭션 밖. 지수 백오프+지터, 구간별 계측, 좀비 회수 |
 | 7 | 채널 어댑터 | GA4 / Meta. **신규 매체 = 클래스 1개 + 설정 1줄** |
 
 상세 → [docs/api-spec.md](docs/api-spec.md) · [docs/data-model.md](docs/data-model.md)
@@ -94,49 +96,87 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 ## 4. 계측 결과
 
-> 🚧 구현 후 채웁니다 → [docs/benchmarks.md](docs/benchmarks.md)
+전부 운영 중인 t3.small 에서 잰 값입니다 → [docs/benchmarks.md](docs/benchmarks.md)
 
-| 지표 | 목표 | 실측 |
+| 측정 | 결과 | 읽을 것 |
 |---|---|---|
-| 어트리뷰션 보존율 | ≥ 95% | — |
-| 매체 전송 성공률 | ≥ 99% | — |
-| 재시도 후 최종 성공률 | ≥ 99.9% | — |
-| 워커 중복 전송 | **0** | — |
-| 구간별 시간 (parse/db/send) | — | — |
+| **워커 동시성** | 워커 4개 · 2000건 · **중복 전송 0** | `SKIP LOCKED` 를 **꺼도** 중복 0이고 처리량도 안 떨어졌습니다 |
+| **구간별 시간** | total 4.9ms / db 4.8ms / send 0ms (Noop) | GA4 를 붙이면 `send_ms` 가 40~190ms — **전체의 97%가 네트워크** |
+| **인덱스** | 분포에 따라 `ix_poll` ↔ PRIMARY | "인덱스 걸었더니 빨라졌다" 를 쓸 수 없었습니다 (아래 6장) |
+| **리소스** | MySQL 2대가 메모리 90% · CPU 84% | 부하 중 **swap 증가 0MB**, load average 2.29 / vCPU 2 |
+| **복제본 CPU** | 프라이머리 42.2% vs 복제본 **42.1%** | 읽기를 거의 안 받는데도 같은 CPU — **읽기 분산은 공짜가 아닙니다** |
+| **지터** | 같은 배치 두 건이 33.894s · 35.908s | 회복한 매체를 다시 넘어뜨리지 않게 흩뿌립니다 |
+
+### 지표는 아직 지표가 아닙니다
+
+| 지표 | 목표 | 실측 | |
+|---|---|---|---|
+| 워커 중복 전송 | 0 | **0** (9303 시도) | ✅ |
+| 중복 전환 차단 | 유실 0 | **막힘** (`dedup_key` UNIQUE) | ✅ |
+| 어트리뷰션 보존율 | ≥ 95% | 20 / 20 | ◐ 표본 20 |
+| 매체 전송 성공률 | ≥ 99% | GA4 **3 / 3** | ✗ 표본 3 |
+
+> **매체 전송 성공률 100% 는 믿을 값이 아닙니다.** 전송 로그 9303행 중 9300행이 항상 204를 돌려주는 `NoopChannel` 입니다. 실제 매체로 나간 건 3건이라 비율을 낼 단계가 아닙니다.
+>
+> **어트리뷰션 보존율은 정의가 틀려 있었습니다.** 처음 정의(*접점이 남은 방문 ÷ 전체 방문*)로 재면 529/530 = 99.8%가 나오는데, 직접 유입도 `last` 접점을 하나 받기 때문에 뭘 재든 100%에 붙습니다. *광고 유입 방문 중 보존된 비율* 로 고쳐 20/20 입니다. **목표치를 처음부터 넘고 있는 지표는 대개 분모를 잘못 고른 것입니다.**
 
 ---
 
 ## 5. 실패 시나리오와 대응
 
-> 3개 실측 완료, 5개 진행 중 → [docs/failure-scenarios.md](docs/failure-scenarios.md) · 수치 → [docs/benchmarks.md](docs/benchmarks.md)
+> **범위 안 12건 중 7건 실측** → [docs/failure-scenarios.md](docs/failure-scenarios.md)
 
 | 시나리오 | 무엇이 깨지는가 | 어떻게 막았는가 |
 |---|---|---|
 | `Allow-Origin: *` + credentials | 브라우저는 차단, **서버는 기록** → 재시도 시 전환 중복 | 오리진 정확 반향 + `Vary: Origin`, 테스트 16건 |
-| `sendBeacon`의 헤더 제약 | 헤더 불가 + **성공 확인 불가**. 대신 CORS 오설정에도 통과 | 두 경로 모두 구현, `transport` 로 구분 적재 |
-| 301 캐시로 목적지 고착 | — | — |
-| 리다이렉트 중 파라미터 유실 | — | — |
-| 워커 중복 실행 | 같은 건이 두 번 전송되면 전환이 부풀려짐 | 선점과 상태 변경을 한 트랜잭션에. **워커 4개 2000건에서 중복 0** |
-| 매체 API 타임아웃 | — | — |
-| **복제 지연 (read-after-write)** | — | — |
-| 보존기간 파기 후 유입경로 조회 | — | — |
+| `sendBeacon` 의 헤더 제약 | 헤더 불가 + **성공 확인 불가**. 대신 CORS 오설정에도 통과 | 두 경로 모두 구현, `transport` 로 구분 적재 |
+| **캐시 헤더 없는 301** | 3회 클릭 → 서버 도달 **1회**. 게다가 **302로 고쳐도 이미 캐시한 브라우저는 안 돌아옵니다**(같은 URL 2회 → 0회) | 302 고정 + `no-store`. 301은 `.env` 스위치로만 재현 |
+| **랜딩 URL 공유** | passthru 는 클릭 1회가 **유입 2건**으로. vid 는 건수는 맞지만 **두 사람이 한 방문**이 됨 | 기본값 vid. 둘 다 틀리되 **건수 쪽이 정산에 걸립니다** |
+| **오픈 리다이렉트** | 위험한 입력은 `?return=`(없음)이 아니라 **`Host` 헤더**. 막혀 있었지만 **서버 블록 순서에 기댄 우연**이었습니다 | 목적지를 입력으로 받지 않음. 엣지 443에 `default_server` 명시 |
+| **워커 중복 실행** | 같은 건이 두 번 전송되면 전환이 부풀려짐 | 선점과 상태 변경을 한 트랜잭션에. **네 조건 모두 중복 0** |
+| 매체 API 타임아웃 | — | ☐ |
+| 복제 지연 (read-after-write) | — | ☐ |
+| 보존기간 파기 후 유입경로 조회 | — | ☐ |
 
 **범위에서 뺀 것**: 서드파티 쿠키 차단과 `SameSite=None` 누락. 등록 도메인이 하나라 브라우저가 그 경로를 차단할 조건 자체가 만들어지지 않습니다. 설계와 이유는 [failure-scenarios A장](docs/failure-scenarios.md)에 남겨 뒀습니다 — **못 한 것과 모르는 것은 다릅니다.**
 
+### 예상이 틀린 곳 셋 — 이 저장소에서 제일 볼 만한 부분
+
+| 예상 | 실제 |
+|---|---|
+| "301이 위험하다" | **301 자체는 아니었습니다.** `no-store` 붙인 301은 매번 서버에 옵니다. 위험한 건 *영구 캐시를 허용하는* 301이고, 그건 **롤백이 안 됩니다** |
+| "`SKIP LOCKED` 를 끄면 처리량이 급감한다" | **안 떨어졌고 오히려 조금 빨랐습니다.** 잠금 구간에 외부 I/O 가 없어 대기가 마이크로초라서입니다. `SKIP LOCKED` 는 처리량 장치가 아니라 보험입니다 |
+| "`?return=` 오픈 리다이렉트를 막자" | **그런 파라미터가 없었습니다.** 과녁은 `Host` 헤더였습니다 |
+
 ---
 
-## 6. 인덱스 최적화
-
-> 🚧 `EXPLAIN` before/after를 캡처해 채웁니다.
+## 6. 인덱스 최적화 — "빨라졌다"를 쓸 수 없었던 이야기
 
 ```sql
-SELECT * FROM dispatch_outbox
-WHERE status = 'pending' AND next_retry_at <= NOW(3)
-ORDER BY id LIMIT 100
-FOR UPDATE SKIP LOCKED;
+SELECT id FROM dispatch_outbox
+ WHERE status = 'pending' AND next_retry_at <= NOW(3)
+ ORDER BY id LIMIT 100
+ FOR UPDATE SKIP LOCKED;
 ```
 
-**복합 인덱스 `(status, next_retry_at, id)`** — 등호 → 범위 → 정렬 순서. 범위 조건 뒤의 컬럼은 인덱스로 정렬에 쓸 수 없으므로 `id`가 마지막.
+**복합 인덱스 `(status, next_retry_at, id)`** — 등호 → 범위 → 정렬 순서. 범위 조건 뒤의 컬럼은 인덱스로 정렬에 쓸 수 없으므로 `id` 가 마지막입니다.
+
+`EXPLAIN` 을 두 가지 분포에서 찍었더니 답이 갈렸습니다.
+
+| 분포 | 옵티마이저 선택 | `rows` | `Extra` |
+|---|---|---|---|
+| pending 2000 / sent 0 (**큐가 밀린 상태**) | **PRIMARY** | 100 | `Using where` |
+| pending 20 / sent 2000 (**정상 운영**) | **`ix_poll`** | 20 | `Using index` (커버링) |
+
+밀렸을 때는 거의 모든 행이 조건을 만족하므로 **PK 를 순서대로 걸어가다 100건에서 멈추는 것**이 가장 쌉니다. 보조 인덱스를 타면 1924건을 훑고 filesort 까지 해야 합니다.
+
+> **그래서 "인덱스를 걸었더니 빨라졌다" 는 문장을 쓸 수 없었습니다.** `ix_poll` 이 값을 하는 건 워커가 큐를 따라잡고 있을 때고, 밀려 있을 때 옵티마이저가 인덱스를 버리는 건 **틀린 게 아니라 맞는 판단**입니다.
+
+그리고 좀비 회수용으로 `ix_zombie (status, claimed_at)` 를 추가한 직후 **폴링 쿼리의 계획이 흔들렸습니다.** 둘 다 `status` 로 시작해서 옵티마이저가 더 좁은 쪽을 골랐는데, 그쪽은 `next_retry_at` 을 걸러 주지 못해 2002건을 훑습니다.
+
+> **인덱스를 추가하는 일은 기존 쿼리의 계획을 바꾸는 일입니다.** 추가할 때 그 인덱스를 쓸 쿼리만 보면 안 되고, **같은 선두 컬럼을 가진 기존 인덱스가 있는지** 봐야 합니다.
+
+상세 → [docs/benchmarks.md 1장](docs/benchmarks.md)
 
 ---
 
@@ -162,8 +202,17 @@ FOR UPDATE SKIP LOCKED;
 | | 처음 생각 | 조사 후 |
 |---|---|---|
 | 도메인 | 서브도메인 3개면 충분 | **사이트와 오리진은 다른 축.** CORS는 걸리고 쿠키 차단은 안 걸림 |
-| 워커 중복 | `dedup_key`로 사후 차단 | **전송 중복은 못 막음** → `SKIP LOCKED` |
+| 워커 중복 | `dedup_key`로 사후 차단 | **전송 중복은 `dedup_key` 로 못 막음** — 잠금이 필요 |
 | 서드파티 쿠키 | "곧 사라진다" | **Chrome이 2025년에 폐지 철회.** 문제는 *브라우저 편차* |
+
+### 그리고 실측이 그 조사를 다시 뒤집었습니다
+
+| | 조사 후 | 재 보고 나서 |
+|---|---|---|
+| 도메인 | 등록 도메인 2개가 필요하다 ([ADR-002](docs/decisions/ADR-002-two-registered-domains.md)) | **1개로 되돌림.** 잃는 건 4개가 아니라 2개였습니다 ([ADR-018](docs/decisions/ADR-018-single-registered-domain.md)) |
+| 워커 중복 | `SKIP LOCKED` 가 답이다 | **중복을 막는 건 잠금과 "한 트랜잭션" 규칙**입니다. `SKIP LOCKED` 는 기다릴지 건너뛸지만 정합니다 ([D-1](docs/failure-scenarios.md)) |
+
+> **첫 번째 오해는 조사로 잡혔고, 두 번째 오해는 재 봐야 잡혔습니다.** 그 차이가 이 저장소에 계측 문서가 따로 있는 이유입니다.
 
 ---
 
@@ -194,10 +243,16 @@ AWS Well-Architected 6기둥 기준입니다.
 
 ### 다음 단계
 
-- Meta CAPI에 픽셀 `event_id` 중복 제거 실측
-- 채널 3번째 추가로 "변경 파일 2개" 주장 검증
-- 커스텀 수집 2종(`/impression`·`/click`)으로 광고 태그 없이 자체 계측
-- CDN 도입 전후의 이미지 응답 시간·오리진 요청 수 비교
+측정이 안 끝난 것부터입니다. 순서는 **아직 모르는 것이 큰 순**입니다.
+
+| | 무엇 | 왜 아직인가 |
+|---|---|---|
+| D-2 | 매체 API 타임아웃 → `dead` 까지 | 실패 경로를 한 번도 끝까지 안 가 봤습니다. 지금 지표가 전부 100%인 이유 |
+| E-1 | 복제 지연 read-after-write | `SOURCE_DELAY` 로 지연을 만들어 "방금 쓴 걸 못 읽는" 창을 잽니다 |
+| E-2 | 3개월 파기 후 유입경로 조회 | 어트리뷰션 보존율이 실제로 깨지는 자리 |
+| — | 커스텀 수집 `/impression` · `/click` | 광고 태그 없이 자체 계측 |
+| — | Meta CAPI `event_id` 중복 제거 | 픽셀과 서버 전송이 겹칠 때 |
+| — | 채널 3번째 추가 | "변경 파일 2개" 주장([ADR-005](docs/decisions/ADR-005-channel-adapter.md))의 검증 |
 
 ---
 
