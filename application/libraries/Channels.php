@@ -100,9 +100,37 @@ class Channels
 	{
 		return match ($name) {
 			'ga4'  => $this->ga4(),
-			'noop' => new NoopChannel(),
+			'noop' => $this->noop(),
 			default => NULL,
 		};
+	}
+
+	/**
+	 * 아무 데도 보내지 않는 채널.
+	 *
+	 * `.env` 의 NOOP_OUTCOME 으로 **실패를 주입**할 수 있다. 실패 경로는
+	 * 성공 경로보다 재현하기 어려운데, 매체가 우리 사정에 맞춰 죽어 주지
+	 * 않기 때문이다. GA4 는 일부러 깨진 페이로드를 보내도 2xx 를 돌려준다.
+	 *
+	 *   sent    204        기본값
+	 *   retry   503        5xx — 재시도 대상
+	 *   dead    400        4xx — 우리 요청이 잘못됐으므로 재시도하지 않는다
+	 *
+	 * 운영에서 쓸 값이 아니다. 실패 시나리오 D-2 를 재려고 열어 둔 문이고,
+	 * 이름 그대로 아무 데도 보내지 않으므로 매체에 영향이 없다.
+	 * → docs/failure-scenarios.md D-2
+	 */
+	private function noop()
+	{
+		$outcome = strtolower(trim((string) (getenv('NOOP_OUTCOME') ?: 'sent')));
+
+		if ( ! in_array($outcome, array('sent', 'retry', 'dead'), TRUE))
+		{
+			log_message('error', 'channels: NOOP_OUTCOME 값이 올바르지 않습니다 — '.$outcome);
+			$outcome = 'sent';
+		}
+
+		return new NoopChannel('noop', $outcome);
 	}
 
 	private function ga4()
