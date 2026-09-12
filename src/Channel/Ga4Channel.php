@@ -165,7 +165,12 @@ final class Ga4Channel implements ChannelInterface
             default => 2,
         };
 
-        return $exponent === 0 ? $minor : $minor / (10 ** $exponent);
+        // PHP 의 / 는 나누어떨어지면 int 를 돌려준다.
+        //   USD 9900 → 99   (int)
+        //   USD 9950 → 99.5 (float)
+        // 같은 통화인데 금액에 따라 JSON 모양이 달라진다. 타입은
+        // 금액이 아니라 **통화**가 정해야 하므로 명시적으로 캐스팅한다.
+        return $exponent === 0 ? $minor : (float) ($minor / (10 ** $exponent));
     }
 
     /**

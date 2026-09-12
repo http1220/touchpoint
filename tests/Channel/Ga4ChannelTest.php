@@ -113,6 +113,7 @@ final class Ga4ChannelTest extends TestCase
             'KRW 는 0자리'  => ['KRW', 9900, 9900],
             'JPY 는 0자리'  => ['jpy', 1200, 1200],
             'USD 는 2자리'  => ['USD', 9900, 99.0],
+            'USD 나머지 있음' => ['USD', 9950, 99.5],
             'KWD 는 3자리'  => ['KWD', 9900, 9.9],
         ];
     }
