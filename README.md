@@ -88,6 +88,8 @@ open https://lp.<SHOP_DOMAIN>/diag           # 호스트 라우팅·TLS·쿠키 
 
 상세 → [docs/api-spec.md](docs/api-spec.md) · [docs/data-model.md](docs/data-model.md)
 
+6·7번 구현 방법 → [docs/outbox-and-channels.md](docs/outbox-and-channels.md)
+
 ---
 
 ## 4. 계측 결과

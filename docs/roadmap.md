@@ -410,5 +410,6 @@ flowchart LR
 | **기획** | [research-method.md](research-method.md) · [decisions/](decisions/) |
 | **계획** | 이 문서 ③장 · [setup.md](setup.md) · [domain-setup.md](domain-setup.md) |
 | 설계 | [architecture.md](architecture.md) · [domains-and-cookies.md](domains-and-cookies.md) · [api-spec.md](api-spec.md) · [data-model.md](data-model.md) |
+| 구현 안내 | [outbox-and-channels.md](outbox-and-channels.md) — 아웃박스·채널 어댑터·GA4 |
 | 검증 | [failure-scenarios.md](failure-scenarios.md) · [benchmarks.md](benchmarks.md) |
 | **기록** | [worklog.md](worklog.md) — 한 일 · 막힌 것 · 결정한 것 |
