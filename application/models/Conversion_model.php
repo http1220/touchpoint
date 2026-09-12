@@ -29,7 +29,19 @@ class Conversion_model extends CI_Model
 		$this->db->trans_begin();
 
 		$this->db->query(
-			'INSERT INTO '.self::TABLE.' (
+			/*
+			 * INSERT IGNORE 다.
+			 *
+			 * dedup_key 가 겹치면 평범한 INSERT 는 오류를 내고, db_debug 가
+			 * 켜져 있으면 CI3 가 에러 화면을 띄우고 요청을 끝낸다. 중복 전환은
+			 * **정상적으로 일어나는 일**이라 예외로 다루면 안 된다 —
+			 * 사용자가 결제 버튼을 두 번 누르면 바로 이 경로다.
+			 *
+			 * IGNORE 로 두면 중복은 affected_rows 0 으로 조용히 돌아오고,
+			 * 그걸 duplicated 로 호출자에게 알린다. 경쟁 상태에도 안전하다 —
+			 * 미리 SELECT 해서 막으면 동시 요청 둘이 다 통과한다.
+			 */
+			'INSERT IGNORE INTO '.self::TABLE.' (
 				conversion_uid, user_id, visit_id, type, value_minor, currency, dedup_key, occurred_at
 			) VALUES (UNHEX(?), ?, ?, ?, ?, ?, ?, ?)',
 			array(
@@ -44,9 +56,10 @@ class Conversion_model extends CI_Model
 			)
 		);
 
-		$id = (int) $this->db->insert_id();
+		$affected = (int) $this->db->affected_rows();
+		$id       = (int) $this->db->insert_id();
 
-		if ($id === 0)
+		if ($affected === 0 OR $id === 0)
 		{
 			// dedup_key UNIQUE 에 걸렸다. 같은 전환이 이미 있다.
 			$this->db->trans_rollback();

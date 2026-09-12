@@ -112,12 +112,21 @@ class Dispatch extends MY_Controller
 			return 0;
 		}
 
+		/*
+		 * 선점 시간을 건수로 나눠 행마다 배분한다.
+		 *
+		 * 배치 전체의 선점 시간을 모든 행에 그대로 더했더니 db_ms 평균이
+		 * total_ms 평균보다 커졌다(31.6 vs 7.8). 구간을 나눠 적는 이유가
+		 * "합이 맞아야 어디가 느린지 안다" 인데, 합이 안 맞으면 소용없다.
+		 */
+		$claimPerRow = (int) round($claimMs / max(1, count($rows)));
+
 		$backoff = new BackoffPolicy();
 		$clock   = new SystemClock();
 
 		foreach ($rows as $row)
 		{
-			$this->handle($row, $backoff, $clock, $claimMs);
+			$this->handle($row, $backoff, $clock, $claimPerRow);
 		}
 
 		return count($rows);
@@ -134,7 +143,7 @@ class Dispatch extends MY_Controller
 
 	// ────────────────────────────────────────────────────────
 
-	private function handle(array $row, BackoffPolicy $backoff, SystemClock $clock, $claimMs)
+	private function handle(array $row, BackoffPolicy $backoff, SystemClock $clock, $claimPerRow)
 	{
 		$total = microtime(TRUE);
 
@@ -182,7 +191,7 @@ class Dispatch extends MY_Controller
 			'attempt'     => $row['attempt'],
 			'http_status' => $result->httpStatus,
 			'parse_ms'    => $parseMs,
-			'db_ms'       => $claimMs + self::msSince($t),
+			'db_ms'       => $claimPerRow + self::msSince($t),
 			'send_ms'     => $sendMs,
 			'total_ms'    => self::msSince($total),
 		));
