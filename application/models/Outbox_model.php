@@ -60,6 +60,16 @@ class Outbox_model extends CI_Model
 	{
 		$limit = max(1, (int) $limit);
 
+		/*
+		 * SKIP LOCKED 를 끌 수 있게 열어 뒀다 — 그게 값을 하는지 재려면
+		 * 없는 쪽도 돌려 봐야 한다 → docs/failure-scenarios.md D-1
+		 *
+		 * 끄면 워커들이 같은 행을 두고 줄을 선다. 중복 전송은 여전히
+		 * 없지만(잠금은 그대로다) 처리량이 직렬에 가까워진다.
+		 * 운영에서 끌 이유는 없다. 기본값은 켬이다.
+		 */
+		$skipLocked = tp_env_bool('OUTBOX_SKIP_LOCKED', TRUE) ? ' SKIP LOCKED' : '';
+
 		$this->db->trans_begin();
 
 		$rows = $this->db->query(
@@ -68,7 +78,7 @@ class Outbox_model extends CI_Model
 			  WHERE status = ? AND next_retry_at <= ?
 			  ORDER BY id
 			  LIMIT '.$limit.'
-			  FOR UPDATE SKIP LOCKED',
+			  FOR UPDATE'.$skipLocked,
 			array('pending', tp_now_utc())
 		)->result_array();
 
