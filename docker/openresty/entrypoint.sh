@@ -54,7 +54,7 @@ https=0
 if has_cert "$SHOP_DOMAIN"; then
 	sed "s|\${SHOP_DOMAIN}|$SHOP_DOMAIN|g" \
 		< "$TEMPLATES/shop.template" > "$SERVERS/shop.https.conf"
-	echo "openresty: HTTPS 활성 — $SHOP_DOMAIN (루트 · lp. · m. · app.)"
+	echo "openresty: HTTPS 활성 — $SHOP_DOMAIN (루트 · lp. · m. · app. · api.)"
 	https=1
 else
 	echo "openresty: $SHOP_DOMAIN 인증서가 없어 HTTP 로만 뜹니다."
@@ -64,7 +64,7 @@ fi
 
 # ── 추적 측: api. ──────────────────────────────────────────
 if [ -z "$TRACK_DOMAIN" ]; then
-	echo "openresty: TRACK_DOMAIN 미설정 — 수집 호스트 없이 뜹니다 (ADR-002)"
+	echo "openresty: 별도 추적 도메인 없음 — 수집은 api.$SHOP_DOMAIN 이 맡습니다 (ADR-018)"
 elif has_cert "$TRACK_DOMAIN"; then
 	sed "s|\${TRACK_DOMAIN}|$TRACK_DOMAIN|g" \
 		< "$TEMPLATES/track.template" > "$SERVERS/track.https.conf"
