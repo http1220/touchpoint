@@ -13,6 +13,7 @@ $fields = array(
 <html lang="ko">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<?php $this->load->view('partials/gtag'); ?>
 <title>작품 <?= html_escape($work) ?> · touchpoint</title>
 <style>
   body{font:14px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:2rem;
