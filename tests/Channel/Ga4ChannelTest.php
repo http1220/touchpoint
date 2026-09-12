@@ -103,7 +103,9 @@ final class Ga4ChannelTest extends TestCase
             'value_minor' => $minor,
         ]));
 
-        self::assertSame($expected, $http->lastParams()['value'], $currency);
+        // assertSame 이 아니라 assertEquals 다. JSON 에는 정수/실수 구분이
+        // 없어서 99.0 이 99 로 돌아온다 — 비교할 것은 타입이 아니라 값이다.
+        self::assertEquals($expected, $http->lastParams()['value'], $currency);
         self::assertSame(strtoupper($currency), $http->lastParams()['currency']);
     }
 
@@ -118,6 +120,27 @@ final class Ga4ChannelTest extends TestCase
         ];
     }
 
+
+    public function test_JSON_은_정수와_실수를_구분하지_않는다(): void
+    {
+        /*
+         * 한 번 헛짚은 자리라 테스트로 박아 둔다.
+         *
+         * PHP 의 / 가 나누어떨어지면 int 를 돌려주는 것을 보고 "같은 통화인데
+         * 금액에 따라 JSON 모양이 달라진다" 고 판단해 캐스팅을 넣었는데,
+         * 실제로는 json_encode(99.0) 이 "99" 를 낸다. 애초에 없는 문제였다.
+         *
+         * 그러니 매체가 받는 값을 확인할 때 PHP 타입으로 단정하지 않는다.
+         */
+        $http = new FakeHttpClient(204);
+        (new Ga4Channel($http, 'G-T', 's'))->send($this->conversion([
+            'currency' => 'USD',
+            'value_minor' => 9900,
+        ]));
+
+        self::assertStringContainsString('"value":99', (string) $http->lastBody);
+        self::assertStringNotContainsString('"value":99.0', (string) $http->lastBody);
+    }
     public function test_금액이_없으면_통화도_넣지_않는다(): void
     {
         $http = new FakeHttpClient(204);
