@@ -193,10 +193,36 @@ reclaimZombies($olderThanSeconds)               sending 에 멈춘 행을 pendin
 
 ```
 운영   POST https://www.google-analytics.com/mp/collect?measurement_id=G-XXXX&api_secret=YYYY
-검증   POST https://www.google-analytics.com/_debug_/mp/collect?measurement_id=G-XXXX&api_secret=YYYY
+검증   POST https://www.google-analytics.com/debug/mp/collect?measurement_id=G-XXXX&api_secret=YYYY
 ```
 
-**검증 경로는 `/_debug_/mp/collect` 다.** 언더스코어가 앞뒤로 붙는다 — `/debug/mp/collect` 가 아니다.
+두 경로 모두 2026-09-12 에 실제 요청을 보내 확인했다. `/_debug_/mp/collect`(언더스코어) 는 **404** 다 — 공식 문서 페이지의 Firebase 탭 설명을 웹 스트림에 잘못 옮겨 적었다가 한 번 틀렸다.
+
+### 실측 (2026-09-12, 실제 속성 `G-Z766LSNKB3`)
+
+| 요청 | 결과 |
+|---|---|
+| `POST /debug/mp/collect` + 올바른 페이로드 | `200` · `{"validationMessages": []}` |
+| `POST /debug/mp/collect` + `"name":"_badEventName"` | `200` · `NAME_INVALID` 메시지 |
+| `POST /debug/mp/collect` + **틀린 `api_secret`** | **`200` · `validationMessages` 비어 있음** |
+| `POST /mp/collect` + 잘못된 이벤트 | **`204` · 본문 0바이트** |
+| `POST /_debug_/mp/collect` | `404` |
+
+**세 번째 줄이 중요하다.** 검증 서버는 `api_secret` 을 확인하지 않는다. 그래서
+
+> **`validationMessages: []` 는 "페이로드가 맞다" 는 뜻이지 "인증이 맞다" 는 뜻이 아니다.**
+> 자격 증명이 틀렸는지는 **GA4 실시간 보고서에 데이터가 보이는지로만** 알 수 있다.
+
+검증 엔드포인트로 확인할 수 있는 것과 없는 것을 갈라 두면 이렇게 된다.
+
+| | 검증 엔드포인트로 알 수 있나 |
+|---|---|
+| 이벤트 이름·파라미터 형식 | ✅ |
+| 한도 초과 | ✅ |
+| **`api_secret` 이 맞는가** | ❌ |
+| **`measurement_id` 가 맞는가** | ❌ |
+| **데이터가 실제로 집계됐는가** | ❌ |
+
 
 ### 가장 중요한 함정
 
@@ -213,7 +239,7 @@ reclaimZombies($olderThanSeconds)               sending 에 멈춘 행을 pendin
 1. `.env` 의 `GA4_DEBUG=true` 면 **검증 엔드포인트**로 보내고 `validationMessages` 를 본다
 2. 검증 메시지가 비어 있지 않으면 **`dead`** 로 보낸다. 재시도해도 같은 답이다
 3. 운영 전환 전에 각 이벤트 타입을 한 번씩 검증 경로로 통과시킨다
-4. 최종 확인은 GA4 **실시간 보고서**와 **DebugView** 로 한다 — HTTP 응답이 아니라 **데이터가 도착했는지**를 본다
+4. 최종 확인은 GA4 **실시간 보고서**와 **DebugView** 로 한다 — HTTP 응답이 아니라 **데이터가 도착했는지**를 본다. 검증 엔드포인트가 `api_secret` 을 보지 않으므로 **이 단계를 건너뛸 수 없다**
 
 검증 응답 모양:
 
@@ -393,6 +419,7 @@ docker compose exec mysql-primary sh -c \
 | 증상 | 원인 | 대응 |
 |---|---|---|
 | 전송은 2xx 인데 GA4 에 안 보임 | **운영 엔드포인트는 틀려도 2xx 다** | `GA4_DEBUG=true` 로 `validationMessages` 확인 |
+| 검증은 통과하는데 GA4 에 안 보임 | **검증 서버는 `api_secret` 을 확인하지 않는다** | 실시간 보고서로 확인. secret·측정 ID 재확인 |
 | 1970년 데이터로 들어감 | `timestamp_micros` 에 밀리초를 넣음 | ×1000 |
 | 실시간 보고서에만 안 보임 | `engagement_time_msec`·`session_id` 누락 | 둘 다 넣는다 |
 | 사용자가 전부 신규 | `client_id` 를 매번 새로 만듦 | `_ga` 쿠키에서 뽑는다 |
