@@ -24,11 +24,26 @@ final class FakeHttpClient implements HttpClient
 
     public int $calls = 0;
 
+    /** @var array<string,string>|null 마지막 postForm 의 필드 */
+    public ?array $lastForm = null;
+
+    /** @var list<HttpResponse> 앞에서부터 하나씩 꺼내 쓴다. 비면 기본 응답 */
+    public array $queue = [];
+
     public function __construct(
         private readonly ?int $status = 204,
         private readonly string $body = '',
         private readonly ?string $error = null,
     ) {
+    }
+
+    public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse
+    {
+        $this->calls++;
+        $this->lastUrl = $url;
+        $this->lastForm = $fields;
+
+        return $this->next();
     }
 
     public function postJson(string $url, string $json, array $headers = [], int $timeoutMs = 3000): HttpResponse
@@ -37,6 +52,15 @@ final class FakeHttpClient implements HttpClient
         $this->lastUrl = $url;
         $this->lastBody = $json;
         $this->lastHeaders = $headers;
+
+        return $this->next();
+    }
+
+    private function next(): HttpResponse
+    {
+        if ($this->queue !== []) {
+            return array_shift($this->queue);
+        }
 
         if ($this->status === null) {
             return HttpResponse::failure($this->error ?? '연결 실패', 12);

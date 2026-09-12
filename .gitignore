@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# 서비스 계정 키 — 이 파일 하나로 GA4 속성을 읽을 수 있다
+/secrets/
+*-sa.json
+
 # 의존성
 /vendor/
 

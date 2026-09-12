@@ -24,4 +24,15 @@ interface HttpClient
      * @param int                  $timeoutMs 응답까지 기다릴 최대 시간
      */
     public function postJson(string $url, string $json, array $headers = [], int $timeoutMs = 3000): HttpResponse;
+
+    /**
+     * `application/x-www-form-urlencoded` 로 보낸다.
+     *
+     * JSON 이 표준인 시대에 이게 왜 필요한가 — **OAuth2 토큰 엔드포인트가
+     * 폼 인코딩만 받는다**(RFC 6749 §4.1.3). 매체 API 는 JSON 인데 그 API 를
+     * 쓰기 위한 인증은 폼이다. 하나로 뭉뚱그릴 수 없어서 메서드를 나눈다.
+     *
+     * @param array<string,string> $fields
+     */
+    public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse;
 }

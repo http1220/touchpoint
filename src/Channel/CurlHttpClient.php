@@ -31,6 +31,16 @@ final class CurlHttpClient implements HttpClient
         }
     }
 
+    public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse
+    {
+        return $this->post(
+            $url,
+            http_build_query($fields),
+            ['Content-Type: application/x-www-form-urlencoded'],
+            $timeoutMs
+        );
+    }
+
     public function postJson(string $url, string $json, array $headers = [], int $timeoutMs = 3000): HttpResponse
     {
         $merged = ['Content-Type: application/json'];
@@ -39,13 +49,21 @@ final class CurlHttpClient implements HttpClient
             $merged[] = $name.': '.$value;
         }
 
+        return $this->post($url, $json, $merged, $timeoutMs);
+    }
+
+    /**
+     * @param list<string> $headers 이미 `Name: value` 로 조립된 것
+     */
+    private function post(string $url, string $body, array $headers, int $timeoutMs): HttpResponse
+    {
         $ch = curl_init();
 
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $json,
-            CURLOPT_HTTPHEADER => $merged,
+            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT_MS => $timeoutMs,
             CURLOPT_CONNECTTIMEOUT_MS => self::CONNECT_TIMEOUT_MS,
