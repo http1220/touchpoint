@@ -20,21 +20,36 @@
 ```mermaid
 flowchart LR
     AD["광고 매체"] -->|"클릭"| BR
-    subgraph SITE["sshwan.com — 하나의 사이트, 네 개의 오리진"]
-        BR["lp. /go<br/>브리지 302"] --> LP["lp. /l/{work}<br/>랜딩"]
-        APP["app. 가입·결제"]
-        MET["app. /metrics"]
-        API["api. /collect /conversion"]
+
+    subgraph SITE["sshwan.com — 한 사이트, 네 오리진"]
+        BR["lp. /go<br/>브리지"]
+        LP["lp. /l/{work}<br/>랜딩 + track.js"]
+        APP["app.<br/>가입 · 결제 · 지표"]
+        API["api.<br/>/collect · /conversion"]
     end
-    LP -->|"cross-origin<br/>preflight · Vary: Origin"| API
-    LP --> APP --> API
-    API --> DB[("MySQL")] --> W["워커<br/>SKIP LOCKED"]
-    W --> GA["GA4 MP"]
-    W --> META["Meta CAPI"]
-    DB --> MET
+
+    BR -->|"302 + no-store"| LP
+    LP -.->|"cross-origin<br/>preflight · Vary: Origin"| API
+    LP --> APP
+    APP --> API
+
+    subgraph TX["전환과 전송 지시는 한 트랜잭션"]
+        CONV[("conversions")]
+        OB[("dispatch_outbox")]
+    end
+
+    API --> CONV
+    CONV --- OB
+    OB -->|"FOR UPDATE"| W["워커 ×4"]
+    W ==>|"HTTP 는 트랜잭션 밖"| GA["GA4 MP"]
+    W ==> META["Meta CAPI"]
 ```
 
-**사이트는 하나, 오리진은 넷입니다.** CORS는 오리진 기준이라 그대로 걸리고, 쿠키 차단은 사이트(eTLD+1) 기준이라 걸리지 않습니다. 그 경계를 정확히 구분하는 것이 이 배치의 산출물입니다 → [ADR-018](docs/decisions/ADR-018-single-registered-domain.md)
+**① 사이트는 하나, 오리진은 넷입니다.** CORS는 오리진 기준이라 그대로 걸리고(점선), 쿠키 차단은 사이트(eTLD+1) 기준이라 걸리지 않습니다. 그 경계를 구분하는 것이 이 배치의 산출물입니다 → [ADR-018](docs/decisions/ADR-018-single-registered-domain.md)
+
+**② 전환을 기록하는 트랜잭션 안에서 전송 지시도 같이 적재합니다.** 커밋이 곧 "보내기로 확정됨"이고, 롤백되면 둘 다 사라집니다 — *전환은 없는데 전송은 나갔다* 가 구조적으로 불가능해집니다 → [ADR-003](docs/decisions/ADR-003-mysql-outbox.md)
+
+**③ 외부 HTTP(굵은 선)는 트랜잭션 밖입니다.** 매체가 느린 만큼 잠금이 길어지면 워커를 넷으로 늘린 의미가 사라집니다. 이 선택 때문에 잠금 대기가 마이크로초로 끝나고, 그래서 `SKIP LOCKED` 가 처리량을 벌어 주지 **않습니다** → [D-1](docs/failure-scenarios.md)
 
 상세 → [docs/architecture.md](docs/architecture.md)
 
