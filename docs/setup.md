@@ -641,6 +641,7 @@ done
 | MySQL 이 안 뜬다 | `MYSQL_ROOT_PASSWORD` 가 비었다 | `sh scripts/check-env.sh` (3-1) |
 | 세션이 유지되지 않는다 | `ENCRYPTION_KEY` 가 비었다. **에러 없이** 깨진다 | 위와 같다 |
 | `.env` 값이 반영 안 됨 | compose 가 캐시된 설정 사용 | `docker compose up -d --force-recreate` |
+| 워커만 멈추려다 **사이트가 내려감** | `docker compose --profile worker stop` 은 워커만이 아니라 **기본 프로파일 서비스까지 전부** 멈춘다 | 워커만: `docker compose stop worker`. 이미 내렸다면 `docker compose up -d` |
 | `docker: 'compose' is not a docker command` | AL2023 의 docker 패키지에 Compose v2 가 없다 | 3-0-1 |
 | 모든 요청이 500 | **`composer install` 을 안 했다.** `vendor/` 가 없으면 CodeIgniter 자체가 없다 | 6-1 |
 | `Class "CI_Controller" not found` | 위와 같다 | 6-1 |

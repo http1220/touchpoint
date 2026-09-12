@@ -76,9 +76,29 @@ class Bridge extends MY_Controller
 		$status = (int) (getenv('BRIDGE_REDIRECT_STATUS') ?: 302);
 		$status = in_array($status, array(301, 302, 303, 307, 308), TRUE) ? $status : 302;
 
+		/*
+		 * 캐시 헤더를 끌 수 있게 열어 둔다.
+		 *
+		 * 301 이 위험한 진짜 이유를 가르려면 세 경우를 나눠 봐야 한다.
+		 *
+		 *   302 + no-store   매번 서버에 온다 (기본값)
+		 *   301 + no-store   no-store 가 이기는가?
+		 *   301 + 헤더 없음  브라우저가 영구 캐시한다
+		 *
+		 * 세 번째가 광고 링크에서 사고가 나는 자리다. 목적지를 바꿔도
+		 * 반영되지 않고, 두 번째 클릭부터는 요청이 서버에 오지 않아
+		 * 클릭 집계가 통째로 사라진다. → docs/failure-scenarios.md C-1
+		 */
+		$cache = getenv('BRIDGE_CACHE_CONTROL');
+		$cache = ($cache === FALSE) ? 'no-store' : trim($cache);
+
 		$this->output
 			->set_status_header($status)
-			->set_header('Cache-Control: no-store')
 			->set_header('Location: '.$location);
+
+		if ($cache !== '')
+		{
+			$this->output->set_header('Cache-Control: '.$cache);
+		}
 	}
 }
