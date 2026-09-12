@@ -42,10 +42,22 @@ class Seed extends MY_Controller
 		$this->load->library('channels');
 	}
 
-	public function conversion($count = 1)
+	/**
+	 * @param int    $count    만들 전환 수
+	 * @param string $currency ISO 4217. `mix` 면 아래 목록에서 돌아가며 쓴다
+	 *
+	 * 통화를 섞을 수 있게 한 이유는 **소수 자릿수가 통화마다 다르기** 때문이다.
+	 * 9900 이라는 minor unit 정수가 KRW 면 ₩9,900 이고 USD 면 $99.00 이다.
+	 * 매체 대시보드에 찍히는 매출로 그 변환을 확인할 수 있다 → src/Channel/Ga4Channel::majorUnits
+	 */
+	public function conversion($count = 1, $currency = 'KRW')
 	{
 		$count = max(1, min(100000, (int) $count));
 		$names = $this->channels->names();
+
+		// 0자리 · 2자리 · 3자리를 하나씩. 자릿수별로 한 번씩은 지나가게.
+		$mix = array('KRW', 'USD', 'JPY', 'EUR', 'BHD');
+		$currency = strtoupper(trim((string) $currency));
 
 		if ($names === array())
 		{
@@ -59,10 +71,12 @@ class Seed extends MY_Controller
 
 		for ($i = 0; $i < $count; $i++)
 		{
+			$cur = ($currency === 'MIX') ? $mix[$i % count($mix)] : $currency;
+
 			$r = $this->conversion_model->createWithOutbox(array(
 				'type'        => 'purchase',
 				'value_minor' => 9900,
-				'currency'    => 'KRW',
+				'currency'    => $cur,
 
 				// dedup_key 는 유일해야 한다. 같은 값이면 UNIQUE 에 걸려
 				// 두 번째부터 duplicated 로 돌아온다 — 그 동작도 확인 대상이다.
@@ -80,8 +94,9 @@ class Seed extends MY_Controller
 		}
 
 		$this->line(sprintf(
-			'전환 %d건 · 아웃박스 %d건 적재 (채널 %s) · %dms',
+			'전환 %d건 · 아웃박스 %d건 적재 (채널 %s · 통화 %s) · %dms',
 			$made, $enqueued, implode(',', $names),
+			$currency === 'MIX' ? implode('/', $mix) : $currency,
 			(int) round((microtime(TRUE) - $startedAt) * 1000)
 		));
 	}
