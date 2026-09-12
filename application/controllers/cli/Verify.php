@@ -35,6 +35,60 @@ class Verify extends MY_Controller
         }
     }
 
+    /**
+     * 이 서비스 계정이 볼 수 있는 속성 목록.
+     *
+     * "403 도 아니고 오류도 없는데 0건" 일 때 쓴다. 그 상태에서 남는
+     * 의심은 엉뚱한 속성을 보고 있다는 것뿐이다.
+     */
+    public function props()
+    {
+        $reader = $this->reader();
+
+        if ($reader === NULL)
+        {
+            return;
+        }
+
+        try
+        {
+            $props = $reader->propertySummaries();
+        }
+        catch (Exception $e)
+        {
+            $this->fail($e->getMessage());
+
+            return;
+        }
+
+        if ($props === array())
+        {
+            $this->line('이 서비스 계정이 볼 수 있는 속성이 없습니다.');
+            $this->line('  GA4 관리 > 속성 액세스 관리에서 뷰어로 추가됐는지 확인하세요.');
+
+            return;
+        }
+
+        $current = trim((string) (getenv('GA4_PROPERTY_ID') ?: ''));
+
+        $this->line('볼 수 있는 속성');
+
+        foreach ($props as $p)
+        {
+            $this->line(sprintf(
+                '  %-14s %-28s (계정: %s)%s',
+                $p['property'], $p['displayName'], $p['account'],
+                $p['property'] === $current ? '  ← 지금 .env 의 값' : ''
+            ));
+        }
+
+        if ($current !== '' && ! in_array($current, array_column($props, 'property'), TRUE))
+        {
+            $this->line('');
+            $this->line('  ⚠ .env 의 GA4_PROPERTY_ID='.$current.' 는 위 목록에 없습니다.');
+        }
+    }
+
     /** 속성에 무엇이 들어와 있는지부터 본다. 권한·설정 확인용. */
     public function events($start = 'today', $end = 'today')
     {

@@ -31,6 +31,17 @@ final class CurlHttpClient implements HttpClient
         }
     }
 
+    public function get(string $url, array $headers = [], int $timeoutMs = 3000): HttpResponse
+    {
+        $merged = [];
+
+        foreach ($headers as $name => $value) {
+            $merged[] = $name.': '.$value;
+        }
+
+        return $this->send($url, $merged, $timeoutMs, null);
+    }
+
     public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse
     {
         return $this->post(
@@ -57,12 +68,17 @@ final class CurlHttpClient implements HttpClient
      */
     private function post(string $url, string $body, array $headers, int $timeoutMs): HttpResponse
     {
+        return $this->send($url, $headers, $timeoutMs, $body);
+    }
+
+    /** @param list<string> $headers  @param string|null $body null 이면 GET */
+    private function send(string $url, array $headers, int $timeoutMs, ?string $body): HttpResponse
+    {
         $ch = curl_init();
 
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_POST => $body !== null,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT_MS => $timeoutMs,
@@ -78,11 +94,15 @@ final class CurlHttpClient implements HttpClient
             CURLOPT_SSL_VERIFYHOST => 2,
         ]);
 
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+
         $startedAt = microtime(true);
-        $body = curl_exec($ch);
+        $response = curl_exec($ch);
         $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
 
-        if ($body === false) {
+        if ($response === false) {
             $error = curl_error($ch) ?: 'curl 오류';
             curl_close($ch);
 
@@ -93,6 +113,6 @@ final class CurlHttpClient implements HttpClient
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
 
-        return new HttpResponse($status, (string) $body, $elapsedMs);
+        return new HttpResponse($status, (string) $response, $elapsedMs);
     }
 }

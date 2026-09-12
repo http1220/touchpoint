@@ -37,6 +37,15 @@ final class FakeHttpClient implements HttpClient
     ) {
     }
 
+    public function get(string $url, array $headers = [], int $timeoutMs = 3000): HttpResponse
+    {
+        $this->calls++;
+        $this->lastUrl = $url;
+        $this->lastHeaders = $headers;
+
+        return $this->next();
+    }
+
     public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse
     {
         $this->calls++;

@@ -78,6 +78,52 @@ final class Ga4Reader
     }
 
     /**
+     * 이 서비스 계정이 볼 수 있는 속성 목록. (Analytics **Admin** API)
+     *
+     * 진단용이다. "권한도 통과했고 오류도 없는데 0건" 일 때, 남는 의심은
+     * **엉뚱한 속성을 보고 있다**는 것뿐이다. 속성 ID 는 눈으로 확인하기
+     * 어려운 숫자라(측정 ID·서비스 계정 client_id 와 헷갈린다) 목록을
+     * 직접 받아 보는 편이 빠르다.
+     *
+     * Data API 와 **다른 API** 다. GCP 에서 따로 사용 설정해야 한다.
+     *
+     * @return list<array{property:string, displayName:string, account:string}>
+     */
+    public function propertySummaries(): array
+    {
+        $res = $this->http->get(
+            'https://analyticsadmin.googleapis.com/v1beta/accountSummaries?pageSize=200',
+            ['Authorization' => 'Bearer '.$this->account->accessToken()],
+            $this->timeoutMs
+        );
+
+        $body = $res->json();
+
+        if (!$res->isSuccess()) {
+            throw new RuntimeException(sprintf(
+                "Admin API 실패 (http=%s): %s\n".
+                '  (Data API 와 별개입니다. GCP 에서 Google Analytics Admin API 도 켜야 합니다)',
+                $res->status ?? '-',
+                (string) ($body['error']['message'] ?? $res->error ?? $res->body)
+            ));
+        }
+
+        $out = [];
+
+        foreach ($body['accountSummaries'] ?? [] as $account) {
+            foreach ($account['propertySummaries'] ?? [] as $p) {
+                $out[] = [
+                    'property' => str_replace('properties/', '', (string) ($p['property'] ?? '')),
+                    'displayName' => (string) ($p['displayName'] ?? ''),
+                    'account' => (string) ($account['displayName'] ?? ''),
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * 이벤트 이름별 건수. 대조 전에 "무엇이라도 들어왔는가" 를 보는 용도다.
      *
      * @return array<string,int>

@@ -35,4 +35,11 @@ interface HttpClient
      * @param array<string,string> $fields
      */
     public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse;
+
+    /**
+     * 읽기. 매체 API 중에는 조회가 GET 인 것이 있다 (GA4 Admin API 등).
+     *
+     * @param array<string,string> $headers
+     */
+    public function get(string $url, array $headers = [], int $timeoutMs = 3000): HttpResponse;
 }
