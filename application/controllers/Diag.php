@@ -24,6 +24,18 @@ class Diag extends MY_Controller
 
 		$this->issueProbeCookies($role[0], $shop, $track);
 
+		/*
+		 * _ga 쿠키가 여기까지 오는지 본다.
+		 *
+		 * gtag 는 lp. 에서 쿠키를 심고, 서버 전송은 api. 에서 그 값을 읽어야 한다.
+		 * 등록 도메인이 하나라 Domain=.sshwan.com 이면 실려 온다 — 그 전제가
+		 * 실제로 성립하는지 이 줄로 확인한다. 안 오면 Measurement Protocol 의
+		 * client_id 를 못 얻고, 전환이 매 건 신규 사용자로 잡힌다.
+		 * → docs/outbox-and-channels.md 7장
+		 */
+		$gaRaw      = (string) $this->input->cookie('_ga', TRUE);
+		$gaClientId = \App\Channel\GaClientId::fromCookie($gaRaw);
+
 		// CI3 는 Exceptions 클래스를 "에러가 났을 때" 처음 로드한다.
 		// production 에서는 억제할 deprecation 자체가 안 나므로 로드되지 않고,
 		// 그 상태에서 MY_Exceptions::suppressed() 를 부르면 이 페이지가 500 이 된다.
@@ -50,6 +62,8 @@ class Diag extends MY_Controller
 				'CodeIgniter'    => CI_VERSION,
 				'환경'           => ENVIRONMENT,
 				'억제된 deprecation' => $suppressed.'건 (프레임워크 내부)',
+				'_ga 쿠키'      => $gaRaw !== '' ? $gaRaw : '(없음)',
+				'client_id'     => $gaClientId !== NULL ? $gaClientId : '(못 뽑음 — 서버 전송이 신규 사용자로 잡힌다)',
 				'서버 시각(UTC)' => tp_now_utc(),
 			),
 		);
@@ -64,7 +78,10 @@ class Diag extends MY_Controller
 		if ($shop !== '' && $host === 'lp.'.$shop)   return array('lp',  '광고주 측 · 랜딩/브리지', 'first-party');
 		if ($shop !== '' && $host === 'm.'.$shop)    return array('m',   '광고주 측 · 모바일',      'first-party');
 		if ($shop !== '' && $host === 'app.'.$shop)  return array('app', '광고주 측 · 서비스/전환', 'first-party');
-		if ($track !== '' && $host === 'api.'.$track) return array('api', '추적 측 · 수집 API',      'third-party');
+		// 수집 호스트는 같은 등록 도메인의 서브도메인이다 → ADR-018.
+		// 사이트가 같으니 first-party 이고, 오리진이 달라 CORS 만 걸린다.
+		if ($shop  !== '' && $host === 'api.'.$shop)  return array('api', '수집 API · same-site, cross-origin', 'first-party');
+		if ($track !== '' && $host === 'api.'.$track) return array('api', '수집 API · 별도 추적 도메인',        'third-party');
 
 		return array('?', '알 수 없는 호스트', '-');
 	}
