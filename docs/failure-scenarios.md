@@ -30,16 +30,65 @@
 
 `Partitioned`(CHIPS) 역시 `SameSite=None; Secure`와 함께여야 효력이 있으므로 같이 빠진다.
 
-### A-3. same-site · cross-origin 대조 ✅ 이건 한다
+### A-3. same-site · cross-origin 대조 ✅ 실측
 
-| 호출 | 사이트 | 오리진 | 쿠키 | CORS | 결과 |
-|---|---|---|---|---|---|
-| `lp.sshwan.com` → `app.sshwan.com` | 같음 | 같음(호스트만 다름) | `Lax`로 전송 | **적용됨** | ☐ |
-| `lp.sshwan.com` → `api.sshwan.com` | 같음 | **다름** | `Lax`로 전송 | **적용됨** | ☐ |
+`lp.sshwan.com` 페이지에서 세 곳으로 `fetch(credentials:'include')` 를 날렸다.
+등록 도메인은 하나뿐이라 **셋 다 같은 사이트**다. 다른 것은 오리진뿐이다.
 
-> **이 표가 [ADR-018](decisions/ADR-018-single-registered-domain.md)의 요지다.** 사이트가 같아도 오리진이 다르면 CORS는 그대로 걸린다. "크로스사이트가 아니면 CORS도 없다"는 흔한 오해이고, 나도 처음에 그렇게 묶어서 잃는 시나리오를 4개로 과대평가했다. 실제로는 2개다.
+| 호출 | 사이트 | 오리진 | 브라우저가 받은 것 | 서버 로그 |
+|---|---|---|---|---|
+| `lp.` → `lp./healthz` | 같음 | **같음** | **200** | `lp… GET /healthz -> 200` |
+| `lp.` → `app./healthz` | 같음 | **다름** | **`TypeError: Failed to fetch`** | `app… GET /healthz -> **200**` |
+| `lp.` → `api./collect` | 같음 | **다름** | **200** | `api… OPTIONS -> 204`, `POST -> 200` |
+
+**① 사이트가 같아도 오리진이 다르면 CORS 가 걸린다.**
+가운데 줄이 [ADR-018](decisions/ADR-018-single-registered-domain.md)의 요지 그 자체다.
+`app.` 은 `lp.` 과 **같은 사이트**여서 쿠키는 그대로 오가는데, 오리진이 달라
+브라우저가 응답을 막았다. "크로스사이트가 아니면 CORS 도 없다" 는 오해가
+여기서 깨진다.
+
+**② 그런데 서버는 200 을 돌려줬다.**
+브라우저는 `Failed to fetch` 를 받았고 엣지 로그에는 `200` 이 남아 있다.
+[B-2](#b-2-allow-origin--로-바꾸면--실측--가장-중요한-발견)에서 확인한 성질이
+same-site 쌍에서도 똑같다 — **CORS 는 요청을 막지 않는다. 응답을 읽는 것을 막는다.**
+
+> 그래서 `app.` 이 CORS 헤더를 안 보내는 것은 "보호" 가 아니다.
+> 요청은 이미 처리됐다. 상태를 바꾸는 엔드포인트였다면 바뀐 뒤다.
+
+**③ 쿠키는 세 곳 모두에 갔다.**
+`api./collect` 가 `200` 을 주면서 **방문을 붙였다.**
+
+```
+| id | visit_id | event | transport | origin                |
+| 29 |      427 | click | fetch     | https://lp.sshwan.com |
+```
+
+`visit_id` 가 채워졌다는 것은 `ab_vid` 쿠키(`Domain=.sshwan.com`, `SameSite=Lax`)가
+**크로스오리진 요청에 실려 갔다**는 뜻이다. 같은 사이트라 `Lax` 로 충분하고,
+`SameSite=None` 도 서드파티 쿠키 차단도 끼어들지 않는다.
+
+**④ preflight 는 `api.` 에서만 떴다.**
+`Content-Type: application/json` 이 단순 요청 조건을 벗어나기 때문이다.
+`app./healthz` 는 GET 이라 preflight 없이 본 요청이 바로 갔고, 그래서
+**막혔는데도 서버에 도달**했다.
+
+> ### 이 표는 원래 틀려 있었다
+>
+> 스켈레톤에 첫 줄을 이렇게 적어 뒀었다.
+>
+> | `lp.` → `app.` | 사이트 같음 | 오리진 **같음(호스트만 다름)** |
+>
+> 오리진은 scheme + **host** + port 다. 호스트가 다르면 오리진이 다르다.
+> 바로 아래에 *"사이트가 같아도 오리진이 다르면 CORS 는 그대로 걸린다"* 고
+> 적어 놓고, **표에서는 그 둘을 다시 묶고 있었다.**
+>
+> 같은 오해를 이 저장소에서 세 번 했다 — 처음엔 잃는 시나리오를 4개로
+> 과대평가했고([research-method 3-1](research-method.md)), 다음엔
+> `architecture.md` 4장의 닫는 말에서, 이번엔 이 표에서.
+> **문장으로 아는 것과 표를 채울 때 아는 것이 달랐다.**
 
 ---
+
 ## B. CORS
 
 측정 환경: `lp.sshwan.com` → `api.sshwan.com` (same-site, **cross-origin**), Chromium, 2026-09-12.

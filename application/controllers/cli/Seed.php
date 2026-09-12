@@ -101,6 +101,36 @@ class Seed extends MY_Controller
 		));
 	}
 
+	/**
+	 * 같은 `dedup_key` 로 **한 번만** 넣는다. 키를 밖에서 준다.
+	 *
+	 *   for i in 1..8; do cli/seed race KEY & done
+	 *
+	 * 이걸 병렬로 띄우는 것이 D-3 의 실험이다. 순차 두 번(`duplicate`)은
+	 * UNIQUE 가 막는 걸 보여 줄 뿐이고, **경쟁 상태**는 동시에 때려야 한다.
+	 * `Conversion_model` 주석이 "미리 SELECT 해서 막으면 동시 요청 둘이
+	 * 다 통과한다" 고 주장하는데, 그 주장을 검증하려면 이 경로가 필요하다.
+	 */
+	public function race($key = NULL)
+	{
+		if ( ! is_string($key) OR trim($key) === '')
+		{
+			fwrite(STDERR, "dedup_key 를 인자로 주세요.\n");
+			exit(1);
+		}
+
+		$r = $this->conversion_model->createWithOutbox(array(
+			'type'        => 'purchase',
+			'value_minor' => 9900,
+			'currency'    => 'KRW',
+			'dedup_key'   => $key,
+			'client_id'   => mt_rand(100000000, 999999999).'.'.time(),
+		), $this->channels->names());
+
+		// 한 줄만 찍는다. 병렬 출력이 섞여도 세기 쉽게.
+		$this->line($r['duplicated'] ? 'DUP' : 'NEW id='.$r['id']);
+	}
+
 	/** 같은 dedup_key 로 두 번 넣어 UNIQUE 가 막는지 본다. */
 	public function duplicate()
 	{
