@@ -1,23 +1,37 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+use App\Dispatch\BackoffPolicy;
+use App\Support\SystemClock;
 
 /**
  * 매체 전송 워커. CLI 전용.
  *
- *   docker compose --profile worker up --scale worker=4
+ *   docker compose --profile worker up -d --scale worker=4
+ *   docker compose exec app php public/index.php cli/dispatch once   # 1회만
  *
  * 아웃박스를 폴링해 채널 어댑터로 넘긴다. 동시 실행이 전제다 —
- * 워커를 4개로 늘려도 같은 건이 두 번 전송되지 않는 것을
- * FOR UPDATE SKIP LOCKED 로 보장한다. → ADR-004
+ * 워커를 넷으로 늘려도 같은 건이 두 번 전송되지 않는 것을
+ * FOR UPDATE SKIP LOCKED 가 보장한다 → ADR-004
  *
- * 지금은 루프와 잠금 골격만 있다. 실제 전송은 채널 어댑터와 함께 붙인다.
- * → docs/roadmap.md Phase 1
+ * 루프 순서가 이 파일의 전부다 → docs/outbox-and-channels.md 6장
+ *
+ *   ① 선점 + 상태 변경   한 트랜잭션 (Outbox_model::claim)
+ *   ② 커밋               잠금을 여기서 푼다
+ *   ③ 외부 HTTP          트랜잭션 밖
+ *   ④ 결과 반영          sent / pending(재시도) / dead
+ *   ⑤ 계측 기록          구간별 시간
+ *
+ * ③을 잠금 안에 두면 상대가 느린 만큼 잠금이 길어지고, 다른 워커가
+ * 그동안 아무것도 못 한다.
  */
 class Dispatch extends MY_Controller
 {
-	/** @var bool SIGTERM 을 받으면 내려간다. */
+	/** SIGTERM 을 받으면 현재 배치까지만 처리하고 내려간다. */
 	private $running = TRUE;
+
+	/** 좀비 회수를 매 루프 돌리지 않는다. 이 횟수마다 한 번. */
+	const ZOMBIE_EVERY = 60;
 
 	public function __construct()
 	{
@@ -27,25 +41,52 @@ class Dispatch extends MY_Controller
 		{
 			show_404();
 		}
+
+		$this->load->model('outbox_model');
+		$this->load->library('channels');
 	}
 
+	/** 계속 돈다. 컨테이너로 띄우는 기본 모드. */
 	public function work()
 	{
 		$this->installSignalHandler();
 
 		$interval = (int) (getenv('WORKER_POLL_INTERVAL_MS') ?: 1000);
 		$batch    = (int) (getenv('WORKER_BATCH_SIZE') ?: 100);
+		$names    = array_keys($this->channels->all());
 
-		$this->line('워커 시작 · batch='.$batch.' interval='.$interval.'ms');
+		if ($names === array())
+		{
+			$this->line('채널이 하나도 없습니다. .env 의 CHANNELS 와 자격 증명을 확인하세요.');
+
+			return;
+		}
+
+		$this->line('워커 시작 · 채널='.implode(',', $names).' batch='.$batch.' interval='.$interval.'ms');
+
+		$loops = 0;
 
 		while ($this->running)
 		{
-			$claimed = $this->claim($batch);
-
-			if ($claimed === 0)
+			if ($loops % self::ZOMBIE_EVERY === 0)
 			{
-				// 할 일이 없을 때만 쉰다. 있으면 곧바로 다음 배치로 간다 —
-				// 밀린 큐를 폴링 간격만큼 느리게 비우는 일이 없도록.
+				$reclaimed = $this->outbox_model->reclaimZombies(
+					(int) (getenv('DISPATCH_TIMEOUT_MS') ?: 3000) / 1000 * 10 + 60
+				);
+
+				if ($reclaimed > 0)
+				{
+					$this->line('좀비 회수 '.$reclaimed.'건 — 전송 중 사라진 워커가 있었습니다');
+				}
+			}
+
+			$done = $this->once($batch);
+			$loops++;
+
+			if ($done === 0)
+			{
+				// 할 일이 없을 때만 쉰다. 있으면 곧바로 다음 배치로 —
+				// 밀린 큐를 폴링 간격만큼 느리게 비우지 않도록.
 				usleep($interval * 1000);
 			}
 		}
@@ -54,51 +95,122 @@ class Dispatch extends MY_Controller
 	}
 
 	/**
-	 * 배치 하나를 선점한다.
+	 * 한 배치만 처리한다. 검증과 디버깅용.
 	 *
-	 * 트랜잭션 안에서 SKIP LOCKED 로 잠그고, 그 자리에서 상태를 바꾼다.
-	 * 잠금을 풀고 나서 상태를 바꾸면 그 틈에 다른 워커가 같은 행을 집는다.
-	 *
-	 * @return int 선점한 건수
+	 * @return int 처리한 건수
 	 */
-	private function claim($limit)
+	public function once($limit = NULL)
 	{
-		$this->db->trans_begin();
+		$limit = (int) ($limit ?: (getenv('WORKER_BATCH_SIZE') ?: 100));
 
-		$rows = $this->db->query(
-			'SELECT id, conversion_id, channel, payload, attempt
-			   FROM dispatch_outbox
-			  WHERE status = ? AND next_retry_at <= ?
-			  ORDER BY id
-			  LIMIT '.(int) $limit.'
-			  FOR UPDATE SKIP LOCKED',
-			array('pending', tp_now_utc())
-		)->result_array();
+		$dbStart = microtime(TRUE);
+		$rows    = $this->outbox_model->claim($limit);
+		$claimMs = self::msSince($dbStart);
 
 		if ($rows === array())
 		{
-			$this->db->trans_rollback();
-
 			return 0;
 		}
 
-		// TODO(Phase 1): 채널 어댑터 호출. 지금은 선점만 검증한다.
-		//   - 전송은 트랜잭션 밖에서 한다. 외부 HTTP 를 트랜잭션 안에 넣으면
-		//     상대 서버가 느릴 때 잠금이 그만큼 길어진다.
-		//   - 결과에 따라 sent / next_retry_at 갱신 / dead 로 나눈다.
+		/*
+		 * 선점 시간을 건수로 나눠 행마다 배분한다.
+		 *
+		 * 배치 전체의 선점 시간을 모든 행에 그대로 더했더니 db_ms 평균이
+		 * total_ms 평균보다 커졌다(31.6 vs 7.8). 구간을 나눠 적는 이유가
+		 * "합이 맞아야 어디가 느린지 안다" 인데, 합이 안 맞으면 소용없다.
+		 */
+		$claimPerRow = (int) round($claimMs / max(1, count($rows)));
 
-		$this->db->trans_rollback();
+		$backoff = new BackoffPolicy();
+		$clock   = new SystemClock();
 
-		$this->line('선점 '.count($rows).'건 (전송은 미구현)');
+		foreach ($rows as $row)
+		{
+			$this->handle($row, $backoff, $clock, $claimPerRow);
+		}
 
 		return count($rows);
+	}
+
+	/** 상태별 건수. 검증 스크립트가 쓴다. */
+	public function status()
+	{
+		foreach ($this->outbox_model->counts() as $status => $n)
+		{
+			$this->line(sprintf('  %-8s %d', $status, $n));
+		}
+	}
+
+	// ────────────────────────────────────────────────────────
+
+	private function handle(array $row, BackoffPolicy $backoff, SystemClock $clock, $claimPerRow)
+	{
+		$total = microtime(TRUE);
+
+		// ── 파싱 ──
+		$t = microtime(TRUE);
+		$payload = json_decode((string) $row['payload'], TRUE);
+		$payload = is_array($payload) ? $payload : array();
+		$parseMs = self::msSince($t);
+
+		$channel = $this->channels->get($row['channel']);
+
+		if ($channel === NULL)
+		{
+			/*
+			 * 어댑터가 없다. .env 에서 매체를 빼거나 자격 증명이 사라진 경우다.
+			 * 재시도해도 생기지 않으므로 dead 로 보낸다 — pending 으로 두면
+			 * 워커가 영원히 같은 행을 집었다 놓는다.
+			 */
+			$this->outbox_model->applyResult(
+				$row['id'],
+				App\Channel\DispatchResult::dead(NULL, 0, '어댑터 없음: '.$row['channel'])
+			);
+			$this->line(sprintf('#%d %s → dead (어댑터 없음)', $row['id'], $row['channel']));
+
+			return;
+		}
+
+		// ── 전송 (트랜잭션 밖) ──
+		$t = microtime(TRUE);
+		$result = $channel->send($payload);
+		$sendMs = self::msSince($t);
+
+		// ── 결과 반영 ──
+		$t = microtime(TRUE);
+		$nextRetryAt = $result->shouldRetry()
+			? $backoff->nextRetryAt((int) $row['attempt'], $clock->now())
+			: NULL;
+
+		$applied = $this->outbox_model->applyResult($row['id'], $result, $nextRetryAt);
+
+		$this->outbox_model->log(array(
+			'outbox_id'   => $row['id'],
+			'trace_id'    => $this->trace_id,
+			'channel'     => $row['channel'],
+			'attempt'     => $row['attempt'],
+			'http_status' => $result->httpStatus,
+			'parse_ms'    => $parseMs,
+			'db_ms'       => $claimPerRow + self::msSince($t),
+			'send_ms'     => $sendMs,
+			'total_ms'    => self::msSince($total),
+		));
+
+		$this->line(sprintf(
+			'#%d %s attempt=%d → %s (http=%s, %dms)%s',
+			$row['id'], $row['channel'], $row['attempt'], $applied,
+			$result->httpStatus === NULL ? '-' : $result->httpStatus,
+			$sendMs,
+			$result->error === NULL ? '' : ' · '.$result->error
+		));
 	}
 
 	/**
 	 * SIGTERM 을 받으면 현재 배치를 끝내고 내려간다.
 	 *
-	 * docker stop 은 SIGTERM 후 10초 뒤 SIGKILL 이다. 이걸 처리하지 않으면
-	 * 배포할 때마다 전송 중이던 건이 pending 으로 남거나 중복 전송된다.
+	 * docker stop 은 SIGTERM 후 10초 뒤 SIGKILL 이다. 처리하지 않으면
+	 * 배포할 때마다 전송 중이던 행이 `sending` 으로 남고, 좀비 회수를
+	 * 기다려야 다시 나간다.
 	 */
 	private function installSignalHandler()
 	{
@@ -118,6 +230,11 @@ class Dispatch extends MY_Controller
 
 		pcntl_signal(SIGTERM, $stop);
 		pcntl_signal(SIGINT, $stop);
+	}
+
+	private static function msSince($startedAt)
+	{
+		return (int) round((microtime(TRUE) - $startedAt) * 1000);
 	}
 
 	private function line($msg)

@@ -16,7 +16,7 @@ $config['migration_type'] = 'timestamp';
 
 // 목표 버전. 새 마이그레이션을 추가하면 이 값을 올린다.
 // 이 값을 올리는 것을 잊으면 latest 가 새 파일을 건너뛴다 — 흔한 함정이다.
-$config['migration_version'] = 20260912000100;
+$config['migration_version'] = 20260912000200;
 
 $config['migration_table']    = 'ci_migrations';
 $config['migration_auto_latest'] = FALSE;   // 요청마다 마이그레이션이 도는 일은 없어야 한다
