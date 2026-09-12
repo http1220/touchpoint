@@ -1,6 +1,6 @@
 # 실패 시나리오
 
-> **상태: 범위 안 12건 중 7건 실측** (B-1 · B-2 · B-3 · C-1 · C-2 · C-3 · D-1. B-3 은 부분). 나머지는 시나리오와 **검증 방법**까지만 확정했고, `결과`·`대응` 열은 실제로 재현한 뒤 채운다.
+> **상태: 범위 안 12건 중 8건 실측** (B-1 · B-2 · B-3 · C-1 · C-2 · C-3 · D-1 · D-2. B-3 은 부분). 나머지는 시나리오와 **검증 방법**까지만 확정했고, `결과`·`대응` 열은 실제로 재현한 뒤 채운다.
 > 이 문서와 [benchmarks.md](benchmarks.md)가 이 저장소의 진짜 차별점이다. 코드는 누구나 쓴다.
 
 기록 규칙:
@@ -448,17 +448,100 @@ $this->outbox_model->reclaimZombies(DISPATCH_TIMEOUT_MS/1000 * 10 + 60);  // = 9
 
 ---
 
-### D-2. 매체 API 타임아웃
+### D-2. 매체 API 타임아웃 ✅ 실측
 
-| 시나리오 | 예상 | 결과 |
-|---|---|---|
-| 첫 시도 타임아웃 | `failed` → `next_retry_at` 설정 | ☐ |
-| 재시도 5회 모두 실패 | `dead` 처리, 알림 | ☐ |
-| 3회째 성공 | `sent`, 최종 성공률에 반영 | ☐ |
-| 매체가 5xx 반환 | 재시도 | ☐ |
-| 매체가 4xx 반환 | **재시도 안 함** (요청 자체가 잘못됨) | ☐ |
+**실패를 만드는 게 첫 관문이었다.** GA4 는 일부러 깨진 페이로드를 보내도
+2xx 를 돌려준다(→ [outbox-and-channels](outbox-and-channels.md)). 매체가 우리
+사정에 맞춰 4xx·5xx 를 내주지 않으니, 실패 경로를 한 번도 끝까지 가 보지
+못한 채로 "지표 100%" 를 보고 있었던 것이다.
 
-> **4xx와 5xx를 구분하지 않으면 잘못된 페이로드를 5번 더 보낸다.**
+`NoopChannel` 이 이미 `outcome` 인자를 받고 있었는데 `Channels` 에서 넘기지
+않고 있었다. `.env` 의 `NOOP_OUTCOME` 으로 노출했다.
+
+```bash
+NOOP_OUTCOME=sent    # 204  기본값
+NOOP_OUTCOME=retry   # 503  5xx — 재시도 대상
+NOOP_OUTCOME=dead    # 400  4xx — 재시도하지 않는다
+```
+
+| 시나리오 | 예상 | 결과 | |
+|---|---|---|---|
+| 첫 시도 타임아웃 | `pending` + `next_retry_at` | **`pending`, 33.5초 뒤**, `http_status` **NULL** | ✅ |
+| 재시도 5회 모두 실패 | `dead` | **attempt 6 에서 `dead`** | ✅ |
+| 3회째 성공 | `sent` | **attempt 3 에서 `sent`**, `last_error` NULL 로 지워짐 | ✅ |
+| 매체가 5xx | 재시도 | **503 × 5회 재시도** | ✅ |
+| 매체가 4xx | **재시도 안 함** | **attempt 1 에서 즉시 `dead`** | ✅ |
+
+#### ① 5xx — 사다리를 끝까지 걸어갔다
+
+```
+[1] #13835 noop attempt=1 → failed (http=503)
+[2] #13835 noop attempt=2 → failed (http=503)
+[3] #13835 noop attempt=3 → failed (http=503)
+[4] #13835 noop attempt=4 → failed (http=503)
+[5] #13835 noop attempt=5 → failed (http=503)
+[6] #13835 noop attempt=6 → dead   (http=503)
+```
+
+`BackoffPolicy::WAIT_SECONDS` 에 1~5 만 있으므로 `attemptsMade=6` 에서
+`nextRetryAt` 이 `null` 을 돌려주고, 모델이 그걸 `dead` 로 옮긴다.
+**포기 지점이 별도 카운터가 아니라 사다리의 끝이라는 것**이 여기서 보인다.
+
+> **백오프 대기는 기다리지 않고 `next_retry_at` 을 `NOW(3)` 으로 당겼다.**
+> 사다리 전체를 실시간으로 기다리면 30s+2m+10m+1h+3h ≈ 4시간이다.
+> 그래서 이 실험이 검증한 것은 **상태 기계와 시도 사다리**지 대기 길이가
+> 아니다. 대기 길이와 지터는 [benchmarks 4-0](benchmarks.md)에서 따로 쟀다.
+
+#### ② 4xx — 한 번에 포기했다
+
+```
+[1] #13836 noop attempt=1 → dead (http=400) · noop: 포기 흉내
+```
+
+`shouldRetry(400)` 이 `false` 라 `next_retry_at` 을 받지 못하고 바로 `dead` 다.
+**이게 없으면 잘못된 페이로드를 다섯 번 더 보낸다.** 매체 쪽에서 보면
+같은 잘못된 요청이 4시간에 걸쳐 여섯 번 오는 것이고, 고쳐야 할 것은
+타이밍이 아니라 요청이다.
+
+#### ③ 타임아웃 — `http_status` 가 NULL 이라는 것이 신호다
+
+`DISPATCH_TIMEOUT_MS=1` 로 GA4 를 불렀다.
+
+```
+#13837 ga4 attempt=1 → failed (http=-, 9ms) · Resolving timed out after 4 milliseconds
+```
+
+| | |
+|---|---|
+| `http_status` | **NULL** |
+| `status` | `pending` |
+| `next_retry_at` | **33.5초 뒤** (기본 30초 + 지터 ±20%) |
+
+`shouldRetry(null)` 이 `true` 인 이유가 여기 있다 — **응답이 없다는 것과
+응답이 4xx 라는 것은 다르다.** 전자는 일시적일 수 있고 후자는 아니다.
+
+> **한계 하나.** 에러 원문이 `Resolving timed out` 이다. 1ms 는 DNS 해석보다
+> 짧아서 **연결도 못 해 보고 끊긴 것**이다. 실제로 워커를 붙잡는 실패는
+> 이쪽이 아니라 **연결은 됐는데 응답이 안 오는** 경우인데, 그건 아직 못 쟀다.
+> 재려면 느리게 응답하는 서버를 세워야 한다.
+
+#### 곁가지 — 매체를 빼면 그 큐는 어떻게 되는가
+
+`CHANNELS` 를 `ga4` 에서 `noop` 으로 바꾼 뒤 남아 있던 ga4 행이 이렇게 나왔다.
+
+```
+#13834 ga4 → dead (어댑터 없음)
+```
+
+의도한 동작이다. 어댑터가 없으면 재시도해도 생기지 않으므로 `pending` 으로
+두면 워커가 영원히 같은 행을 집었다 놓는다 → `cli/Dispatch::handle`
+
+#### 아직 아닌 것
+
+- **알림이 없다.** 원래 표에 "`dead` 처리, 알림" 이라고 적어 뒀는데 `dead` 까지만
+  구현돼 있다. 지금은 `cli/dispatch status` 로 봐야 안다
+- `last_error` 는 성공하면 `NULL` 로 지워진다. 실패 이력은 행이 아니라
+  `dispatch_log` 에 남는다 — 행만 보고 "문제없이 갔다" 로 읽으면 안 된다
 
 ---
 
@@ -508,7 +591,7 @@ $this->outbox_model->reclaimZombies(DISPATCH_TIMEOUT_MS/1000 * 10 + 60);  // = 9
 | C-2 | 랜딩 URL 공유 | **A(passthru)**: 클릭 1회가 유입 2건으로 부풀었다(방문 2개). **B(vid)**: 건수는 그대로지만 링크를 받은 사람이 원래 방문자의 쿠키를 물려받아 **두 사람이 한 방문**이 됐다 | 기본값을 B 로. 정산이 걸린 것은 건수 쪽이고, vid 에는 권한·개인정보가 붙어 있지 않아 주워도 할 수 있는 일이 없다 |
 | C-3 | 오픈 리다이렉트 | 위험한 입력은 `?return=`(애초에 없다)이 아니라 **`Host` 헤더**였다 — 브리지가 Location 을 `$http_host` 로 만든다. 막혀 있긴 했지만 **443 서버 블록 순서에 기댄 우연**이었다 | 목적지를 입력으로 받지 않는다. `work` 는 1~18자리 숫자만(헤더 분할·경로 조작 전부 400). 엣지 443 에 `default_server` 명시, `api.` 는 `requireHost` 가 404 |
 | D-1 | 워커 중복 실행 | 중복은 네 조건 모두 **0**. 다만 **`SKIP LOCKED` 를 꺼도 처리량이 안 떨어졌다**(오히려 조금 빨랐다) — 잠금 구간에 외부 I/O 가 없어 대기가 마이크로초라서다 | 선점과 상태 변경을 한 트랜잭션에, HTTP 는 트랜잭션 밖에. `SKIP LOCKED` 는 처리량이 아니라 보험으로 남긴다 |
-| D-2 | 매체 타임아웃 | | |
+| D-2 | 매체 장애 | 5xx·타임아웃은 **사다리 끝(attempt 6)에서 `dead`**, 4xx 는 **attempt 1 에서 즉시 `dead`**, 3회째 복구되면 `sent`. 타임아웃은 `http_status` 가 **NULL** 로 구분된다 | `BackoffPolicy::shouldRetry` 가 4xx/5xx/무응답을 가른다. 실패 주입은 `NOOP_OUTCOME` 스위치 — GA4 는 깨진 페이로드에도 2xx 를 준다 |
 | E-1 | 복제 지연 | | |
 | E-2 | 보존기간 파기 | | |
 
