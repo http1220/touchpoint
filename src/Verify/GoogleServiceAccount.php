@@ -69,6 +69,15 @@ final class GoogleServiceAccount
         return new self($http, (string) $json['client_email'], (string) $json['private_key'], $scope);
     }
 
+    /**
+     * 이 계정의 이메일. **속성에 추가해야 하는 값**이라 밖에서 읽을 수 있게 둔다.
+     * 비밀이 아니다 — 비밀은 개인키뿐이다.
+     */
+    public function email(): string
+    {
+        return $this->clientEmail;
+    }
+
     public function accessToken(?int $now = null): string
     {
         $now ??= time();

@@ -119,15 +119,34 @@ final class Ga4Reader
         $body = $res->json();
 
         if (!$res->isSuccess()) {
+            $message = (string) ($body['error']['message'] ?? $res->error ?? $res->body);
+
             /*
-             * 403 은 대개 "속성에 서비스 계정을 추가하지 않음" 이다.
-             * 키 파일이 맞아도 그 계정이 속성 권한을 못 받았으면 여기서 막힌다 —
-             * 인증(누구인가)과 인가(무엇을 볼 수 있는가)가 다른 단계라서 그렇다.
+             * 403 은 거의 항상 "속성에 서비스 계정을 추가하지 않음" 이다.
+             *
+             * 여기까지 왔다는 것은 **토큰을 이미 받았다**는 뜻이다 —
+             * 키 파일도 서명도 정상이고, 인가만 없다. 인증(누구인가)과
+             * 인가(무엇을 볼 수 있는가)가 다른 단계라서 생기는 자리다.
+             *
+             * 그래서 메시지에 **추가해야 할 이메일을 그대로 찍는다.**
+             * 실제로 여기서 막혔을 때 "무엇을 어디에 넣어야 하는지" 를
+             * 다시 찾아 헤맸다. 오류는 원인만 말하지 말고 다음 행동을 말해야 한다.
              */
+            if ($res->status === 403) {
+                $message .= sprintf(
+                    "\n\n  GA4 관리 > 속성 > 속성 액세스 관리 에서 아래 계정을 뷰어로 추가하세요.\n".
+                    "    %s\n".
+                    "  속성 ID 도 확인하세요 — 지금 %s 로 물었습니다.".
+                    " 관리 > 속성 설정의 숫자이며, 서비스 계정 client_id 가 아닙니다.",
+                    $this->account->email(),
+                    $this->propertyId
+                );
+            }
+
             throw new RuntimeException(sprintf(
                 'Data API 실패 (http=%s): %s',
                 $res->status ?? '-',
-                (string) ($body['error']['message'] ?? $res->error ?? $res->body)
+                $message
             ));
         }
 
