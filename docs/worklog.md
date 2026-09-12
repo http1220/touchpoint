@@ -111,6 +111,50 @@
 
 > **증거 없는 주장을 남겨두는 것이 도메인을 아끼는 것보다 훨씬 큰 손해다.** — ADR-002 에 미리 적어 둔 문장
 
+
+### 추가 (2026-09-12 저녁) · `/collect` 와 CORS 정책
+
+로드맵 M3. `api.sshwan.com` 에서 수집이 돈다.
+
+- `src/Http/CorsPolicy` — 오리진 정확 반향 · `Vary: Origin` · preflight · 허용 목록. 테스트 16건
+- `Collect` 컨트롤러 · `collect_events` 마이그레이션 (보존 3개월, `visits` 에 CASCADE)
+
+**테스트에 "닮은 오리진" 여섯 개를 넣었다.** 허용 목록을 문자열 포함으로 검사하면 전부 뚫린다.
+
+```
+https://lp.sshwan.com.evil.example    접미사 위조
+https://evil-lp.sshwan.com            접두 위조
+https://a.lp.sshwan.com               서브의 서브
+http://lp.sshwan.com                  스킴 다운그레이드
+https://lp.sshwan.com:8443            포트 추가
+```
+
+**본문 형식을 `Content-Type` 으로 판단하지 않는다.** `sendBeacon` 은 preflight 를 피하려고 `text/plain` 을 보낸다. 그래서 내용을 JSON 으로 파싱해 보고, `Content-Type` 은 **transport 를 기록하는 용도로만** 쓴다 — `fetch` 로 온 건과 `beacon` 으로 온 건 중 어느 쪽이 더 많이 유실되는지 재려면 행마다 남아 있어야 한다.
+
+### 막힌 것
+
+**에러 응답의 `type` URI 가 `example.invalid` 이었다**
+
+```
+{"type":"https://example.invalid/problems/unknown-event", ...}
+```
+
+- **원인** [확인]: `problem()` 이 `TRACK_DOMAIN` 을 기준으로 URI 를 만들고 있었다. 추적 도메인을 안 사기로 하면서 그 값이 영구히 빈 문자열이 됐다
+- **배운 것**: 결정을 뒤집을 때 **그 값을 참조하던 코드까지 따라가야 한다.** 문서는 훑어 고쳤는데 코드 한 줄이 남아 있었다. `grep TRACK_DOMAIN` 을 한 번 돌렸으면 됐다
+
+### 운영에서 확인
+
+| 시험 | 결과 |
+|---|---|
+| preflight (허용 오리진) | 204 · 오리진 정확 반향 · `Vary: Origin` · `Max-Age: 600` |
+| preflight (`lp.sshwan.com.evil.example`) | **403, CORS 헤더 없음** |
+| POST fetch (JSON) | 200 · `transport=fetch` · 클라이언트 `occurred_at` 사용 |
+| POST beacon (`text/plain`) | 200 · `transport=beacon` · preflight 없이 통과 |
+| 모르는 이벤트 | 422 + RFC 9457 |
+| `CORS_ALLOW_ORIGIN_WILDCARD=true` | `Allow-Origin: *` + `credentials: true` 동시 송출 |
+
+마지막 항목이 B-2 의 재료다. **서버는 200 을 주고 막는 쪽은 브라우저다** — 그 오류 원문을 브라우저로 받아 적는 것이 다음 할 일이다.
+
 ### 다음
 
 - [ ] 도메인 결정 (가비아). 사면 저녁에 `api.` 붙이기
