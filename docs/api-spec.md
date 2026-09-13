@@ -266,10 +266,12 @@ HTTP/1.1 422 Unprocessable Content
 Content-Type: application/problem+json
 
 {
-  "type": "https://sshwan.com/probs/invalid-currency",
-  "title": "Invalid currency",
+  "type": "https://sshwan.com/problems/invalid-request",
+  "title": "invalid-request",
   "status": 422,
-  "detail": "currency must be an ISO 4217 alpha-3 code",
+  "detail": "currency 는 ISO 4217 세 글자여야 합니다.",
+  "field": "currency",
+  "trace_id": "8fbeb057fd48847a9c92187550153ed3",
   "instance": "/conversion"
 }
 ```
@@ -279,4 +281,12 @@ Content-Type: application/problem+json
 | 검증 실패 | 422 | `invalid-request` |
 | 오리진 미허용 | 403 | `origin-not-allowed` |
 | `visit_uid` 없음 | 404 | `visit-not-found` |
+| 중복 판정인데 기존 행이 없음 | 409 | `conversion-conflict` |
 | 매체 전송 실패(내부) | — | 아웃박스에 기록, 응답엔 노출 안 함 |
+
+> **`type` 은 상황별로 쪼개지 않는다.** 검증 실패는 전부 `invalid-request` 이고,
+> 어느 필드인지는 RFC 9457 확장 멤버 `field` 로 붙인다. 경로는 `/problems/` 다
+> — 이 값은 `MY_Controller::problem()` 이 만든다.
+>
+> `409` 는 **중복인데 기존 전환을 못 찾은** 경우에만 쓴다. "중복이라 성공(200)"
+> 과 구분되는 진짜 충돌이라, 없는 uid 를 지어내지 않고 실패로 낸다.
