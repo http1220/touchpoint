@@ -18,7 +18,7 @@ flowchart LR
         MET["app. /metrics<br/>지표"]
     end
 
-    subgraph TRACK["sshwan.com — 추적 측 (third-party)"]
+    subgraph TRACK["sshwan.com — 수집 (같은 사이트, 다른 오리진)"]
         API["api. /collect /conversion<br/>수집 API"]
     end
 
@@ -29,11 +29,13 @@ flowchart LR
     API --> DB[("MySQL 8.0")]
     DB --> W["워커<br/>아웃박스 폴링"]
     W --> GA["GA4 채널<br/>Measurement Protocol"]
-    W --> META["Meta 채널<br/>Conversions API"]
+    W -.-> META["Meta 채널<br/>Conversions API<br/>(설계만 · 미구현)"]
     DB --> MET
 ```
 
-**핵심**: 광고주 도메인과 추적 도메인을 **서로 다른 등록 도메인**으로 갈랐다. 이 결정 하나가 이 프로젝트의 전부다 → [ADR-002](decisions/ADR-002-two-registered-domains.md)
+**핵심**: 수집(`api.`)을 서비스(`lp.`·`app.`)와 **다른 오리진**으로 갈랐다. 등록 도메인은 하나이므로 **같은 사이트인데 오리진만 다르다** — 그래서 CORS 는 그대로 걸리고 쿠키 차단은 걸리지 않는다. 그 경계를 구분하는 것이 이 배치의 산출물이다 → [ADR-018](decisions/ADR-018-single-registered-domain.md)
+
+> 처음에는 **등록 도메인 2개**로 가려 했다([ADR-002](decisions/ADR-002-two-registered-domains.md)). 잃는 시나리오를 4개로 과대평가한 것이 원인이고, 실제로는 2개였다 → [research-method 3-1](research-method.md)
 
 ---
 
@@ -147,7 +149,7 @@ flowchart LR
 
 플랫폼 A에서 `…slave=sdb3` 쿠키를 관측했다 — **읽기 복제본에 세션을 고정**하는 구조다([조사 요약](research-method.md) 3-2).
 
-이 프로젝트는 복제본을 실제로 띄우지는 않되 **커넥션 그룹을 분리**하고, 지연을 인위적으로 주입해 **"방금 기록한 전환이 지표 화면에 안 보인다"** 를 재현한다 → [ADR-007](decisions/ADR-007-read-write-split.md), [failure-scenarios](failure-scenarios.md)
+이 프로젝트는 **복제본을 실물로 띄운다** — MySQL 프라이머리 + 복제본을 GTID 로 묶고, 커넥션 그룹(`rdb1`·`rdb2`)을 나눠 Lua 가 요청마다 배정한다. `SOURCE_DELAY` 로 지연을 키워 **"같은 URL 이 같은 순간에 다른 답을 준다"** 를 실측했다 → [E-1](failure-scenarios.md) · [ADR-007](decisions/ADR-007-read-write-split.md)
 
 ---
 
@@ -172,7 +174,9 @@ classDiagram
 
 플랫폼 A에 붙어 있는 매체가 **10종 이상**이다(태그 관리 컨테이너 3개, 검색·디스플레이 전환 ID 10개 이상, 소셜 픽셀 2, DSP 2, 글로벌 소셜 2). 매체별 `if` 분기로는 유지가 불가능하다 → [ADR-005](decisions/ADR-005-channel-adapter.md)
 
-**신규 매체 추가 비용 = 어댑터 클래스 1개 + 설정 1줄.** 이걸 README에서 수치로 보여준다.
+**주장**: 신규 매체 추가 비용 = 어댑터 클래스 1개 + 설정 1줄.
+
+> **아직 검증되지 않았다.** 구현체가 `Ga4Channel` 과 `NoopChannel` 둘뿐이고 후자는 아무 데도 보내지 않는 가짜다. `MetaChannel` 은 설계에만 있다. 주장이 참이려면 **실제 매체 두 번째**를 붙여 봐야 한다.
 
 ---
 
@@ -195,5 +199,5 @@ classDiagram
 | Kubernetes / ECR | 컨테이너 4개 → [ADR-010](decisions/ADR-010-no-kubernetes.md) |
 | Redis / SQS | → [ADR-003](decisions/ADR-003-mysql-outbox.md) |
 | SPA / React | → [ADR-009](decisions/ADR-009-no-spa.md) |
-| 실제 PG 상용 연동 | **테스트 모듈 2개**를 붙인다. 상용 계약·정산은 범위 밖 → [ADR-016](decisions/ADR-016-payment-and-notification.md) |
+| 실제 PG 상용 연동 | 설계만 있고 **구현하지 않았다.** `payments` 는 마이그레이션뿐이다 → [ADR-016](decisions/ADR-016-payment-and-notification.md) |
 | 웹툰 뷰어·랭킹·검색 | 광고 연동과 무관 → [조사 요약](research-method.md) 버린 것 24개 |
