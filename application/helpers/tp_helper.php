@@ -60,6 +60,30 @@ if ( ! function_exists('tp_uuid_text'))
 	}
 }
 
+if ( ! function_exists('tp_uuid7_unix'))
+{
+	/**
+	 * UUIDv7 hex → 그 안에 박힌 생성 시각(초).
+	 *
+	 * tp_uuid7() 의 역방향이다. 앞 48비트가 밀리초 타임스탬프라
+	 * **DB 를 읽지 않고** 방문이 언제 시작됐는지 알 수 있다.
+	 *
+	 * 형식이 아니면 0 을 돌려준다. 현재 시각으로 때우면 요청마다 값이
+	 * 달라지는데, 이 값을 씨앗으로 쓰는 쪽(GaClientId::fallback)에서는
+	 * 그게 "한 방문이 매 전환마다 다른 사용자" 로 나타난다.
+	 */
+	function tp_uuid7_unix($uidHex)
+	{
+		if ( ! is_string($uidHex) OR preg_match('/\A[0-9a-f]{32}\z/', $uidHex) !== 1)
+		{
+			return 0;
+		}
+
+		// 12자리 hex 는 최대 2^48 이라 64비트 int 안에 들어온다.
+		return intdiv((int) hexdec(substr($uidHex, 0, 12)), 1000);
+	}
+}
+
 if ( ! function_exists('tp_hash'))
 {
 	/**

@@ -95,4 +95,42 @@ class Conversion_model extends CI_Model
 
 		return array('id' => $id, 'uid_hex' => $uidHex, 'enqueued' => $enqueued, 'duplicated' => FALSE);
 	}
+
+	/**
+	 * dedup_key 로 이미 기록된 전환을 찾는다.
+	 *
+	 * **`createWithOutbox()` 가 duplicated 를 돌려준 뒤에만 부른다.**
+	 * 먼저 불러서 중복을 거르는 용도로 쓰면 안 된다 — 그 순서로 두면
+	 * 동시 요청 둘이 다 SELECT 를 통과한다. 판정은 UNIQUE 가 한다.
+	 *
+	 * 이 메서드가 필요한 이유는 INSERT IGNORE 가 **충돌한 행을 알려주지
+	 * 않기** 때문이다. affected_rows 0 이 전부라서, 멱등 응답에 실을
+	 * 기존 conversion_uid 를 따로 읽어야 한다 → docs/api-spec.md 4장
+	 *
+	 * 복제본이 아니라 $this->db(프라이머리)로 읽는다. 방금 다른 요청이
+	 * 커밋한 행이라 복제본에서는 아직 안 보일 수 있고, 그러면 멱등해야 할
+	 * 재요청이 "중복인데 행이 없다" 로 떨어진다 → ADR-007
+	 *
+	 * @param string $dedupKey
+	 * @return array|null [id, uid_hex]
+	 */
+	public function findByDedupKey($dedupKey)
+	{
+		$row = $this->db
+			->query(
+				/*
+				 * HEX() 는 대문자를 돌려주고 bin2hex() 는 소문자를 돌려준다.
+				 * 신규 응답(createWithOutbox)과 중복 응답이 같은 전환에 대해
+				 * 다른 문자열을 내면 호출자가 두 값을 다른 것으로 센다.
+				 */
+				'SELECT id, LOWER(HEX(conversion_uid)) AS uid_hex
+				   FROM '.self::TABLE.'
+				  WHERE dedup_key = ?
+				  LIMIT 1',
+				array((string) $dedupKey)
+			)
+			->row();
+
+		return $row ? array('id' => (int) $row->id, 'uid_hex' => (string) $row->uid_hex) : NULL;
+	}
 }
