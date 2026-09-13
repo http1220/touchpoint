@@ -198,6 +198,24 @@ class Verify extends MY_Controller
             $this->line('    누락 예: '.$id);
         }
 
+        /*
+         * 누락이 많으면 목록을 파일로 뺀다.
+         *
+         * 화면에 다 찍으면 읽을 수 없고, 몇 개만 찍으면 **어느 무리가
+         * 빠졌는지** 알 수 없다. 누락은 대개 뭉쳐서 생기므로(같은 시각,
+         * 같은 배치) 전부 받아 DB 와 조인해 봐야 원인이 보인다.
+         */
+        if ($r->missing !== array())
+        {
+            $path = '/tmp/verify-missing.txt';
+
+            if (@file_put_contents($path, implode(PHP_EOL, $r->missing).PHP_EOL) !== FALSE)
+            {
+                $this->line('');
+                $this->line('  누락 '.count($r->missing).'건 전체 → '.$path);
+            }
+        }
+
         foreach (array_slice($r->duplicated, 0, 5, TRUE) as $id => $n)
         {
             $this->line('    중복 예: '.$id.' ('.$n.'회)');
