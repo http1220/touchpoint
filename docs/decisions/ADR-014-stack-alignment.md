@@ -72,6 +72,7 @@ CI3는 CI2와 관용구가 거의 같고(`$this->load->model()`, URI 라우팅, 
 - **일정 순증 약 2.7일.** Meta CAPI · 인덱스 EXPLAIN 실측 · Prometheus·Grafana를 잘라 상쇄한다
 - **인스턴스 t3.micro → t3.small.** MySQL 2대 + OpenResty + PHP-FPM에 1GB는 불가. 2주 약 $15
 - **Prometheus·Grafana 대신 Lua 복제본 배정이 인프라 포지션 대응을 맡는다**([ADR-012](ADR-012-observability-scope.md) 수정). 대시보드를 붙이는 것보다 **그들이 실제로 하는 일을 구현하는 쪽**이 강하다
+  - **2026-09-14 주**: 이 컷이 ADR-012 의 "Grafana 가 자체 화면을 대신한다" 전제를 없앴다. 그 빈자리를 [ADR-019](ADR-019-metrics-view-over-grafana.md) 가 자체 HTML 화면으로 메운다. **Grafana 를 되살리려면 이 항목부터 뒤집어야 한다**
 - **얻는 것**: "OpenResty에서 Lua로 읽기 복제본을 배정하고, CI3 위에서 유입 추적을 붙여봤습니다"가 사실이 된다
 
 ## 이 원칙이 만드는 면접 카드
