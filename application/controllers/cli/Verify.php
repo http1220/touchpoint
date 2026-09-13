@@ -243,12 +243,31 @@ class Verify extends MY_Controller
         $from = ($start === 'today') ? date('Y-m-d') : $start;
         $to   = ($end === 'today') ? date('Y-m-d') : $end;
 
+        /*
+         * **검증 엔드포인트로 나간 것은 뺀다.**
+         *
+         * `GA4_DEBUG=true` 면 `/debug/mp/collect` 로 간다. 거기는 페이로드를
+         * 검사만 하고 **적재하지 않는다.** 그런데 응답이 성공이라 아웃박스는
+         * `sent` 로 적는다 — 대조하면 영원히 `missing` 이다.
+         *
+         * 실제로 그 5건 때문에 "204 를 받고도 버려졌다" 로 읽을 뻔했다.
+         * 알고 보니 애초에 적재 대상이 아니었다.
+         *
+         * 가르는 값은 HTTP 상태다. 실측으로 확인했다 — 운영은 `204`,
+         * 검증은 `200` 이다(→ docs/benchmarks.md 3-1). 상태로 가르는 것이
+         * 암묵적이긴 하나, 지금 스키마에 "어느 엔드포인트로 갔는가" 를
+         * 남기는 자리가 없다. 남기는 편이 낫다 → 아래 주석
+         */
         $rows = $this->db->query(
             'SELECT LOWER(HEX(c.conversion_uid)) AS uid
                FROM dispatch_outbox o
                JOIN conversions c ON c.id = o.conversion_id
               WHERE o.channel = ? AND o.status = ?
-                AND DATE(o.sent_at) BETWEEN ? AND ?',
+                AND DATE(o.sent_at) BETWEEN ? AND ?
+                AND EXISTS (
+                      SELECT 1 FROM dispatch_log l
+                       WHERE l.outbox_id = o.id AND l.http_status = 204
+                    )',
             array('ga4', 'sent', $from, $to)
         )->result_array();
 
