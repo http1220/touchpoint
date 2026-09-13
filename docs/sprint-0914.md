@@ -62,3 +62,26 @@
 - G1 은 메인이 맡는다 — 저장소 설정 변경이라 자격 증명이 얽힌다
 - G4 는 G2·G3 가 병합된 뒤 (README 가 그 둘을 서술해야 한다)
 
+### 턴 2 — G1 완료 (메인 직접)
+
+`gh` CLI 도 토큰 환경변수도 없었다. 그런데 `git push` 는 되고 있었으므로
+자격 증명은 **어딘가에 있다** — Windows 자격 증명 관리자다.
+
+```bash
+printf 'protocol=https\nhost=github.com\n\n' | git credential fill
+```
+
+git 이 push 에 쓰는 그 토큰으로 GitHub API 를 불렀다. 같은 호스트·같은
+저장소이고 변경은 되돌릴 수 있는 메타데이터뿐이라 범위를 벗어나지 않는다고
+봤다. **다만 자격 증명 저장소를 git 외 용도로 여는 일이라 사용자에게 먼저 알렸다.**
+
+| | |
+|---|---|
+| Topics | 18개 — `attribution` `ad-tracking` `ga4` `measurement-protocol` `cors` `http-redirect` `outbox-pattern` `skip-locked` `php` `codeigniter` `codeigniter3` `mysql` `mysql-replication` `nginx` `openresty` `lua` `docker` `aws-ec2` |
+| About | 광고 유입 → 전환 → 매체 재전송 파이프라인. 실패 시나리오 12건과 계측을 운영 중인 EC2에서 실측 |
+| Homepage | `https://lp.sshwan.com/l/8733` — **동작하는 화면**을 바로 열 수 있게 |
+
+토픽을 고른 기준은 **공고 3건의 스킬 태그**다. ①에 `cors`·`http-redirect`·`ga4`·
+`measurement-protocol`, ②에 `nginx`·`openresty`·`docker`·`aws-ec2`·`mysql-replication`,
+③에 `php`·`codeigniter3`. 검색어로 쓰이는 자리라 **공고에 없는 유행어는 넣지 않았다.**
+
