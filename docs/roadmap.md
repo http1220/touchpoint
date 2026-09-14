@@ -315,7 +315,7 @@ gantt
 | 1 | **S3 + CloudFront** | 대상 조직이 S3+CDN을 쓴다. **미경험 영역이라 학습 가치가 가장 크다** → [ADR-015](decisions/ADR-015-image-pipeline-cdn.md) |
 | 2 | **PG 테스트 연동 + 웹훅** | 결제가 전환의 원천. 스텁에서 실물 테스트 연동으로 → [ADR-016](decisions/ADR-016-payment-and-notification.md) |
 | 3 | **웹 푸시 + SMS 알림** | 알림도 채널 어댑터가 된다. 매체 어댑터와 같은 패턴을 두 번째로 증명 |
-| 4 | ~~Meta CAPI~~ | 어댑터(09-14, 실측 6파일) · 결제 경로 브라우저 맥락 보존(09-15) · 테스트 전송 확인. 남은 것은 `/conversion` 경로·픽셀·운영 전환 → [ADR-005](decisions/ADR-005-channel-adapter.md) |
+| 4 | ~~Meta CAPI~~ | 어댑터(09-14, 실측 6파일) · 결제 경로 브라우저 맥락 보존(09-15) · `/conversion` 경로·픽셀 코드(09-15). 남은 것은 처리방침 고지 후 픽셀 켜기 · 테스트 코드 제거(운영 전환) → [ADR-005](decisions/ADR-005-channel-adapter.md) |
 | 5 | 인덱스 `EXPLAIN` 실측 | `benchmarks.md` 채우기 |
 | 6 | 이미지 서명 URL·워터마크 | 시간이 남으면 |
 

@@ -38,6 +38,28 @@ Meta 에 보낼 브라우저 맥락을 **별도 테이블 · 3개월 · `/purcha
 - **원격 `bash -s` 스크립트가 첫 `docker compose exec` 에서 끝났다.** `exec -T` 가 표준입력(=남은 스크립트)을 먹었다. 오류도 없이 조용히 끝나서, `.env` 를 바꾼 뒤였다면 운영 설정이 바뀐 채 남았을 것이다. → 파일로 올려 실행 · `exec </dev/null` · `trap` 으로 원복
 - **워커가 09-12 22:49 이후 떠 있지 않았다.** `profiles: ["worker"]` 라 `docker compose up -d` 로는 안 뜬다. 대기 행 9건(`noop` 3 · `ga4` 6, 전부 실험). 켜면 실험 전환이 운영 GA4 로 나간다 → 켜지 않고 어댑터를 직접 불러 쟀다. **운영 전송 경로가 사흘째 멈춰 있었다는 사실 자체가 기록할 일이다** `[확인]`
 
+### 아침 — 워커 복구 · `/conversion` · 그리고 내가 낸 502
+
+- 대기 실험 행 9건을 `dead`(이유 기록)로 정리하고 `--profile worker` 로 워커를 올렸다. 도커 서비스는 부팅 시 자동 시작(`enabled`), 워커는 `restart: unless-stopped`
+- `/conversion` 에 브라우저 맥락: 본문 `page_url` + `Origin` 이 우리 도메인일 때만 UA·IP·쿠키. 검증 규칙은 `ClientContext` 하나로(테스트 17개, 전체 347 통과)
+- 픽셀 스니펫은 넣되 `META_PIXEL_BROWSER=false`. 켜기 전에 고지가 먼저다
+- 워커로 세 경로 관통: 브라우저 결제 sent · **서버 간 결제는 dead(서버 UA 를 보내지 않음)** · 브라우저 전환 sent → [ADR-005](decisions/ADR-005-channel-adapter.md)
+
+**막힌 것 — 내가 사이트를 40초 내렸다.** `CHANNELS` 를 바꾸며 `app` 과 `worker` 를 함께 올렸다.
+
+```
+connect() failed (111: Connection refused) while connecting to upstream,
+upstream: "fastcgi://172.20.0.4:9000"
+touchpoint-app-1     172.20.0.6     ← 재생성으로 새 IP
+touchpoint-worker-1  172.20.0.4     ← app 의 옛 IP 를 받았다
+```
+
+`fastcgi_pass app:9000;` 은 nginx 가 **기동 때 한 번** 풀어 둔다. 어제 첫 종단 실측에서 app 을 재생성했을 때는 같은 IP 를 돌려받아 멀쩡했을 뿐이다 — **운이었다.** 오늘은 worker 가 먼저 그 IP 를 가져가 엣지가 PHP 요청을 워커로 보냈다. `nginx -s reload` 로 복구.
+
+→ `resolver 127.0.0.11 valid=10s` + 변수 `fastcgi_pass`. **재현해서 확인했다**: 더미 컨테이너로 app 의 IP 를 빼앗고 app 을 다시 올리자, 10초 캐시 창 안의 요청 1건만 502 였고 이후 reload 없이 새 IP 로 갔다.
+
+> 교훈 — "재생성해도 됐다" 는 한 번의 성공은 IP 가 우연히 같았다는 뜻일 수 있다. 조건(IP 가 바뀐다)을 일부러 만들어야 확인이 된다.
+
 ---
 
 ## 2026-09-14 (월) · D-7 — 오후: ADR-005 검증
