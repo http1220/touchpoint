@@ -564,6 +564,6 @@ http_status 200  →  검증 엔드포인트. 적재되지 않는다
 
 ## 15. 이 문서가 다루지 않는 것
 
-- **Meta Conversions API** — 채널 어댑터의 두 번째 구현. 계약이 같으므로 [ADR-005](decisions/ADR-005-channel-adapter.md) 의 *"신규 매체 = 클래스 1개 + 설정 한 줄"* 주장을 검증하는 자리다
+- **Meta Conversions API** — 어댑터는 있다(`src/Channel/MetaChannel.php`). 검증 결과와 남은 결정은 [ADR-005 「검증」](decisions/ADR-005-channel-adapter.md)
 - **알림 어댑터(SMS·웹푸시)** — 같은 패턴의 세 번째 적용 → [ADR-016](decisions/ADR-016-payment-and-notification.md)
 - **전환 화면·지표** — [api-spec.md](api-spec.md) 7장

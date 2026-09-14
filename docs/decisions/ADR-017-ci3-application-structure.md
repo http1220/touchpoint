@@ -71,7 +71,7 @@ class Channels {
 }
 ```
 
-워커는 `$this->channels->all()` 로 받아 인터페이스만 알고 돌린다. **신규 매체 = `src/Channel/` 에 클래스 1개 + `.env` 한 줄** ([ADR-005](ADR-005-channel-adapter.md))이 CI3에서도 그대로 성립한다.
+워커는 `$this->channels->all()` 로 받아 인터페이스만 알고 돌린다. **신규 매체를 붙여도 워커는 바뀌지 않는다**는 것이 CI3에서도 성립한다. 다만 "클래스 1개 + `.env` 한 줄" 은 과소평가였다 — 실측 6파일 → [ADR-005 「검증」](ADR-005-channel-adapter.md)
 
 ### ③ 읽기 커넥션 — Lua가 고른 것을 따른다
 

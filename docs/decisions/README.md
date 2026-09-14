@@ -9,7 +9,7 @@
 | [002](ADR-002-two-registered-domains.md) | ~~등록 도메인 2개~~ | **철회 → [018](ADR-018-single-registered-domain.md).** eTLD+1 분석은 유효하고 구매 결정만 뒤집힘 |
 | [003](ADR-003-mysql-outbox.md) | MySQL 아웃박스 | 전환과 전송 지시를 **한 트랜잭션**에. Redis·SQS는 정합성 구멍 |
 | [004](ADR-004-skip-locked.md) | `FOR UPDATE SKIP LOCKED` | 중복 전송을 사후 차단이 아니라 **DB가 예방** |
-| [005](ADR-005-channel-adapter.md) | 채널 어댑터 | 매체 **10종 이상** 실측. 신규 매체 = 클래스 1개 + 설정 1줄 |
+| [005](ADR-005-channel-adapter.md) | 채널 어댑터 | 매체 **10종 이상** 실측. ~~클래스 1개 + 설정 1줄~~ → Meta 로 검증, **실측 6파일**. 적재 계약은 어댑터로 격리되지 않는다 |
 | [006](ADR-006-coin-ledger.md) | 코인 원장 | 약관의 **유료 5년 / 무료 1년**은 잔액 컬럼으로 구현 불가 |
 | [007](ADR-007-read-write-split.md) | 읽기/쓰기 분리 | **실물 복제본** + Lua 배정. 흉내에서 실물로 |
 | [008](ADR-008-stub-pg.md) | 스텁 PG | PG 30개사. 어댑터는 이미 005에서 증명 — 여기선 상태 머신만 |

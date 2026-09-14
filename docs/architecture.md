@@ -29,7 +29,7 @@ flowchart LR
     API --> DB[("MySQL 8.0")]
     DB --> W["워커<br/>아웃박스 폴링"]
     W --> GA["GA4 채널<br/>Measurement Protocol"]
-    W -.-> META["Meta 채널<br/>Conversions API<br/>(설계만 · 미구현)"]
+    W -.-> META["Meta 채널<br/>Conversions API<br/>(어댑터만 · 자격 증명 없음)"]
     DB --> MET
 ```
 
@@ -160,8 +160,7 @@ classDiagram
     class ChannelInterface {
         <<interface>>
         +name() string
-        +buildPayload(Conversion) array
-        +send(array) DispatchResult
+        +send(array conversion) DispatchResult
     }
     ChannelInterface <|.. Ga4Channel
     ChannelInterface <|.. MetaChannel
@@ -174,9 +173,9 @@ classDiagram
 
 플랫폼 A에 붙어 있는 매체가 **10종 이상**이다(태그 관리 컨테이너 3개, 검색·디스플레이 전환 ID 10개 이상, 소셜 픽셀 2, DSP 2, 글로벌 소셜 2). 매체별 `if` 분기로는 유지가 불가능하다 → [ADR-005](decisions/ADR-005-channel-adapter.md)
 
-**주장**: 신규 매체 추가 비용 = 어댑터 클래스 1개 + 설정 1줄.
+**주장했던 것**: 신규 매체 추가 비용 = 어댑터 클래스 1개 + 설정 1줄.
 
-> **아직 검증되지 않았다.** 구현체가 `Ga4Channel` 과 `NoopChannel` 둘뿐이고 후자는 아무 데도 보내지 않는 가짜다. `MetaChannel` 은 설계에만 있다. 주장이 참이려면 **실제 매체 두 번째**를 붙여 봐야 한다.
+> **2026-09-14 Meta 어댑터로 검증했다 — 변경 파일은 2개가 아니라 6개였다.** 워커·아웃박스·재시도 루프는 그대로였지만, 테스트·조립 메서드·공유 통화 변환을 세지 않았고, Meta 가 레이트리밋을 HTTP 400 으로 줘서 재시도 판정을 어댑터가 해야 했다. 가장 큰 발견은 **적재 시점에 버린 브라우저 맥락(UA·URL)을 어댑터가 되살릴 수 없다**는 것이다 → [ADR-005 「검증」](decisions/ADR-005-channel-adapter.md#검증-2026-09-14--두-번째-실매체를-붙여-봤다)
 
 ---
 
