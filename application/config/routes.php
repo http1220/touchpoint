@@ -12,7 +12,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | 경로 표는 docs/api-spec.md 의 엔드포인트 목록과 1:1로 맞춘다.
 */
 
-$route['default_controller'] = 'landing';
+$route['default_controller'] = 'home';   // 루트 도메인의 웹툰 홈. lp. 는 /l/{work} 로 들어온다
 $route['404_override']       = 'errors/not_found';
 
 // URL 끝의 슬래시를 컨트롤러 이름으로 오해하지 않게 한다.

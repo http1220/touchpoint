@@ -4,21 +4,39 @@
 # 없는데 만들면 nginx 가 기동 자체를 거부하고, 그러면 ACME 챌린지를 받을
 # 80번 블록까지 같이 죽어서 인증서를 영원히 못 받는다.
 # → docker/openresty/entrypoint.sh
-    # ── 루트 도메인 · 443 기본 블록 ──────────────────────────
-    # 이 프로젝트 기간에는 랜딩으로 넘긴다.
-    # 나중에 개인 사이트를 올리면 이 블록만 교체하면 된다.
+    # ── 443 기본 블록 — 모르는 Host 를 여기서 끊는다 ──────────
     #
-    # default_server 를 명시한 이유 → docs/failure-scenarios.md C-3
+    # **이 블록은 콘텐츠를 서빙하지 않는다.** 존재 이유가 하나다:
+    # 브리지가 Location 을 $http_host 로 만들기 때문에, 모르는 Host 가
+    # PHP 까지 닿으면 그게 곧 오픈 리다이렉트다 → docs/failure-scenarios.md C-3
     #
-    # 브리지는 Location 을 $http_host 로 만든다. 모르는 Host 가 PHP 까지
-    # 닿으면 그게 곧 오픈 리다이렉트다. 여기서 먼저 걷어낸다 —
     # 아래 return 은 목적지를 하드코딩하므로 Host 가 무엇이든 결과가 같다.
+    # server_name 을 `_` 로 둔 것은 **어떤 이름과도 일치하지 않게** 하려는
+    # 것이다 — 이름으로 매칭되는 일 없이 오직 default_server 로만 걸린다.
     #
-    # 재 봤을 때도 막혀 있었지만, 그건 이 블록이 **우연히 첫 443 블록**이라
-    # nginx 가 기본으로 골랐기 때문이었다. 블록 순서를 바꾸면 사라지는
-    # 보장이라 명시로 바꾼다.
+    # 루트 도메인은 아래 별도 블록에서 홈을 서빙한다. 두 역할을 한 블록에
+    # 두면 홈을 붙이는 순간 C-3 방어선이 사라진다.
     server {
         listen 443 ssl default_server;
+        http2 on;
+        server_name _;
+
+        # 이름이 안 맞는 인증서다. 거절 응답이므로 그래도 된다 —
+        # 클라이언트가 경고를 보는 것이 정상이고, 여기까지 온 것 자체가
+        # 우리가 모르는 이름으로 왔다는 뜻이다.
+        ssl_certificate     /etc/letsencrypt/live/${SHOP_DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
+        include /etc/nginx/conf.d/tls-common.conf;
+
+        return 302 https://lp.${SHOP_DOMAIN}$request_uri;
+    }
+
+    # ── 루트 도메인 — 웹툰 홈 ────────────────────────────────
+    #
+    # 전에는 이 자리가 lp. 로 302 하는 블록이었다. 홈을 붙이면서 갈랐다.
+    # 여기는 **이름으로 매칭되는** 블록이고, 위 기본 블록은 이름이 없다.
+    server {
+        listen 443 ssl;
         http2 on;
         server_name ${SHOP_DOMAIN};
 
@@ -26,7 +44,13 @@
         ssl_certificate_key /etc/letsencrypt/live/${SHOP_DOMAIN}/privkey.pem;
         include /etc/nginx/conf.d/tls-common.conf;
 
-        return 302 https://lp.${SHOP_DOMAIN}$request_uri;
+        set $read_target "";
+
+        access_by_lua_block {
+            require("replica").assign()
+        }
+
+        include /etc/nginx/conf.d/php-app.conf;
     }
 
     # ── lp. 랜딩 · 브리지 (광고주 측) ────────────────────────

@@ -149,6 +149,21 @@ class MY_Controller extends CI_Controller
 				continue;
 			}
 
+			if ($role === 'root')
+			{
+				/*
+				 * 루트 도메인. 서브도메인이 붙지 않는 유일한 자리라
+				 * `$role.'.'.$shop` 규칙에 들어가지 않는다.
+				 *
+				 * `www.` 를 같이 허용하지 않는다 — 그 호스트는 인증서에도
+				 * DNS 에도 없다. 있지도 않은 것을 허용 목록에 적어 두면
+				 * 나중에 "왜 안 되지" 를 여기서 찾게 된다.
+				 */
+				$allowed[] = $shop;
+
+				continue;
+			}
+
 			$allowed[] = $role.'.'.$shop;
 		}
 
