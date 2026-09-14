@@ -29,6 +29,9 @@ use App\Payment\WebhookSignature;
  */
 class Pg extends MY_Controller
 {
+	/** `sign` 이 본문을 떨구는 곳. 인자로 받지 않는 이유는 sign() 주석에 있다. */
+	const BODY_PATH = '/tmp/pg-body.json';
+
 	public function __construct()
 	{
 		parent::__construct();
@@ -45,8 +48,6 @@ class Pg extends MY_Controller
 	 * 출력은 `eval`/`source` 할 수 있는 셸 변수다. 전송은 하지 않는다 —
 	 * 전송하는 쪽이 셸이어야 동시성을 셸이 만든다.
 	 */
-	const BODY_PATH = '/tmp/pg-body.json';
-
 	public function sign($uidHex = NULL, $status = NULL)
 	{
 		/*
