@@ -108,6 +108,9 @@ footer{margin-top:3rem;color:#5b6270;font-size:.8rem}
   <tr><th>이름</th><th>누가</th><th>용도</th><th>기간</th></tr>
   <tr><td><code>ab_vid</code></td><td>이 사이트</td><td>같은 방문자인지 알아보기</td><td>1년</td></tr>
   <tr><td><code>tp_sess</code></td><td>이 사이트</td><td>세션 유지</td><td>2시간</td></tr>
+  <?php /* config.php csrf_cookie_name · docker/openresty/lua/replica.lua — 09-15 응답 헤더에서 발견해 추가 */ ?>
+  <tr><td><code>tp_csrf</code></td><td>이 사이트</td><td>위조 요청 방지 토큰</td><td>2시간</td></tr>
+  <tr><td><code>ab_rdb</code></td><td>이 사이트</td><td>읽기용 데이터베이스 배정 (개인 식별 없음)</td><td>1일</td></tr>
   <tr><td><code>tp_ad_optout</code></td><td>이 사이트</td><td>맞춤형 광고 거부 설정 기억</td><td>1년</td></tr>
   <tr><td><code>tp_probe_vid</code></td><td>이 사이트</td><td>진단 페이지(<code>/diag</code>)의 쿠키 동작 시험</td><td>짧은 기간</td></tr>
   <tr><td><code>_ga</code>, <code>_ga_*</code></td><td>Google</td><td>이용 통계</td><td>최대 2년</td></tr>
