@@ -19,6 +19,6 @@
   <h1>touchpoint</h1>
   <p>유입·전환 추적 파이프라인.</p>
   <p>읽기 대상 <code><?= html_escape($read_target) ?></code> · 상관 ID <code><?= html_escape($trace_id) ?></code></p>
-  <p><a href="/diag">인프라 진단</a></p>
+  <p><a href="/diag">인프라 진단</a> · <a href="/privacy">개인정보처리방침</a></p>
 </main>
 </html>

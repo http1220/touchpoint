@@ -163,7 +163,8 @@ footer{margin-top:2rem;color:#5b6270;font-size:.8rem}
 <footer>
   읽기 대상 <code><?= html_escape($read_target) ?></code> ·
   상관 ID <?= html_escape($trace_id) ?> ·
-  <a href="https://github.com/http1220/touchpoint" style="color:#5b6270">소스</a>
+  <a href="https://github.com/http1220/touchpoint" style="color:#5b6270">소스</a> ·
+  <a href="/privacy" style="color:#5b6270">개인정보처리방침</a>
 </footer>
 
 </div>

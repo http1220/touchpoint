@@ -34,6 +34,8 @@ $route['signup']      = 'account/signup';    // 5. POST /signup
 $route['purchase']    = 'purchase/index';    // 6. POST /purchase
 $route['webhooks/pg'] = 'webhook/pg';        // PG 웹훅. app. 에서만 — docs/plan-payment-webhook.md 12장 결정 1
 $route['metrics']     = 'metrics/index';     // 7. GET  /metrics
+$route['privacy']     = 'privacy/index';     // 개인정보처리방침 — 픽셀보다 먼저
+$route['privacy/ads'] = 'privacy/ads';       // 맞춤형 광고 거부 (쿠키)
 $route['episode/(:num)'] = 'episode/view/$1';
 
 // ── 운영 ────────────────────────────────────────────────

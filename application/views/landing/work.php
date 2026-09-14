@@ -116,5 +116,6 @@ $fields = array(
   <?php if ($api_host !== ''): ?>
     <script src="https://<?= html_escape($api_host) ?>/track.js" data-work="<?= html_escape($work) ?>"></script>
   <?php endif; ?>
+  <p style="margin-top:2rem;font-size:.8rem"><a href="/privacy" style="color:#5b6270">개인정보처리방침 · 맞춤형 광고 거부</a></p>
 </main>
 </html>

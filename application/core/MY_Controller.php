@@ -237,6 +237,16 @@ class MY_Controller extends CI_Controller
 			return array();
 		}
 
+		/*
+		 * 맞춤형 광고를 거부한 브라우저면 싣지 않는다. 그러면 Meta 어댑터가
+		 * 필수 필드 없음으로 보내지 않고, 행에 이유가 남는다 → controllers/Privacy.php
+		 * GA4 는 이 맥락을 쓰지 않으므로 영향이 없다.
+		 */
+		if (\App\Attribution\AdOptOut::isOn($this->input->cookie(\App\Attribution\AdOptOut::COOKIE, TRUE)))
+		{
+			return array();
+		}
+
 		return \App\Attribution\ClientContext::from(
 			self::str($this->input->user_agent()),
 			self::str($this->input->ip_address()),   // proxy_ips 로 엣지 뒤의 원래 IP 다

@@ -21,14 +21,16 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | 모른다. 합칠 키가 없는 이중 전송이 된다.
 |
 | 켜기 전에 필요한 것 — 코드가 아니라 고지다.
-|   · 개인정보처리방침: 행태정보 수집, Meta(국외) 제공
+|   · 개인정보처리방침: 행태정보 수집, Meta(국외) 제공 → /privacy (09-15)
+|   · 거부 수단 — 거부한 브라우저에는 이 스니펫을 내보내지 않는다
 |   · EU 방문자가 있으면 동의 전에는 켜지 않는다
 | 그래서 기본값을 끔으로 두고, 켜는 일은 설정 한 줄로 남긴다.
 */
 
-$pixel_id = getenv('META_PIXEL_ID') ?: '';
+$pixel_id  = getenv('META_PIXEL_ID') ?: '';
+$opted_out = \App\Attribution\AdOptOut::isOn(get_instance()->input->cookie(\App\Attribution\AdOptOut::COOKIE, TRUE));
 
-if ( ! tp_env_bool('META_PIXEL_BROWSER') OR preg_match('/\A\d{10,20}\z/', $pixel_id) !== 1):
+if ( ! tp_env_bool('META_PIXEL_BROWSER') OR $opted_out OR preg_match('/\A\d{10,20}\z/', $pixel_id) !== 1):
 	return;
 endif;
 ?>
