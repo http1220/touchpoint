@@ -111,10 +111,22 @@ $config['global_xss_filtering'] = FALSE;
 /*
 | CSRF.
 |
-| 폼(가입·결제)에는 필요하고, 수집 엔드포인트에는 성립하지 않는다 —
-| 광고 랜딩에서 다른 등록 도메인으로 보내는 요청이라 토큰을 심을 수 없다.
-| 그래서 수집 경로만 제외하고, 그 경로의 방어는 Origin 검사로 따로 한다.
-| → docs/api-spec.md
+| 폼에는 필요하고, **세션이 없는 JSON API 에는 성립하지 않는다.**
+| CSRF 가 막는 것은 "남의 브라우저에 올라탄 인증된 요청" 인데, 올라탈
+| 세션이 없으면 막을 것도 없다. 대신 각 경로가 자기 방어선을 갖는다.
+|
+|   collect · conversion   Origin 검사 (src/Http/CorsPolicy)
+|   webhooks/pg            HMAC 서명 (src/Payment/WebhookSignature)
+|   purchase               없음 — 인증 자체가 없다. 악용 범위는 아래
+|
+| `/purchase` 에 방어가 없어도 **전환도 코인도 만들 수 없다.** 그 둘은
+| captured 웹훅에서만 발화하고 웹훅은 서명을 요구한다. 누구나 만들 수
+| 있는 것은 status=created 인 payments 행뿐이고, 스텁 PG 라 청구도 없다.
+| → docs/plan-payment-webhook.md 12장 결정 5
+|
+| **패턴은 요청 URI 와 맞춘다.** 라우팅 뒤의 컨트롤러 이름이 아니다 —
+| `webhooks/pg` 로 들어와 `webhook/pg` 로 라우팅되므로, `webhook/.*` 는
+| 맞지 않는다. 실제로 그래서 403 이 났다.
 */
 $config['csrf_protection']   = TRUE;
 $config['csrf_token_name']   = 'tp_csrf_token';
@@ -126,7 +138,8 @@ $config['csrf_exclude_uris'] = array(
 	'conversion',
 	'impression',
 	'click',
-	'webhook/.*',
+	'purchase',
+	'webhooks/.*',
 );
 
 // 압축은 nginx 가 한다. PHP에서 또 하면 이중 처리다.
