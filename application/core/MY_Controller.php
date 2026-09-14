@@ -6,11 +6,12 @@ use App\Support\TraceId;
 /**
  * 모든 컨트롤러의 기반 층.
  *
- * 여기 있는 것은 넷뿐이다.
+ * 여기 있는 것은 다섯뿐이다.
  *   ① 읽기 커넥션 선택 — Lua 가 배정한 복제본을 따른다
  *   ② 상관 ID       — 엣지에서 받은 값을 앱 로그까지 끌고 간다
  *   ③ 호스트 검증   — 이 경로가 이 호스트에서 열려도 되는가
  *   ④ 에러 응답     — RFC 9457 Problem Details
+ *   ⑤ 브라우저 맥락 — 매체 전송용. 규칙은 src/Attribution/ClientContext
  *
  * 도메인 로직은 여기 두지 않는다. src/ 의 PSR-4 쪽이다. → ADR-017
  */
@@ -210,6 +211,46 @@ class MY_Controller extends CI_Controller
 			->set_content_type('application/json', 'utf-8')
 			->set_header('Cache-Control: no-store')
 			->set_output(json_encode($body, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+	}
+
+	/**
+	 * 광고 매체 전송에 쓸 브라우저 맥락. `/purchase` · `/conversion` 이 쓴다.
+	 *
+	 * **Origin 이 우리 도메인일 때만 받는다.** 두 경로 모두 서버 간 호출로도
+	 * 불린다(PG·백오피스·cli 스모크). 그때의 UA·IP 는 **서버의 것**이고,
+	 * 그걸 사용자 브라우저라고 매체에 보내면 지어낸 값이다. 브라우저는
+	 * POST 에 Origin 을 붙이고, 서버 클라이언트는 대개 붙이지 않는다 —
+	 * 붙여서 속이는 호출자까지는 막지 못한다.
+	 *
+	 * 값 검증 규칙은 src/Attribution/ClientContext 에 있다.
+	 *
+	 * @param string|null $pageUrl 이벤트가 일어난 페이지(Referer 나 본문)
+	 * @return array<string, string> 값이 있는 키만. 브라우저가 아니면 빈 배열
+	 */
+	protected function browserContext($pageUrl)
+	{
+		$shop   = (string) (getenv('SHOP_DOMAIN') ?: '');
+		$origin = \App\Attribution\ClientContext::sourceUrl($this->server('HTTP_ORIGIN'), $shop);
+
+		if ($origin === NULL)
+		{
+			return array();
+		}
+
+		return \App\Attribution\ClientContext::from(
+			self::str($this->input->user_agent()),
+			self::str($this->input->ip_address()),   // proxy_ips 로 엣지 뒤의 원래 IP 다
+			self::str($pageUrl),
+			self::str($this->input->cookie('_fbp', TRUE)),
+			self::str($this->input->cookie('_fbc', TRUE)),
+			$shop
+		);
+	}
+
+	/** CI3 입력은 없으면 NULL, 배열 쿠키면 배열이다. 문자열만 넘긴다. */
+	private static function str($v)
+	{
+		return is_string($v) ? $v : NULL;
 	}
 
 	/** $_SERVER 접근 한 곳으로. CLI 에서도 안전하게 빈 문자열이 나온다. */

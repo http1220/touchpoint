@@ -167,7 +167,8 @@ Content-Type: application/json
   "type": "purchase",
   "value_minor": 9900,
   "currency": "KRW",
-  "dedup_key": "payment:01J8XP..."
+  "dedup_key": "payment:01J8XP...",
+  "page_url": "https://lp.example.com/works/8733"
 }
 ```
 
@@ -177,6 +178,9 @@ Content-Type: application/json
 | `value_minor` | **정수**. KRW는 소수 0자리라 `9900` = 9,900원 |
 | `currency` | ISO 4217 3글자 |
 | `dedup_key` | **UNIQUE**. 같은 키 재요청은 기존 결과 반환 |
+| `page_url` | 선택. 전환이 일어난 페이지. 크로스오리진이라 `Referer` 에 경로가 없어 본문으로 받는다. **우리 도메인 https 만 받고 쿼리·조각은 버린다.** 틀리면 422 가 아니라 조용히 버린다 — 광고 부가 정보 때문에 전환을 잃지 않는다 |
+
+> 브라우저가 부른 요청(`Origin` 이 우리 도메인)이면 UA·IP·`_fbp`·`_fbc` 도 매체 전송용으로 싣는다. 서버 간 호출에는 싣지 않는다 — 그 UA·IP 는 서버의 것이다 → [ADR-005 「결정」](decisions/ADR-005-channel-adapter.md)
 
 ### 응답
 

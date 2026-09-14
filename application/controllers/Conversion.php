@@ -82,7 +82,8 @@ class Conversion extends MY_Controller
 
 	private function register()
 	{
-		$input = ConversionInput::fromBody($this->body());
+		$body  = $this->body();
+		$input = ConversionInput::fromBody($body);
 
 		if ( ! $input->isValid())
 		{
@@ -110,7 +111,18 @@ class Conversion extends MY_Controller
 			log_message('error', 'conversion: CHANNELS 가 비어 있어 아웃박스에 적재하지 않는다.');
 		}
 
-		$result = $this->conversion_model->createWithOutbox(array(
+		/*
+		 * 브라우저 맥락(UA·IP·페이지·_fbp·_fbc). 브라우저가 부른 요청일 때만 실린다
+		 * → MY_Controller::browserContext()
+		 *
+		 * 페이지 주소는 **본문 page_url** 로 받는다. lp. → api. 는 크로스오리진이라
+		 * 브라우저 기본 Referer 정책이 경로를 잘라 오리진만 보낸다(ADR-005 표).
+		 * 틀린 page_url 은 422 로 막지 않고 버린다 — 광고용 부가 정보 하나 때문에
+		 * 전환 자체를 잃을 수는 없다.
+		 */
+		$pageUrl = isset($body['page_url']) && is_string($body['page_url']) ? $body['page_url'] : NULL;
+
+		$result = $this->conversion_model->createWithOutbox($this->browserContext($pageUrl) + array(
 			'visit_id'    => $visit === NULL ? NULL : $visit['id'],
 			'type'        => $input->type,
 			'value_minor' => $input->valueMinor,

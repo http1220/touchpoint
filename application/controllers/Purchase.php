@@ -68,70 +68,6 @@ class Purchase extends MY_Controller
 		return $this->visit_model->findByUid($cookie);
 	}
 
-	/**
-	 * 광고 매체 전송에 쓸 브라우저 맥락.
-	 *
-	 * 결제 전환은 PG 웹훅에서 발화하는데 웹훅 요청에는 사용자 브라우저가
-	 * 없다. 그래서 **여기서** 받아 payment_client_context 에 3개월 둔다
-	 * → docs/decisions/ADR-005-channel-adapter.md 「결정」
-	 *
-	 * 각 값은 형식이 맞을 때만 받는다. 틀린 값을 보내느니 안 보내는 게 낫다 —
-	 * 매체는 틀린 값을 거절하지 않고 조용히 매칭에서 뺀다(ADR-005 실측).
-	 *
-	 * @return array<string, string|null>
-	 */
-	private function clientContext()
-	{
-		$ua = (string) $this->input->user_agent();
-		$ip = (string) $this->input->ip_address();
-
-		$fbp = (string) $this->input->cookie('_fbp', TRUE);
-		$fbc = (string) $this->input->cookie('_fbc', TRUE);
-
-		return array(
-			'client_user_agent' => $ua === '' ? NULL : mb_substr($ua, 0, 512),
-
-			// CI3 는 형식이 틀리면 0.0.0.0 을 준다. proxy_ips 로 엣지 뒤의 원래 IP 다
-			'client_ip_address' => ($ip === '' OR $ip === '0.0.0.0') ? NULL : $ip,
-
-			'event_source_url'  => $this->sourceUrl(),
-
-			// 픽셀이 만드는 쿠키. 이 사이트엔 아직 픽셀이 없어 대개 NULL 이다
-			'fbp' => preg_match('/\Afb\.\d\.\d{10,13}\.\d{1,20}\z/', $fbp) === 1 ? $fbp : NULL,
-			'fbc' => (strlen($fbc) <= 255 && preg_match('/\Afb\.\d\.\d{10,13}\.[A-Za-z0-9_-]+\z/', $fbc) === 1) ? $fbc : NULL,
-		);
-	}
-
-	/**
-	 * 결제를 시작한 페이지. Referer 에서 읽는다.
-	 *
-	 * 같은 오리진(app.) 요청이라 브라우저 기본 정책에서도 경로까지 온다.
-	 * (크로스오리진이면 오리진만 온다 — /conversion 은 그 경우다.)
-	 *
-	 * **쿼리와 조각은 버린다.** 쿼리에 이메일·토큰이 실려 오는 페이지가
-	 * 흔하고, 그걸 광고 매체로 넘기면 안 된다. 우리 도메인이 아니면 받지 않는다.
-	 */
-	private function sourceUrl()
-	{
-		$ref  = (string) $this->server('HTTP_REFERER');
-		$shop = strtolower((string) (getenv('SHOP_DOMAIN') ?: ''));
-
-		if ($ref === '' OR $shop === '')
-		{
-			return NULL;
-		}
-
-		$u    = parse_url($ref);
-		$host = strtolower((string) ($u['host'] ?? ''));
-
-		if (($u['scheme'] ?? '') !== 'https' OR ($host !== $shop && substr($host, -strlen('.'.$shop)) !== '.'.$shop))
-		{
-			return NULL;
-		}
-
-		return mb_substr('https://'.$host.($u['path'] ?? '/'), 0, 1024);
-	}
-
 	public function index()
 	{
 		if (strtoupper($this->server('REQUEST_METHOD')) !== 'POST')
@@ -213,7 +149,7 @@ class Purchase extends MY_Controller
 			'visit_id'        => $this->currentVisitId(),
 
 			// 브라우저가 있는 마지막 순간이다. 웹훅에는 없다 → clientContext()
-			'client_context'  => $this->clientContext(),
+			'client_context'  => $this->browserContext($this->server('HTTP_REFERER')),
 		));
 
 		if ($result['duplicated'])
