@@ -358,7 +358,7 @@ LIMIT 1;
 |---|---|---|
 | `visits`, `touchpoints`, `dispatch_log` | **3개월** | 통신비밀보호법 (웹사이트 방문기록) |
 | `users`(+스냅샷), `conversions`, `payments`, `payment_events`, `coin_lots`, `coin_spends` | **5년** | 전자상거래법 · 전자금융거래법 |
-| `dispatch_outbox` | 전송 완료 후 90일 | 운영 판단 |
+| `payment_client_context`, `dispatch_outbox` | **3개월** | 광고 전송용 원문(UA·IP) — 방문기록과 같은 기한. 2026-09-15 추가 → [ADR-005 「결정」](decisions/ADR-005-channel-adapter.md) |
 
 ```sql
 -- 파기 배치 (일 1회)

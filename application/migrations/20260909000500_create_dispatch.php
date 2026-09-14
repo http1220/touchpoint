@@ -49,7 +49,7 @@ class Migration_Create_dispatch extends CI_Migration
 		 *
 		 * FK 를 걸지 않는다. 전송할 때마다 쌓이는 계측 테이블이라
 		 * 매 INSERT 의 참조 검사 비용이 계측 자체를 왜곡한다.
-		 * 게다가 outbox 는 전송 완료 90일 뒤, 이 로그는 3개월 보존이라
+		 * 게다가 outbox 는 마지막 이동 90일 뒤(09-15 파기 배치에 추가), 이 로그는 3개월 보존이라
 		 * 어차피 생명주기가 다르다.
 		 */
 		$this->db->query(

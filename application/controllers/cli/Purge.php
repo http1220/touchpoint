@@ -125,7 +125,7 @@ class Purge extends MY_Controller
 			/*
 			 * 아웃박스 payload 에 위 원문이 복사돼 들어간다 → 같이 지운다.
 			 *
-			 * 마이그레이션 주석이 "outbox 는 전송 완료 90일 뒤" 라고 약속해
+			 * dispatch 마이그레이션 주석이 outbox 를 90일 뒤 지운다고 약속해
 			 * 놓고 여기 없던 자리이기도 하다. created_at 이 없어 마지막으로
 			 * 움직인 시각(sent_at, 없으면 next_retry_at)을 쓴다. 인덱스가
 			 * 없어 전체 스캔이다 — 행 수가 전환 × 매체라 지금은 감수한다.
