@@ -111,6 +111,13 @@ class Conversion_model extends CI_Model
 		 * 원문 UA·IP 가 아웃박스 payload 에 들어간다. 그래서 dispatch_outbox 도
 		 * 3개월 파기 대상이다 → cli/Purge::targets()
 		 */
+		// 환불 전환이 가리키는 원래 구매 전환 uid. 매체가 무엇을 취소할지 안다
+		// → Payment_model::recordRefund()
+		if (isset($c['refund_of']) && $c['refund_of'] !== '')
+		{
+			$payload['refund_of'] = (string) $c['refund_of'];
+		}
+
 		foreach (array('client_user_agent', 'client_ip_address', 'event_source_url', 'fbp', 'fbc') as $key)
 		{
 			if (isset($c[$key]) && $c[$key] !== '')

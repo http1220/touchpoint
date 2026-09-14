@@ -5,6 +5,7 @@ use App\Channel\GaClientId;
 use App\Payment\CoinProduct;
 use App\Payment\PaymentStateMachine;
 use App\Payment\PaymentStatus;
+use App\Payment\RefundPolicy;
 
 /**
  * 결제와 결제 이벤트.
@@ -44,6 +45,9 @@ class Payment_model extends CI_Model
 
 	/** `purchase:` + 32자 hex = 41자. conversions.dedup_key 는 VARCHAR(64) 다. */
 	const DEDUP_PREFIX = 'purchase:';
+
+	/** `refund:` + 32자 hex. 같은 결제의 환불은 한 번만 매체로 간다. */
+	const REFUND_PREFIX = 'refund:';
 
 	/**
 	 * 조회 3곳이 같은 컬럼을 본다.
@@ -317,6 +321,26 @@ class Payment_model extends CI_Model
 			return self::result(FALSE, NULL, NULL, 'payment-vanished');
 		}
 
+		/*
+		 * 캡처보다 먼저 도착한 환불. **무시가 아니라 재시도 요청이다.**
+		 *
+		 * 여기서 무시(200)하면 PG 는 다시 보내지 않고, 뒤이어 온 captured 가
+		 * 결제를 살려 둔다 — 돈은 돌려줬는데 코인·매출이 남는다.
+		 * 기록(payment_events)도 남기지 않는다. 재전송마다 행이 쌓이고,
+		 * 그 행들은 "일어나지 않은 전이" 다 → src/Payment/RefundPolicy
+		 *
+		 * $before 는 잠금 없는 스냅샷이라 낡을 수 있다. 낡은 쪽으로 틀리면
+		 * (실제로는 방금 captured 가 됐다) 409 를 한 번 더 주고 다음 재전송에서
+		 * 처리된다 — 잃는 것은 재전송 한 번이다.
+		 */
+		if (RefundPolicy::arrivedBeforeCapture($before, $to))
+		{
+			$this->db->trans_rollback();
+			log_message('error', sprintf('payment refund: 캡처 전 환불 도착 — 재시도 요청. id=%d status=%s', $paymentId, $before));
+
+			return self::result(FALSE, $before, $before, 'refund-before-capture');
+		}
+
 		$applied = tp_env_bool('PAYMENT_WEBHOOK_PRECHECK')
 			? $this->transitionByPrecheck($paymentId, $before, $to, $allowed, $now)
 			: $this->transitionByCas($paymentId, $to, $allowed, $now);
@@ -343,9 +367,18 @@ class Payment_model extends CI_Model
 
 		$this->appendEvent($paymentId, $before, $to, 'webhook', $raw, $now);
 
-		$effects = ($to === PaymentStatus::CAPTURED)
-			? $this->onCaptured($payment, $now)
-			: array('lot_id' => NULL, 'conversion_uid' => NULL);
+		if ($to === PaymentStatus::CAPTURED)
+		{
+			$effects = $this->onCaptured($payment, $now);
+		}
+		elseif ($to === PaymentStatus::REFUNDED)
+		{
+			$effects = $this->onRefunded($payment, $now);
+		}
+		else
+		{
+			$effects = array('lot_id' => NULL, 'conversion_uid' => NULL);
+		}
 
 		/*
 		 * 커밋 전에 트랜잭션 상태를 본다.
@@ -516,6 +549,92 @@ class Payment_model extends CI_Model
 		$out['conversion_uid'] = $this->recordConversion($payment, $amount, $currency, $now);
 
 		return $out;
+	}
+
+	/**
+	 * refunded 로 전이한 직후의 부수 효과. applyEvent 트랜잭션 안이다.
+	 *
+	 *   ① 코인 회수 — 이 결제가 만든 lot 의 남은 코인을 0 으로. 이미 쓴 코인은
+	 *      음수로 만들지 않고 불일치로 남긴다 → RefundPolicy ②
+	 *   ② 매체 환불 — 원래 구매 전환을 가리키는 `refund` 전환을 적재한다.
+	 *      같은 트랜잭션이라 "환불은 됐는데 매체엔 매출이 그대로" 가 구조적으로
+	 *      생기지 않는다 → ADR-003
+	 *
+	 * @return array [lot_id, conversion_uid, coins_revoked, coins_spent]
+	 */
+	private function onRefunded(array $payment, $now)
+	{
+		$this->load->model('coin_model');
+
+		$coins = $this->coin_model->revokeByPayment((int) $payment['id']);
+
+		if ($coins['spent'] > 0)
+		{
+			/*
+			 * 쓴 코인이 있는데 환불됐다. 약관의 청약철회 조건(이용 내역 없음)을
+			 * PG 쪽 환불이 우회한 것이다. 거절할 수 없는 사실이라 적용은 하고,
+			 * 사람이 판단할 수 있게 error 로 남긴다 → ADR-006 파생 규칙
+			 */
+			log_message('error', sprintf(
+				'payment refund: 이미 사용한 코인이 있는 결제가 환불됐다. payment_id=%d 사용=%d 회수=%d',
+				(int) $payment['id'], $coins['spent'], $coins['revoked']
+			));
+		}
+
+		return array(
+			'lot_id'         => NULL,
+			'conversion_uid' => $this->recordRefund($payment, $now),
+			'coins_revoked'  => $coins['revoked'],
+			'coins_spent'    => $coins['spent'],
+		);
+	}
+
+	/**
+	 * 환불 전환을 적재한다.
+	 *
+	 * **새 전환 행이다.** 구매 전환을 지우거나 고치지 않는다 — 매체에 이미
+	 * 보냈을 수 있고, 매체는 "취소" 를 별도 이벤트로 받는다(GA4 `refund`).
+	 * 원래 구매는 `refund_of` 로 가리킨다.
+	 *
+	 * 보낼 매체는 `Channels::namesFor('refund')` 가 고른다. Meta 전환 API 에는
+	 * 표준 환불 이벤트가 없어 빠진다 — 이 판단이 **매체 능력의 차이가 적재
+	 * 쪽으로 새는 두 번째 자리**다(첫째는 브라우저 맥락) → ADR-005
+	 *
+	 * 원래 구매 전환이 없으면(대조군 스위치로 막혔거나 파기) 적재하지 않는다.
+	 * 가리킬 대상이 없는 환불은 매체에서 아무것도 취소하지 못한다.
+	 *
+	 * @return string|null 환불 전환 uid hex
+	 */
+	private function recordRefund(array $payment, $now)
+	{
+		$this->load->model('conversion_model');
+		$this->load->library('channels');
+
+		$original = $this->conversion_model->findByDedupKey(self::DEDUP_PREFIX.$payment['uid_hex']);
+
+		if ($original === NULL)
+		{
+			log_message('error', 'payment refund: 가리킬 구매 전환이 없어 매체 환불을 적재하지 않는다. payment='.$payment['uid_hex']);
+
+			return NULL;
+		}
+
+		$ctx = $this->attribution((int) $payment['user_id'], isset($payment['visit_id']) ? $payment['visit_id'] : NULL);
+
+		$result = $this->conversion_model->createWithOutbox(array(
+			'user_id'     => (int) $payment['user_id'],
+			'visit_id'    => $ctx['visit_id'],
+			'type'        => 'refund',
+			'value_minor' => (int) $payment['amount_minor'],
+			'currency'    => (string) $payment['currency'],
+			'dedup_key'   => self::REFUND_PREFIX.$payment['uid_hex'],
+			'client_id'   => $ctx['client_id'],
+			'user_uid'    => $ctx['user_uid_hex'],
+			'occurred_at' => $now,
+			'refund_of'   => $original['uid_hex'],
+		), $this->channels->namesFor('refund'));
+
+		return $result['duplicated'] ? NULL : $result['uid_hex'];
 	}
 
 	/**

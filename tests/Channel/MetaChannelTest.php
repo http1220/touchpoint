@@ -173,4 +173,13 @@ final class MetaChannelTest extends TestCase
         self::assertTrue($r->isDead());
         self::assertSame(0, $http->calls);
     }
+
+    public function test_환불은_보내지_않는다_표준_이벤트가_없고_전환으로_세어진다(): void
+    {
+        $http = new FakeHttpClient(200);
+        $r = $this->channel($http)->send($this->withBrowser(['type' => 'refund', 'refund_of' => 'X']));
+
+        self::assertTrue($r->isDead());
+        self::assertSame(0, $http->calls);
+    }
 }

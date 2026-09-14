@@ -64,6 +64,16 @@ final class MetaChannel implements ChannelInterface
 
     public function send(array $conversion): DispatchResult
     {
+        if (($conversion['type'] ?? '') === 'refund') {
+            /*
+             * 전환 API 에 표준 환불 이벤트가 없다. CustomConversion 으로 보내면
+             * Meta 는 그걸 **또 하나의 전환**으로 센다 — 취소가 매출을 늘린다.
+             * 정상 경로에서는 Channels::namesFor('refund') 가 이미 걸러서 여기
+             * 오지 않는다. 오면 적재 쪽 버그라 dead 로 드러낸다.
+             */
+            return DispatchResult::dead(null, 0, 'Meta 전환 API 에는 표준 환불 이벤트가 없어 보내지 않습니다.');
+        }
+
         if ($this->pixelId === '' || $this->accessToken === '') {
             return DispatchResult::dead(null, 0, 'Meta 픽셀 ID 또는 액세스 토큰이 비어 있습니다.');
         }

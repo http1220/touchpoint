@@ -22,10 +22,11 @@ final class WebhookEvent
     /**
      * 웹훅으로 받는 상태.
      *
-     * 전이표(PaymentStateMachine)의 to 목록에서 **refunded 를 뺀 것**이다.
-     * 환불은 전이만으로 끝나지 않는다 — 코인 lot 회수(ADR-006)가 붙어야
-     * 성립하고, 그게 없는 채로 전이만 시키면 "환불됐는데 코인은 그대로"
-     * 라는 상태가 DB 에 남는다. 미구현을 422 로 말하는 편이 낫다 → 계획 0장
+     * 전이표(PaymentStateMachine)의 to 목록과 같다.
+     *
+     * refunded 는 처음에 뺐었다 — 코인 lot 회수(ADR-006)가 없는 채로 전이만
+     * 시키면 "환불됐는데 코인은 그대로" 가 남기 때문이다. 2026-09-15 회수와
+     * 매체 환불 전송을 붙이고 받기 시작했다 → src/Payment/RefundPolicy
      *
      * created 도 뺀다. created 는 /purchase 의 INSERT 로만 생기고,
      * 전이표에 목적지로 없어서 통과시켜 봐야 늘 무시(200)가 된다.
@@ -36,6 +37,7 @@ final class WebhookEvent
         PaymentStatus::AUTHORIZED,
         PaymentStatus::CAPTURED,
         PaymentStatus::FAILED,
+        PaymentStatus::REFUNDED,
     ];
 
     private function __construct(

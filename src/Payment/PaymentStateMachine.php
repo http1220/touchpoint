@@ -36,9 +36,9 @@ final class PaymentStateMachine
         PaymentStatus::CAPTURED => [PaymentStatus::CREATED, PaymentStatus::PENDING, PaymentStatus::AUTHORIZED],
         PaymentStatus::FAILED => [PaymentStatus::CREATED, PaymentStatus::PENDING, PaymentStatus::AUTHORIZED],
 
-        // 환불 전이는 표에 둔다. 다만 웹훅 처리는 이번 범위가 아니다 —
-        // 코인 lot 회수(ADR-006)가 붙어야 성립한다 → 계획 0장.
-        // 웹훅 입구(WebhookEvent)가 refunded 를 받지 않는 것으로 막는다.
+        // 환불은 captured 에서만. 그보다 앞선 상태에 도착한 환불은 "무시" 가
+        // 아니라 "재시도 요청" 이다 — 표가 아니라 RefundPolicy 가 가른다.
+        // 코인 회수·매체 환불 전송은 Payment_model::onRefunded (09-15)
         PaymentStatus::REFUNDED => [PaymentStatus::CAPTURED],
     ];
 

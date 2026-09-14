@@ -83,6 +83,31 @@ class Channels
 		return $out;
 	}
 
+	/**
+	 * 이 전환 종류를 받을 수 있는 매체만.
+	 *
+	 * **매체 능력이 다르다.** GA4 는 `refund` 이벤트로 이전 구매를 취소하지만
+	 * Meta 전환 API 에는 표준 환불 이벤트가 없다. 받을 수 없는 매체까지 적재하면
+	 * 그 행은 매번 dead 가 되고, 도달률 지표에서 실패로 세어진다 — 실패가
+	 * 아니라 "보낼 것이 없음" 인데.
+	 *
+	 * 목록을 여기 둔다. 조립 코드가 매체를 아는 유일한 자리라서다. 인터페이스에
+	 * `supports()` 를 올리면 어댑터를 만들어야(=자격 증명을 읽어야) 판정할 수
+	 * 있는데, 이 메서드는 적재 트랜잭션 안에서 불린다 → names() 주석
+	 *
+	 * @return list<string>
+	 */
+	public function namesFor($type)
+	{
+		$unsupported = array(
+			'meta' => array('refund'),
+		);
+
+		return array_values(array_filter($this->names(), static function ($name) use ($type, $unsupported) {
+			return ! in_array($type, $unsupported[$name] ?? array(), TRUE);
+		}));
+	}
+
 	public function get($name)
 	{
 		$all = $this->all();

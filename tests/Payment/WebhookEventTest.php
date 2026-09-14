@@ -77,10 +77,9 @@ final class WebhookEventTest extends TestCase
             'captured' => ['captured', true],
             'failed' => ['failed', true],
 
-            // 환불은 전이표에 있지만 웹훅으로는 받지 않는다. 코인 lot
-            // 회수가 없는 채로 전이만 시키면 "환불됐는데 코인은 그대로"
-            // 라는 상태가 남는다 → 계획 0장
-            'refunded — 이번 범위 밖' => ['refunded', false],
+            // 09-14 까지는 거절했다(코인 회수 미구현). 09-15 회수·매체
+            // 환불 전송을 붙이고 받는다 → src/Payment/RefundPolicy
+            'refunded' => ['refunded', true],
 
             // created 는 전이의 목적지가 아니다. 통과시키면 늘 무시(200)로
             // 떨어져 "PG 가 이상한 걸 보냈다" 가 무시 더미에 섞인다.

@@ -82,6 +82,41 @@ class Coin_model extends CI_Model
 	 * 2 이상이 나와야 한다. 그 숫자가 "매출은 한 번인데 코인이 여러 번" 을
 	 * 눈에 보이게 만드는 자리다 → 계획 8장 ①′
 	 */
+	/**
+	 * 환불된 결제의 코인을 회수한다. 남은 만큼만 — RefundPolicy ②.
+	 *
+	 * `FOR UPDATE` 로 잠근다. 같은 순간 회차 열람이 이 lot 에서 코인을 쓰면
+	 * 읽은 remaining 과 실제가 어긋난다. 호출자(applyEvent)의 트랜잭션 안이다.
+	 *
+	 * lot 을 지우지 않는다. coin_spends 가 lot_id 를 FK 로 가리키고, 무엇을
+	 * 얼마나 쓴 뒤 환불됐는지가 남아야 분쟁에 답할 수 있다.
+	 *
+	 * @return array{lots: int, revoked: int, spent: int}
+	 */
+	public function revokeByPayment($paymentId)
+	{
+		$lots = $this->db
+			->query('SELECT id, amount, remaining FROM '.self::TABLE.' WHERE payment_id = ? FOR UPDATE', array((int) $paymentId))
+			->result_array();
+
+		$out = array('lots' => count($lots), 'revoked' => 0, 'spent' => 0);
+
+		foreach ($lots as $lot)
+		{
+			$r = \App\Payment\RefundPolicy::revocation((int) $lot['amount'], (int) $lot['remaining']);
+
+			if ($r['revoke'] > 0)
+			{
+				$this->db->query('UPDATE '.self::TABLE.' SET remaining = 0 WHERE id = ?', array((int) $lot['id']));
+			}
+
+			$out['revoked'] += $r['revoke'];
+			$out['spent']   += $r['spent'];
+		}
+
+		return $out;
+	}
+
 	public function countByPayment($paymentId)
 	{
 		$row = $this->db

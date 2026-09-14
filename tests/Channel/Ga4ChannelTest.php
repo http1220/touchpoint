@@ -255,4 +255,28 @@ final class Ga4ChannelTest extends TestCase
     {
         self::assertSame('ga4', (new Ga4Channel(new FakeHttpClient(), 'G-T', 's'))->name());
     }
+
+    // ── 환불 ────────────────────────────────────────────────
+
+    public function test_환불은_refund_이벤트로_원래_구매의_transaction_id_를_싣는다(): void
+    {
+        $http = new FakeHttpClient(204);
+        (new Ga4Channel($http, 'G-T', 's'))->send($this->conversion([
+            'conversion_uid' => 'REFUND-UID',
+            'type' => 'refund',
+            'refund_of' => 'PURCHASE-UID',
+        ]));
+
+        self::assertSame('refund', $http->lastJson()['events'][0]['name']);
+        self::assertSame('PURCHASE-UID', $http->lastParams()['transaction_id'], '환불 자신의 uid 를 넣으면 없는 거래를 취소한다');
+        self::assertEquals(9900, $http->lastParams()['value']);
+    }
+
+    public function test_refund_of_가_없는_환불은_자기_uid_로_떨어진다(): void
+    {
+        $http = new FakeHttpClient(204);
+        (new Ga4Channel($http, 'G-T', 's'))->send($this->conversion(['conversion_uid' => 'R', 'type' => 'refund']));
+
+        self::assertSame('R', $http->lastParams()['transaction_id']);
+    }
 }

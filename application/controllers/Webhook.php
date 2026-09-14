@@ -98,6 +98,28 @@ class Webhook extends MY_Controller
 		// ── ④ 전이 ──
 		$r = $this->payment_model->applyEvent($payment, $event->status, $raw);
 
+		/*
+		 * 적용되지 않았는데 **재전송이 필요한** 경우. 200 을 주면 PG 가 멈춘다.
+		 *
+		 *   refund-before-capture  409  캡처가 아직 안 왔다. 캡처 뒤 재전송에서 처리된다
+		 *   db-error · payment-vanished  503  롤백했다. 다시 보내면 다시 기회가 온다
+		 *
+		 * 뒤의 둘은 09-15 까지 **200 ignored 로 나가고 있었다.** 모델 주석은
+		 * "롤백하면 PG 가 재전송한다" 고 적었지만, 컨트롤러가 error 를 보지 않아
+		 * PG 는 성공으로 받고 끝냈다 — 약속과 구현이 어긋난 또 한 자리.
+		 */
+		if ($r['error'] === 'refund-before-capture')
+		{
+			$this->problem(409, 'payment-not-captured', '아직 캡처되지 않은 결제의 환불입니다. 캡처 뒤 다시 보내 주세요.', array('status' => $r['status']));
+		}
+
+		if ($r['error'] !== NULL)
+		{
+			log_message('error', 'webhook 처리 실패 — 재전송 요청: '.$r['error'].' payment='.$event->paymentUid);
+			$this->output->set_header('Retry-After: 30');
+			$this->problem(503, 'temporarily-unavailable', '일시적으로 처리하지 못했습니다. 다시 보내 주세요.');
+		}
+
 		log_message('info', sprintf(
 			'webhook %s payment=%s %s→%s event_id=%s%s',
 			$r['applied'] ? 'applied' : 'ignored',
@@ -118,6 +140,15 @@ class Webhook extends MY_Controller
 			'status'  => $r['status'],
 			'trace_id' => $this->trace_id,
 		);
+
+		if ($r['applied'] && $r['status'] === PaymentStatus::REFUNDED)
+		{
+			// 매체 환불 전환(없으면 null — 가리킬 구매가 없었다)과 코인 회수 결과.
+			// coins_spent > 0 이면 약관 조건을 넘어선 환불이라 사람이 봐야 한다.
+			$body['refund_conversion_uid'] = $r['conversion_uid'];
+			$body['coins_revoked']         = $r['coins_revoked'];
+			$body['coins_spent']           = $r['coins_spent'];
+		}
 
 		if ($r['applied'] && $r['status'] === PaymentStatus::CAPTURED)
 		{

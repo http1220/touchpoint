@@ -103,7 +103,14 @@ final class Ga4Channel implements ChannelInterface
     private function payload(array $c): array
     {
         $params = [
-            'transaction_id' => (string) ($c['conversion_uid'] ?? ''),
+            /*
+             * 환불은 **원래 구매의 transaction_id** 를 싣는다. 환불 전환 자신의
+             * uid 를 넣으면 GA4 는 없는 거래를 취소하려 하고, 구매 매출은
+             * 그대로 남는다 → Payment_model::recordRefund()
+             */
+            'transaction_id' => (string) (($c['type'] ?? '') === 'refund' && isset($c['refund_of'])
+                ? $c['refund_of']
+                : ($c['conversion_uid'] ?? '')),
 
             // 실시간 보고서에 잡히려면 있어야 한다. 서버 전송에는 실제
             // 참여 시간이라는 개념이 없으므로 최소값을 넣는다.
@@ -166,6 +173,7 @@ final class Ga4Channel implements ChannelInterface
             'purchase' => 'purchase',
             'signup' => 'sign_up',
             'subscribe' => 'purchase',
+            'refund' => 'refund',
             default => 'custom_conversion',
         };
     }
