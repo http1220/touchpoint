@@ -364,6 +364,30 @@ class Payment_model extends CI_Model
 			return FALSE;
 		}
 
+		/*
+		 * 검사와 쓰기 사이를 **일부러 벌린다.** (`PAYMENT_WEBHOOK_PRECHECK_DELAY_MS`)
+		 *
+		 * 처음 대조군을 돌렸을 때 **버그가 재현되지 않았다** — 8건이 같은
+		 * 초에 도착했는데도 `applied 1 · ignored 7` 로 정상 경로와 똑같이
+		 * 나왔다. 요청 한 건이 20~40ms 라 두 번째 요청이 SELECT 할 때쯤
+		 * 첫 번째가 이미 커밋돼 있었고, 그래서 `captured` 를 읽고 스스로
+		 * 물러난 것이다.
+		 *
+		 * **그게 check-then-act 버그의 진짜 성질이다.** 늘 터지지 않는다.
+		 * 부하가 높거나 쿼리가 느려질 때만 창이 열리고, 그래서 운영에
+		 * 살아남는다. 재현하려면 그 창을 손으로 벌려야 한다.
+		 *
+		 * 이 지연은 **대조군 전용**이다. CAS 경로에는 없다 — 거기는 창이
+		 * 아무리 넓어도 `WHERE status IN (…)` 이 막기 때문이고, 그 차이를
+		 * 보이는 것이 이 스위치의 목적이다.
+		 */
+		$delayMs = (int) (getenv('PAYMENT_WEBHOOK_PRECHECK_DELAY_MS') ?: 0);
+
+		if ($delayMs > 0)
+		{
+			usleep(min($delayMs, 2000) * 1000);
+		}
+
 		$this->db->query(
 			'UPDATE '.self::TABLE.'
 			    SET status = ?,
