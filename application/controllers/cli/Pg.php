@@ -45,8 +45,20 @@ class Pg extends MY_Controller
 	 * 출력은 `eval`/`source` 할 수 있는 셸 변수다. 전송은 하지 않는다 —
 	 * 전송하는 쪽이 셸이어야 동시성을 셸이 만든다.
 	 */
-	public function sign($uidHex = NULL, $status = NULL, $path = '/tmp/pg-body.json')
+	const BODY_PATH = '/tmp/pg-body.json';
+
+	public function sign($uidHex = NULL, $status = NULL)
 	{
+		/*
+		 * 출력 경로를 인자로 받지 않는다.
+		 *
+		 * CI3 의 CLI 인자는 **URI 세그먼트**라 `/` 에서 쪼개진다.
+		 * `cli/pg sign <uid> captured /tmp/body.json` 을 주면 마지막 인자가
+		 * `tmp` 가 되고 파일이 엉뚱한 데 떨어진다 — 실제로 그렇게 당했고,
+		 * 서명은 맞는데 본문이 비어 401 여덟 개를 받았다. 경로를 고정한다.
+		 */
+		$path = self::BODY_PATH;
+
 		list($uidHex, $status) = $this->args($uidHex, $status);
 
 		$body = $this->payload($uidHex, $status);
