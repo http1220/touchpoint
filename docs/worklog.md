@@ -40,6 +40,22 @@
 
 브라우저 맥락을 보존하면 `visits` 의 "원본 저장 안 함" 과 충돌한다. `dispatch_outbox` 는 파기 대상이 아니다. 권고는 **전송 후 필드 삭제**지만 보존 정책 변경이라 실매체 `test_event_code` 확인 뒤로 미룬다 → [ADR-005](decisions/ADR-005-channel-adapter.md)
 
+### 저녁 — 실자격 증명으로 테스트 전송
+
+**막힌 것 ① 값이 서버에 없었다.** "`.env` 에 넣었다" 는 노트북 `.env` 였다. 서버 `.env` 는 셋 다 빈 값. 값은 출력하지 않고 서버로 옮겼다(백업 후 600).
+
+**막힌 것 ② 컨테이너 안의 `META_TEST_EVENT_CODE` 가 주석 문장이었다.** `[확인]` Compose 5.5.1 `docker compose config`:
+
+```
+EMPTY_SP=    # c1   →  '# c1'      ← 주석이 값이 된다
+VAL_SP=x    # c4    →  x           ← 값이 있으면 잘린다
+QUOTED=""   # c6    →  ""
+```
+
+`.env.example` 에 이 모양이 **7줄**(ENCRYPTION_KEY·MYSQL_ROOT_PASSWORD·REPL_PASSWORD·GA4 3개·META_TEST_EVENT_CODE) 있었다. 복사해서 값을 안 채우면 주석이 비밀번호·암호화 키로 들어간다. `check-env.sh` 는 **반대로 가정**(빈 값)하고 있어서 잡지 못했다 → 주석을 윗줄로 옮기고, 검사는 이 모양을 오류로 센다. 옛 예시에 돌리면 7건을 정확히 짚는다.
+
+**발견 — Meta 도 "접수 ≠ 반영" 이다.** 필수라던 `event_source_url`·`client_user_agent` 를 빼고 보내도 `HTTP 200 {"events_received":1}`. 어댑터의 사전 거절은 풀지 않고, Events Manager 테스트 이벤트 탭을 20분 창 뒤에 본다 → [ADR-005](decisions/ADR-005-channel-adapter.md)
+
 ### 오늘의 한 줄
 
 > **어댑터는 전송을 격리한다. 수집은 격리하지 못한다.**

@@ -20,7 +20,7 @@ fi
 awk '
 # Compose 의 dotenv 파서와 같은 규칙으로 읽는다.
 #   - 줄 앞 공백과 export 접두는 허용
-#   - 값 뒤 " #" 부터는 주석
+#   - 값 뒤 " #" 부터는 주석. 단 값이 비었으면 주석이 값이 된다(아래)
 #   - 같은 키가 여러 번 나오면 뒤엣것이 이긴다
 {
 	line = $0
@@ -42,9 +42,16 @@ awk '
 
 	# 주석 본문을 따로 보관한다. 값이 비었을 때 "혹시 주석 뒤에 썼나" 를
 	# 짚어 주려면 주석 안을 들여다봐야 한다.
+	#
+	# 값이 비고 주석만 있으면(KEY=   # 설명) Compose 는 **주석을 값으로** 넘긴다.
+	# 앞 공백을 먼저 벗기고 나면 # 앞에 공백이 없어져서다. 2026-09-14 Compose
+	# 5.5.1 의 `docker compose config` 로 확인했고, 그 전까지 이 스크립트는
+	# 반대로(빈 값으로) 가정했다. 컨테이너에는 META_TEST_EVENT_CODE 가
+	# "# Events Manager > …" 로 들어가 있었다.
 	cmt = ""
-	if (match(v, /[ \t]+#/)) { cmt = substr(v, RSTART); v = substr(v, 1, RSTART - 1) }
-	else if (v ~ /^[ \t]*#/) { cmt = v; v = "" }
+	if (v ~ /^[ \t]*#/) { cmt = v; v = ""; cmtval[key] = NR }
+	else if (match(v, /[ \t]+#/)) { cmt = substr(v, RSTART); v = substr(v, 1, RSTART - 1); delete cmtval[key] }
+	else delete cmtval[key]
 	gsub(/^[ \t]+|[ \t]+$/, "", v)
 	if (v ~ /^".*"$/ || v ~ /^'"'"'.*'"'"'$/) v = substr(v, 2, length(v) - 2)
 
@@ -90,6 +97,11 @@ END {
 			printf "  %-22s %8d  %s\n", key, ln[key], v
 	}
 	print ""
+
+	for (key in cmtval) {
+		printf "  %d번 줄: %s 는 비어 있지 않습니다 — 주석(#…)이 그대로 값으로 들어갑니다. 주석을 윗줄로 옮기세요\n", cmtval[key], key
+		bad++
+	}
 
 	for (key in badkey) {
 		printf "  형식 오류 %d번 줄: %s 의 = 앞에 공백이 있습니다. KEY=값 으로 붙여 쓰세요\n", badkey[key], key
