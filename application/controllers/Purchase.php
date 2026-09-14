@@ -40,7 +40,32 @@ class Purchase extends MY_Controller
 		parent::__construct();
 
 		$this->requireHost('app');
+		$this->load->library('visitor');   // 생성자에서 visit_model 을 함께 올린다
 		$this->load->model('payment_model');
+	}
+
+	/**
+	 * 결제를 일으킨 방문.
+	 *
+	 * **쿠키가 있을 때만 찾는다.** `Visitor::current()` 는 방문이 없으면
+	 * 새로 만드는데, 여기서 만들면 `landing_path = /purchase` 인 유입 없는
+	 * 방문이 생겨 어트리뷰션 보존율의 분모를 오염시킨다. Conversion.php 가
+	 * 같은 이유로 같은 선택을 했다.
+	 *
+	 * 없으면 NULL 이고, 그때는 가입 접점으로 떨어진다
+	 * → Payment_model::attribution()
+	 */
+	private function currentVisitId()
+	{
+		$name   = getenv('COOKIE_VID_NAME') ?: 'ab_vid';
+		$cookie = $this->input->cookie($name, TRUE);
+
+		if ( ! is_string($cookie) OR preg_match('/\A[0-9a-f]{32}\z/', $cookie) !== 1)
+		{
+			return NULL;
+		}
+
+		return $this->visit_model->findByUid($cookie);
 	}
 
 	public function index()
@@ -119,6 +144,9 @@ class Purchase extends MY_Controller
 			'currency'        => $product->currency,
 			'idempotency_key' => $idempotencyKey,
 			'product'         => $product->code,
+
+			// 결제를 일으킨 방문. 쿠키가 없으면 NULL 이고, 그때만 가입 접점으로 떨어진다.
+			'visit_id'        => $this->currentVisitId(),
 		));
 
 		if ($result['duplicated'])

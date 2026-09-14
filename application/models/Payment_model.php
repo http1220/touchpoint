@@ -51,7 +51,7 @@ class Payment_model extends CI_Model
 	 * HEX() 는 대문자, bin2hex() 는 소문자다. 같은 결제가 경로마다 다른
 	 * 문자열로 나가면 호출자가 둘을 다른 것으로 센다 — 여기서 맞춘다.
 	 */
-	const SELECT_COLUMNS = 'SELECT id, LOWER(HEX(payment_uid)) AS uid_hex, user_id, status,
+	const SELECT_COLUMNS = 'SELECT id, LOWER(HEX(payment_uid)) AS uid_hex, user_id, visit_id, status,
 	                               amount_minor, currency, idempotency_key, captured_at
 	                          FROM '.self::TABLE;
 
@@ -74,12 +74,23 @@ class Payment_model extends CI_Model
 
 		$this->db->query(
 			'INSERT IGNORE INTO '.self::TABLE.' (
-				payment_uid, user_id, pg, channel, status,
+				payment_uid, user_id, visit_id, pg, channel, status,
 				amount_minor, currency, idempotency_key, created_at
-			) VALUES (UNHEX(?), ?, ?, ?, ?, ?, ?, ?, ?)',
+			) VALUES (UNHEX(?), ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 			array(
 				$uidHex,
 				(int) $p['user_id'],
+
+				/*
+				 * 결제 시점의 방문. 없으면 NULL.
+				 *
+				 * `users.signup_visit_id`(가입 접점)와 **다른 값**이다.
+				 * 가입은 A 광고로 하고 석 달 뒤 B 광고를 보고 돌아와
+				 * 결제할 수 있다. 둘 다 남겨 둬야 **어느 쪽으로 귀속할지
+				 * 고를 수 있다** — 하나만 있으면 고르는 게 아니라
+				 * 그것밖에 없는 것이다 → docs/failure-scenarios.md C-2
+				 */
+				isset($p['visit_id']) && $p['visit_id'] !== NULL ? (int) $p['visit_id'] : NULL,
 
 				// PG 는 스텁이다. 실제 연동이 아니라는 사실을 행마다 남긴다
 				// — 나중에 진짜 PG 가 붙어도 옛 행을 구분할 수 있게 → ADR-008
@@ -475,7 +486,7 @@ class Payment_model extends CI_Model
 		$this->load->model('conversion_model');
 		$this->load->library('channels');
 
-		$ctx = $this->attribution((int) $payment['user_id']);
+		$ctx = $this->attribution((int) $payment['user_id'], isset($payment['visit_id']) ? $payment['visit_id'] : NULL);
 
 		$result = $this->conversion_model->createWithOutbox(array(
 			'user_id'     => (int) $payment['user_id'],
@@ -519,18 +530,36 @@ class Payment_model extends CI_Model
 	 *
 	 * @return array [visit_id, user_uid_hex, client_id]
 	 */
-	private function attribution($userId)
+	private function attribution($userId, $paymentVisitId = NULL)
 	{
+		/*
+		 * **결제 시점의 방문을 우선한다. 없으면 가입 접점으로 떨어진다.**
+		 *
+		 * 둘은 다른 값이다 — 가입은 A 광고로 하고 석 달 뒤 B 광고를 보고
+		 * 돌아와 결제할 수 있다. 정산에서 묻는 것은 대개 **결제를 일으킨
+		 * 쪽**이므로 그쪽을 먼저 본다.
+		 *
+		 * 전에는 이 선택지가 아예 없었다. `payments` 에 방문을 적을 칸이
+		 * 없어서 **무조건 가입 접점**이었고, 그건 first-touch 를 고른 게
+		 * 아니라 **고를 수 없었던 것**이다 → 20260914000100 마이그레이션
+		 *
+		 * `COALESCE` 로 한 쿼리에 담는다. 두 번 읽으면 그 사이에 파기
+		 * 배치가 도는 창이 생긴다 — visits 는 3개월 뒤 사라진다.
+		 */
 		$row = $this->db
 			->query(
 				'SELECT LOWER(HEX(u.user_uid)) AS user_uid_hex,
-				        u.signup_visit_id,
-				        LOWER(HEX(v.visit_uid)) AS visit_uid_hex
+				        COALESCE(?, u.signup_visit_id) AS visit_id,
+				        LOWER(HEX(v.visit_uid))        AS visit_uid_hex
 				   FROM users u
-				   LEFT JOIN visits v ON v.id = u.signup_visit_id
+				   LEFT JOIN visits v ON v.id = COALESCE(?, u.signup_visit_id)
 				  WHERE u.id = ?
 				  LIMIT 1',
-				array((int) $userId)
+				array(
+					$paymentVisitId === NULL ? NULL : (int) $paymentVisitId,
+					$paymentVisitId === NULL ? NULL : (int) $paymentVisitId,
+					(int) $userId,
+				)
 			)
 			->row();
 
@@ -558,11 +587,11 @@ class Payment_model extends CI_Model
 
 		if ($clientId === '')
 		{
-			log_message('info', 'payment: 가입 방문이 없어 client_id 가 빈다. user_id='.(int) $userId);
+			log_message('info', 'payment: 귀속할 방문이 없어 client_id 가 빈다. user_id='.(int) $userId);
 		}
 
 		return array(
-			'visit_id'     => $row->signup_visit_id === NULL ? NULL : (int) $row->signup_visit_id,
+			'visit_id'     => $row->visit_id === NULL ? NULL : (int) $row->visit_id,
 			'user_uid_hex' => (string) $row->user_uid_hex,
 			'client_id'    => $clientId,
 		);
@@ -614,6 +643,7 @@ class Payment_model extends CI_Model
 			'id'              => (int) $row->id,
 			'uid_hex'         => (string) $row->uid_hex,
 			'user_id'         => (int) $row->user_id,
+			'visit_id'        => $row->visit_id === NULL ? NULL : (int) $row->visit_id,
 			'status'          => (string) $row->status,
 			'amount_minor'    => (int) $row->amount_minor,
 			'currency'        => (string) $row->currency,
