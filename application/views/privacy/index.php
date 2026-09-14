@@ -83,7 +83,7 @@ footer{margin-top:3rem;color:#5b6270;font-size:.8rem}
           국가·언어, <strong>브라우저 정보(UA)와 IP 주소의 해시값</strong> — 원문은 저장하지 않습니다</td>
       <td>3개월</td></tr>
   <?php /* create_collect_events */ ?>
-  <tr><td>페이지 이벤트</td><td>조회·노출·클릭 이벤트, 작품 번호, 발생 시각, 요청을 보낸 사이트 주소</td><td>3개월</td></tr>
+  <tr><td>페이지 이벤트</td><td>조회·노출·클릭 이벤트, 작품 번호, 배너 자리와 노출일, 발생 시각, 요청을 보낸 사이트 주소</td><td>3개월</td></tr>
   <?php /* create_payment_client_context · Conversion_model payload · ClientContext */ ?>
   <tr><td>광고 전송용 브라우저 정보</td>
       <td>결제·전환이 일어날 때의 <strong>브라우저 정보(UA) 원문, IP 주소 원문</strong>,
