@@ -4,6 +4,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 use App\Channel\ChannelInterface;
 use App\Channel\CurlHttpClient;
 use App\Channel\Ga4Channel;
+use App\Channel\MetaChannel;
 use App\Channel\NoopChannel;
 
 /**
@@ -100,6 +101,7 @@ class Channels
 	{
 		return match ($name) {
 			'ga4'  => $this->ga4(),
+			'meta' => $this->meta(),
 			'noop' => $this->noop(),
 			default => NULL,
 		};
@@ -153,6 +155,32 @@ class Channels
 			(int) (getenv('DISPATCH_TIMEOUT_MS') ?: 3000),
 			NULL,
 			trim((string) (getenv('GA4_TRAFFIC_TYPE') ?: ''))
+		);
+	}
+
+	/**
+	 * 버전을 `.env` 로 뺀다. Graph API 는 버전마다 폐기일이 있어서
+	 * 코드에 박으면 폐기일에 배포가 필요해진다.
+	 */
+	private function meta()
+	{
+		$pixel = (string) (getenv('META_PIXEL_ID') ?: '');
+		$token = (string) (getenv('META_ACCESS_TOKEN') ?: '');
+
+		if ($pixel === '' OR $token === '')
+		{
+			log_message('error', 'channels: Meta 자격 증명이 비어 있어 어댑터를 만들지 않습니다.');
+
+			return NULL;
+		}
+
+		return new MetaChannel(
+			new CurlHttpClient(),
+			$pixel,
+			$token,
+			trim((string) (getenv('META_TEST_EVENT_CODE') ?: '')),
+			trim((string) (getenv('META_GRAPH_VERSION') ?: 'v26.0')),
+			(int) (getenv('DISPATCH_TIMEOUT_MS') ?: 3000)
 		);
 	}
 }
