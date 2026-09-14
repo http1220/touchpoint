@@ -133,9 +133,62 @@ class Payment_model extends CI_Model
 			'currency'        => strtoupper((string) $p['currency']),
 		), $now);
 
+		/*
+		 * 브라우저 맥락. 결제 행과 같은 트랜잭션이다 — 결제는 있는데 맥락이
+		 * 없는 상태가 "브라우저가 없었다" 와 구분되지 않게 되는 것을 막는다.
+		 * 전부 비었으면(서버 간 호출) 행을 만들지 않는다.
+		 */
+		$client = isset($p['client_context']) && is_array($p['client_context'])
+			? array_filter($p['client_context'], static function ($v) { return $v !== NULL && $v !== ''; })
+			: array();
+
+		if ($client !== array())
+		{
+			$this->db->query(
+				'INSERT INTO payment_client_context (
+					payment_id, client_user_agent, client_ip_address, event_source_url, fbp, fbc, captured_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?)',
+				array(
+					$id,
+					$client['client_user_agent'] ?? NULL,
+					$client['client_ip_address'] ?? NULL,
+					$client['event_source_url'] ?? NULL,
+					$client['fbp'] ?? NULL,
+					$client['fbc'] ?? NULL,
+					$now,
+				)
+			);
+		}
+
 		$this->db->trans_commit();
 
 		return array('id' => $id, 'uid_hex' => $uidHex, 'duplicated' => FALSE);
+	}
+
+	/**
+	 * `/purchase` 가 남긴 브라우저 맥락. 없거나 파기됐으면 빈 배열.
+	 *
+	 * 키 이름을 Meta 규격 그대로 둔다 — payload 에 그대로 합쳐지고,
+	 * 어댑터가 같은 이름으로 읽는다. 없는 값은 키째 뺀다.
+	 *
+	 * @return array<string, string>
+	 */
+	private function clientContext($paymentId)
+	{
+		$row = $this->db
+			->query(
+				'SELECT client_user_agent, client_ip_address, event_source_url, fbp, fbc
+				   FROM payment_client_context WHERE payment_id = ? LIMIT 1',
+				array((int) $paymentId)
+			)
+			->row_array();
+
+		if ( ! $row)
+		{
+			return array();
+		}
+
+		return array_filter($row, static function ($v) { return $v !== NULL && $v !== ''; });
 	}
 
 	/**
@@ -472,12 +525,13 @@ class Payment_model extends CI_Model
 	 * 주석이 "/signup·/purchase 가 붙을 때 함께 채워야 할 자리" 라고
 	 * 표시해 둔 자리가 여기다.
 	 *
-	 * `visit_id` 는 users.signup_visit_id 를 경유한다. 즉 **가입 접점에
-	 * 귀속되지 last-touch 가 아니다** — payments 에 visit_id 가 없어서다
-	 * (계획 11장 ④). 결제 직전 클릭한 광고가 아니라 가입시킨 광고가
-	 * 매출을 가져간다. 이건 선택이 아니라 스키마의 한계이고,
-	 * C-2 의 "흡수된 방문자2 의 결제는 어디로 귀속되는가" 는 이 구조로는
-	 * 끝까지 못 간다.
+	 * `visit_id` 는 **결제 시점의 방문**을 먼저 보고, 없으면 가입 접점으로
+	 * 떨어진다 → attribution()
+	 *
+	 * 브라우저 맥락(UA·IP·URL·_fbp·_fbc)은 `/purchase` 가 남긴 것을 읽어
+	 * payload 에 싣는다. 웹훅 요청에는 사용자 브라우저가 없다. 이미 3개월
+	 * 파기로 사라졌으면 싣지 않고, 그때 Meta 어댑터는 보내지 않고 이유를
+	 * 남긴다 → ADR-005 「결정」
 	 *
 	 * @return string|null conversion uid hex. 중복(uq_dedup)이면 NULL
 	 */
@@ -488,7 +542,7 @@ class Payment_model extends CI_Model
 
 		$ctx = $this->attribution((int) $payment['user_id'], isset($payment['visit_id']) ? $payment['visit_id'] : NULL);
 
-		$result = $this->conversion_model->createWithOutbox(array(
+		$result = $this->conversion_model->createWithOutbox($this->clientContext((int) $payment['id']) + array(
 			'user_id'     => (int) $payment['user_id'],
 			'visit_id'    => $ctx['visit_id'],
 			'type'        => 'purchase',

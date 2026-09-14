@@ -15,6 +15,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * 보존기간이 왜 다른가 → 근거가 다른 법이다.
  *
  *   visits · touchpoints · dispatch_log   3개월   통신비밀보호법(방문기록)
+ *   payment_client_context · dispatch_outbox   3개월   광고 전송용 원문 — 방문기록과 같이
  *   users · conversions · payments …      5년     전자상거래법 · 전자금융거래법
  *
  * 20배 차이 나는 것을 같은 테이블에 두면 파기가 불가능해진다.
@@ -54,7 +55,7 @@ class Purge extends MY_Controller
 		foreach (self::targets() as $table => $col)
 		{
 			$n = $this->countOlderThan($table, $col, $cutoff);
-			$this->line(sprintf('  %-18s %7d 건', $table, $n));
+			$this->line(sprintf('  %-24s %7d 건', $table, $n));
 		}
 
 		$this->line('실제로 지우려면: cli/purge run '.(int) $days);
@@ -94,7 +95,7 @@ class Purge extends MY_Controller
 			while ($n === $chunk);
 
 			$this->line(sprintf(
-				'  %-18s %7d 건 삭제 · %dms',
+				'  %-24s %7d 건 삭제 · %dms',
 				$table, $total, (int) round((microtime(TRUE) - $startedAt) * 1000)
 			));
 		}
@@ -117,6 +118,20 @@ class Purge extends MY_Controller
 			'touchpoints'    => 'occurred_at',
 			'collect_events' => 'received_at',
 			'dispatch_log'   => 'created_at',
+
+			// 결제 시 브라우저 맥락(원문 UA·IP). 광고 전송용이라 방문기록과 같은 3개월
+			'payment_client_context' => 'captured_at',
+
+			/*
+			 * 아웃박스 payload 에 위 원문이 복사돼 들어간다 → 같이 지운다.
+			 *
+			 * 마이그레이션 주석이 "outbox 는 전송 완료 90일 뒤" 라고 약속해
+			 * 놓고 여기 없던 자리이기도 하다. created_at 이 없어 마지막으로
+			 * 움직인 시각(sent_at, 없으면 next_retry_at)을 쓴다. 인덱스가
+			 * 없어 전체 스캔이다 — 행 수가 전환 × 매체라 지금은 감수한다.
+			 */
+			'dispatch_outbox' => 'COALESCE(sent_at, next_retry_at)',
+
 			'visits'         => 'first_seen_at',
 		);
 	}

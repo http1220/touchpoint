@@ -104,6 +104,21 @@ class Conversion_model extends CI_Model
 			'occurred_at_unix' => strtotime($c['occurred_at'] ?? $now),
 		);
 
+		/*
+		 * 브라우저 맥락. **있을 때만** 싣는다 — 결제 경로가 payment_client_context
+		 * 에서 읽어 넘긴다. 빈 문자열로 채우면 매체가 "값이 있는데 틀렸다" 로 본다.
+		 *
+		 * 원문 UA·IP 가 아웃박스 payload 에 들어간다. 그래서 dispatch_outbox 도
+		 * 3개월 파기 대상이다 → cli/Purge::targets()
+		 */
+		foreach (array('client_user_agent', 'client_ip_address', 'event_source_url', 'fbp', 'fbc') as $key)
+		{
+			if (isset($c[$key]) && $c[$key] !== '')
+			{
+				$payload[$key] = (string) $c[$key];
+			}
+		}
+
 		$enqueued = 0;
 
 		foreach ($names as $name)
