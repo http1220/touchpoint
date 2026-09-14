@@ -45,6 +45,7 @@ class Metrics extends MY_Controller
 	{
 		$this->requireHost('app');
 		$this->load->model('metrics_model');
+		$this->load->model('collect_model');
 
 		/*
 		 * 배정받은 복제본에서 읽는다.
@@ -64,6 +65,7 @@ class Metrics extends MY_Controller
 			'attempts'    => $this->metrics_model->attemptsByChannel($db),
 			'conversions' => $this->metrics_model->conversionsByType($db),
 			'funnel'      => $this->metrics_model->visitFunnel($db),
+			'ctr'         => $this->collect_model->ctrBySlot($db, 7),
 
 			'outbox_statuses' => Metrics_model::OUTBOX_STATUSES,
 			'small_sample'    => self::SMALL_SAMPLE,

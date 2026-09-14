@@ -59,6 +59,16 @@ class Landing extends MY_Controller
 		$this->load->model('collect_model');
 		$events = $this->collect_model->recent($this->read(), $visit['id'], 10);
 
+		/*
+		 * 다른 작품 배너 — 노출·클릭 수집(/impression · /click)을 눈으로 보는 자리.
+		 * 클릭 링크의 sd 는 **여기서, 그리는 날로** 박는다 → src/Collect/ClickRequest
+		 */
+		$this->load->model('work_model');
+		$related = array_values(array_filter(
+			$this->work_model->topByEpisodes($this->read(), 'ko', 5),
+			static function ($w) use ($id) { return (string) $w['id'] !== (string) $id; }
+		));
+
 		$this->output->set_header('Cache-Control: no-store');
 		$this->load->view('landing/work', array(
 			'work'        => (string) $id,
@@ -67,6 +77,9 @@ class Landing extends MY_Controller
 			'result'      => $result,
 			'touchpoints' => $touchpoints,
 			'events'      => $events,
+			'related'     => array_slice($related, 0, 4),
+			'stat_date'   => gmdate('Ymd'),
+			'shop'        => (string) (getenv('SHOP_DOMAIN') ?: ''),
 			'api_host'    => getenv('SHOP_DOMAIN') ? 'api.'.getenv('SHOP_DOMAIN') : '',
 			'read_target' => $this->readTarget(),
 			'trace_id'    => $this->trace_id,

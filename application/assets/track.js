@@ -118,6 +118,64 @@
 		}
 	}
 
+	/* 노출.
+	 *
+	 * 배너마다 요청을 보내지 않는다. 화면에 **절반 이상 보인** 배너를 모아 두었다가
+	 * 한 요청으로 /impression 에 보낸다. 대개 이탈할 때 beacon 으로 나간다.
+	 *
+	 * "렌더됨" 이 아니라 "보임" 을 센다. 페이지 맨 아래 배너는 그려져도 대부분
+	 * 스크롤되지 않는다 — 그걸 노출로 세면 CTR 이 실제보다 낮게 나온다.
+	 * 한 페이지에서 같은 배너는 한 번만 센다(서버도 배치 안 중복을 버린다).
+	 */
+	var impressionEndpoint = origin + '/impression';
+	var impressions = [];
+	var impressionSeen = {};
+
+	function observeImpressions() {
+		var nodes = document.querySelectorAll('[data-imp-work][data-imp-slot]');
+
+		if (!nodes.length || !('IntersectionObserver' in window)) return;
+
+		var io = new IntersectionObserver(function (entries) {
+			for (var i = 0; i < entries.length; i++) {
+				if (!entries[i].isIntersecting) continue;
+
+				var el = entries[i].target;
+				var key = el.dataset.impWork + '|' + el.dataset.impSlot;
+
+				io.unobserve(el);
+				if (impressionSeen[key]) continue;
+
+				impressionSeen[key] = true;
+				impressions.push({ work_id: el.dataset.impWork, slot: el.dataset.impSlot });
+			}
+		}, { threshold: 0.5 });
+
+		for (var n = 0; n < nodes.length; n++) io.observe(nodes[n]);
+	}
+
+	function flushImpressions(leaving) {
+		if (!impressions.length) return false;
+
+		var body = { items: impressions.splice(0, impressions.length) };
+		if (vid) body.visit_uid = vid;
+
+		if (leaving && navigator.sendBeacon) {
+			return navigator.sendBeacon(impressionEndpoint, new Blob([JSON.stringify(body)], { type: 'text/plain;charset=UTF-8' }));
+		}
+
+		fetch(impressionEndpoint, {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		}).catch(function (err) {
+			if (window.console) console.warn('[touchpoint] impression 오류', err);
+		});
+
+		return true;
+	}
+
 	var tp = {
 		/** 즉시 전송. 기본은 fetch 이고, 두 번째 인자로 경로를 고를 수 있다. */
 		track: function (event, extra, transport) {
@@ -135,6 +193,9 @@
 
 		flush: flush,
 
+		/** 모은 노출을 지금 보낸다. 인자가 true 면 beacon. */
+		flushImpressions: flushImpressions,
+
 		/** 진단용. 콘솔에서 설정을 확인할 수 있게. */
 		config: { endpoint: endpoint, workId: workId, vid: vid }
 	};
@@ -147,11 +208,14 @@
 	 * 모바일 사파리는 탭을 백그라운드로 보낼 때 unload 를 부르지 않는다 —
 	 * unload 만 듣고 있으면 모바일 이탈을 통째로 놓친다.
 	 */
-	window.addEventListener('pagehide', function () { flush(true); });
+	window.addEventListener('pagehide', function () { flush(true); flushImpressions(true); });
 	document.addEventListener('visibilitychange', function () {
-		if (document.visibilityState === 'hidden') flush(true);
+		if (document.visibilityState === 'hidden') { flush(true); flushImpressions(true); }
 	});
 
 	// 페이지 조회는 바로 보낸다. 이게 preflight 를 띄우는 요청이다.
 	tp.track('page_view');
+
+	// 스크립트가 본문 끝에 있어 배너 요소는 이미 그려져 있다.
+	observeImpressions();
 })();

@@ -527,6 +527,36 @@ endif;
     (<code>docs/benchmarks.md</code> 5장, 표본 20/20).
   </div>
 
+  <h2>배너 노출 · 클릭 — 자리별 CTR (최근 7일, 노출일 기준)</h2>
+  <p class="sub">
+    <code>POST /impression</code> 이 화면에 절반 이상 보인 배너를, <code>GET /click</code> 이 누른 배너를 센다.
+    클릭은 <strong>누른 날이 아니라 노출된 날</strong>(링크의 <code>sd</code>)로 잡는다.
+  </p>
+
+  <?php if (empty($ctr)): ?>
+    <p class="sub none">아직 없습니다. 작품 랜딩 아래 "다른 작품" 을 스크롤하고 눌러 보세요.</p>
+  <?php else: ?>
+  <div class="wrap">
+  <table>
+    <thead><tr><th>노출일</th><th>자리</th><th class="n">노출</th><th class="n">클릭</th><th class="n">CTR</th></tr></thead>
+    <tbody>
+    <?php foreach ($ctr as $r): ?>
+      <tr>
+        <td><code><?= html_escape($r['stat_date']) ?></code></td>
+        <td><code><?= html_escape($r['slot']) ?></code></td>
+        <td class="n"><?= html_escape(m_int($r['impressions'])) ?></td>
+        <td class="n"><?= html_escape(m_int($r['clicks'])) ?></td>
+        <td class="n">
+          <?= $r['ctr_pct'] === NULL ? '<span class="none">노출 없음</span>' : html_escape($r['ctr_pct']).'%' ?>
+          <?php if (m_thin($r['impressions'], $small_sample)): ?><span class="tag thin">표본 <?= html_escape(m_int($r['impressions'])) ?></span><?php endif; ?>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  </div>
+  <?php endif; ?>
+
   <div class="note">
     <strong>이 화면을 읽는 순서</strong><br>
     ① 채널 줄에서 <span class="tag fake">가짜 채널</span> 을 먼저 지운다 — 남은 것만 매체 이야기다.<br>

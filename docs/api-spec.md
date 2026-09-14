@@ -14,6 +14,8 @@
 | 2 | GET | `/l/{work}` | `lp.sshwan.com` | 랜딩 |
 | 3 | POST | `/collect` | **`api.sshwan.com`** | 크로스사이트 수집 |
 | 4 | POST | `/conversion` | **`api.sshwan.com`** | 전환 등록 |
+| 3-1 | POST | `/impression` | **`api.sshwan.com`** | 배너 노출 배치 (09-15) |
+| 3-2 | GET | `/click` | **`api.sshwan.com`** | 배너 클릭 기록 후 302 (09-15) |
 | 5 | POST | `/signup` | `app.sshwan.com` | 가입 |
 | 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(스텁) |
 | 7 | GET | `/metrics` | `app.sshwan.com` | 지표 화면 |
@@ -155,6 +157,40 @@ Set-Cookie: ab_tid=...; Domain=.sshwan.com; SameSite=Lax; Secure; HttpOnly
 
 ---
 
+## 3-1. `POST api./impression` — 배너 노출 배치
+
+```json
+{ "visit_uid": "01J8XK...(선택)", "items": [ { "work_id": 3, "slot": "lp_related" }, … ] }
+```
+
+| 규칙 | 이유 |
+|---|---|
+| **화면에 절반 이상 보인** 배너만 (track.js · IntersectionObserver) | 그려진 것을 세면 스크롤되지 않은 배너까지 노출이 되어 CTR 이 낮게 나온다 |
+| 한 요청에 모아 보낸다. 이탈 시 `sendBeacon`(text/plain) | 배너마다 요청하면 페이지 하나에 수십 요청 |
+| 틀린 항목만 버리고 나머지를 받는다 · 최대 50 · 배치 안 중복 1회 | beacon 은 응답을 읽을 쪽이 없다. 422 로 전체를 거절하면 조용히 전부 잃는다 |
+| `items` 자체가 없거나 배열이 아닐 때만 422 | |
+| CORS 는 `/collect` 와 같은 판정 | 한쪽만 달라지면 track.js 의 한 경로만 조용히 막힌다 |
+
+응답 `200 {"accepted": N, "dropped": M}` → `src/Collect/ImpressionBatch.php`
+
+## 3-2. `GET api./click?w=&s=&sd=&u=` — 배너 클릭
+
+기록하고 `u` 로 **302**. GET 인데 상태를 바꾼다(RFC 9110 safe method 위반) — 링크여야 해서다. 그 대가를 막는 방법:
+
+| 문제 | 막는 방법 |
+|---|---|
+| 프리페치·크롤러·미리보기가 누른다 | 봇 UA · 빈 UA · `HEAD` 는 기록하지 않는다 |
+| 새로고침·뒤로 가기로 두 번 | `(방문, 작품, 자리, sd)` 해시를 `UNIQUE` — `INSERT IGNORE` |
+| 중간 캐시가 302 를 재사용 | `Cache-Control: no-store` |
+| 목적지를 바꿔 피싱(오픈 리다이렉트) | `u` 는 **우리 도메인 https** 만. 아니면 400 — 이동을 막는 유일한 경우 |
+| 방문 쿠키 없는 클릭 | 방문을 만들지 않고 기록 없이 이동. 유입 없는 방문이 분모를 오염시킨다 |
+
+**`sd` 는 노출일이다.** 링크를 그린 서버가 박는다. 23:59 에 본 배너를 00:01 에 누르면 클릭 시각 기준으로는 노출·클릭이 다른 날로 갈라져 두 날 CTR 이 모두 틀린다. 조작 가능한 값이라 오늘 기준 −7일~+1일 밖이면 오늘로 바꾼다.
+
+**기록이 실패해도 이동은 실패하지 않는다** — 봇·중복·방문 없음 모두 302 → `src/Collect/ClickRequest.php`
+
+---
+
 ## 4. `POST api./conversion` — 전환 등록
 
 ```
@@ -244,6 +280,9 @@ created → pending → authorized → captured
 | 전이마다 `payment_events` 에 append | 감사 추적 |
 | **전환은 `captured`에서만 발화** | `created`에 보내면 실패 건도 전환으로 집계된다 |
 | `captured` 시 `coin_lots` 적립 | `kind='paid'`, `expires_at = +5년` |
+| `refunded` 시 남은 코인 회수 · `refund` 전환 적재 (09-15) | GA4 는 원래 구매의 `transaction_id` 로 `refund`. Meta 는 표준 환불 이벤트가 없어 적재하지 않는다. **쓴 코인은 음수로 깎지 않고** 응답 `coins_spent` 와 error 로그로 남긴다 |
+| **캡처 전에 도착한 `refunded` 는 409** | 무시(200)하면 PG 가 재전송하지 않고, 뒤이어 온 `captured` 가 결제를 살려 둔다. 캡처 뒤 재전송에서 처리된다 |
+| 롤백(DB 오류)은 **503 + `Retry-After`** | 09-15 까지 200 `ignored` 로 나가 PG 가 재전송하지 않았다 |
 
 > PG는 스텁이다. **성공/실패/지연/중복 웹훅을 시나리오로 주입**할 수 있게 만들어 상태 머신과 멱등성만 진짜로 검증한다 → [ADR-008](decisions/ADR-008-stub-pg.md)
 

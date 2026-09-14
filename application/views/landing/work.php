@@ -103,11 +103,28 @@ $fields = array(
     </table>
   <?php endif; ?>
 
+  <?php if ( ! empty($related) && $api_host !== ''): ?>
+  <h2 style="font-size:.95rem;margin:1.8rem 0 .6rem">다른 작품</h2>
+  <?php /* data-imp 가 붙은 배너가 화면에 절반 이상 보이면 track.js 가 노출로 모은다.
+           링크는 api./click 을 거쳐 랜딩으로 간다. sd 는 이 화면을 그린 날 → ClickRequest */ ?>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(9rem,1fr));gap:.6rem">
+    <?php foreach ($related as $w): ?>
+      <?php $dest = 'https://lp.'.$shop.'/l/'.(int) $w['id']; ?>
+      <a data-imp-work="<?= (int) $w['id'] ?>" data-imp-slot="lp_related"
+         href="https://<?= html_escape($api_host) ?>/click?<?= html_escape(http_build_query(array('w' => (int) $w['id'], 's' => 'lp_related', 'sd' => $stat_date, 'u' => $dest))) ?>"
+         style="display:block;padding:.7rem;border:1px solid #232733;border-radius:5px;color:#e6e8ec;text-decoration:none;background:#171b23">
+        <span style="display:block;font-weight:600;line-height:1.35"><?= html_escape($w['title']) ?></span>
+        <span style="font-size:.78rem;color:#8b93a1"><?= (int) $w['ep_count'] ?>화</span>
+      </a>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
   <div class="note">
     <strong>두 전송 경로를 눌러 보세요</strong><br>
     <button type="button" onclick="tp.track('click', {}, 'fetch')">fetch 로 click</button>
     <button type="button" onclick="tp.track('click', {}, 'beacon')">beacon 으로 click</button>
-    <button type="button" onclick="var n = tp.queue('impression'); alert('큐 ' + n + '건. 탭을 닫거나 다른 탭으로 가면 beacon 으로 나갑니다.')">impression 큐에 쌓기</button>
+    <button type="button" onclick="tp.flushImpressions(false)">본 배너 노출 지금 보내기</button>
     <br><br>
     DevTools Network 탭에서 <strong><code>fetch</code> 는 앞에 OPTIONS 가 붙고 <code>beacon</code> 은 안 붙는 것</strong>을 확인하세요.
     <code>beacon</code> 이 <code>text/plain</code> 을 쓰는 이유이자, 대신 헤더를 못 붙이는 대가입니다.
