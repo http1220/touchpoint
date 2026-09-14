@@ -29,7 +29,7 @@ flowchart LR
     API --> DB[("MySQL 8.0")]
     DB --> W["워커<br/>아웃박스 폴링"]
     W --> GA["GA4 채널<br/>Measurement Protocol"]
-    W --> META["Meta 채널<br/>Conversions API<br/>(테스트 이벤트 모드)"]
+    W --> META["Meta 채널<br/>Conversions API"]
     DB --> MET
 ```
 
