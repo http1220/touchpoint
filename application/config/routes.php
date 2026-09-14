@@ -32,6 +32,7 @@ $route['track\.js']   = 'track/js';          // 서드파티 스크립트 — AD
 // ── app. 서비스 · 전환 ──────────────────────────────────
 $route['signup']      = 'account/signup';    // 5. POST /signup
 $route['purchase']    = 'purchase/index';    // 6. POST /purchase
+$route['webhooks/pg'] = 'webhook/pg';        // PG 웹훅. app. 에서만 — docs/plan-payment-webhook.md 12장 결정 1
 $route['metrics']     = 'metrics/index';     // 7. GET  /metrics
 $route['episode/(:num)'] = 'episode/view/$1';
 

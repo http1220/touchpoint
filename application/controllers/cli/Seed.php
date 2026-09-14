@@ -131,6 +131,49 @@ class Seed extends MY_Controller
 		$this->line($r['duplicated'] ? 'DUP' : 'NEW id='.$r['id']);
 	}
 
+	/**
+	 * 결제 시험용 회원 하나.
+	 *
+	 *   php public/index.php cli/seed user
+	 *
+	 * **선택이 아니다.** `payments.user_id` 가 NOT NULL 이고
+	 * `fk_payments_user` 가 걸려 있어, users 행이 없으면 `/purchase` 가
+	 * FK 로 막힌다 → docs/plan-payment-webhook.md 12장 결정 4
+	 *
+	 * `signup_visit_id` 도 채운다. 결제 전환의 유입 귀속이 이 컬럼을
+	 * 경유하기 때문이다(계획 6장). 방문이 없으면 NULL 로 두고, 그러면
+	 * 전환은 기록되지만 어느 광고에서 왔는지는 남지 않는다.
+	 */
+	public function user($email = NULL)
+	{
+		$email = is_string($email) && trim($email) !== ''
+			? trim($email)
+			: 'seed-'.bin2hex(random_bytes(6)).'@example.invalid';
+
+		$uidHex = bin2hex(tp_uuid7());
+
+		// 최근 방문 하나를 골라 가입 접점으로 삼는다. 없으면 NULL.
+		$visit = $this->db
+			->query('SELECT id FROM visits ORDER BY id DESC LIMIT 1')
+			->row();
+
+		$this->db->query(
+			'INSERT IGNORE INTO users (user_uid, email, provider, lang, signup_visit_id, created_at)
+			 VALUES (UNHEX(?), ?, ?, ?, ?, ?)',
+			array($uidHex, $email, 'local', 'ko', $visit ? (int) $visit->id : NULL, tp_now_utc())
+		);
+
+		if ((int) $this->db->affected_rows() === 0)
+		{
+			$this->line('이미 있는 이메일입니다: '.$email);
+			exit(1);
+		}
+
+		$this->line('user_uid='.$uidHex);
+		$this->line('  email='.$email.' visit='.($visit ? $visit->id : '-'));
+		$this->line('  cli/pg 와 /purchase 에 이 user_uid 를 씁니다.');
+	}
+
 	/** 같은 dedup_key 로 두 번 넣어 UNIQUE 가 막는지 본다. */
 	public function duplicate()
 	{

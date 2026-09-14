@@ -26,6 +26,26 @@ class Conversion_model extends CI_Model
 		$uidHex = bin2hex(tp_uuid7());
 		$now    = tp_now_utc();
 
+		/*
+		 * **이 트랜잭션은 바깥 트랜잭션 안에서 열릴 수 있다.**
+		 *
+		 * Payment_model::applyEvent() 가 자기 트랜잭션 안에서 이 메서드를
+		 * 부른다(결제가 captured 될 때). 그러면 깊이가 2 가 되고, CI3 는
+		 * 바깥쪽만 실제로 begin/commit/rollback 한다 —
+		 *
+		 *   vendor/.../DB_driver.php:970
+		 *   elseif ($this->_trans_depth > 1 OR $this->_trans_rollback())
+		 *   { $this->_trans_depth--; return TRUE; }
+		 *
+		 * 즉 **아래의 trans_rollback() 은 아무것도 되돌리지 않고 TRUE 를
+		 * 돌려준다.** 지금 안전한 이유는 단 하나, 그 지점까지 INSERT 된
+		 * 것이 없기 때문이다(INSERT IGNORE 가 0행). **우연히 안전하다.**
+		 *
+		 * 그러므로 이 메서드의 INSERT IGNORE **앞에** 쓰기를 한 줄이라도
+		 * 추가하면, 중복 경로에서 그 쓰기가 되돌려지지 않고 바깥
+		 * 트랜잭션과 함께 커밋된다. 같은 경고를 Payment_model 클래스
+		 * 주석에도 적어 뒀다 — 한쪽만 보고 고치는 일을 막는다.
+		 */
 		$this->db->trans_begin();
 
 		$this->db->query(

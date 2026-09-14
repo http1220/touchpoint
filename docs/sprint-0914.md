@@ -403,3 +403,40 @@ INSERT 가 없어 안전하지만 **우연히 안전한 것**이고, 한 줄만 
 **추가 지시**: 중첩 트랜잭션 주의를 **양쪽 모델 주석에** 남긴다 — 한쪽만 적으면
 다른 쪽을 고치는 사람이 못 본다. 오늘 지침에 넣은 규칙 7 그대로다.
 
+### 턴 11 — 구현 에이전트가 한도로 끊겼다. 이어받았다
+
+`Payment_model::applyEvent()` 를 쓰려던 참에 API 한도로 종료됐다.
+**남은 것을 새 에이전트에 다시 시키지 않고 메인이 이어받았다** — 다시
+시키면 이미 한 일을 재확인하느라 같은 비용을 또 치른다.
+
+**받은 것 먼저 검증**
+
+| | 결과 |
+|---|---|
+| `php -l` 14개 파일 | 전부 통과 |
+| `phpunit` | **OK (317 tests, 600 assertions)** — 기존 191 + 신규 126 |
+| `Payment_model` 완결성 | 617줄, 닫는 괄호까지 온전 |
+
+**핵심 세 가지를 눈으로 확인했다**
+
+- **CAS** — `UPDATE … WHERE id=? AND status IN (…)` 한 문장. `SELECT` 선행 없음 ✅
+- **대조군** — `transitionByPrecheck()` 가 일부러 틀리게 구현돼 있고,
+  주석이 *"`affected_rows` 를 보지 않는다. 이미 captured 인 행에 captured 를
+  쓰면 MySQL 이 0을 돌려주는데 그걸 '막혔다' 로 읽으면 **대조군이 우연히
+  정상처럼 보인다.** 틀린 코드는 틀린 그대로 재현돼야 한다"* 라고 적혀 있다.
+  **내가 지시하지 않은 함정을 스스로 찾아 막았다**
+- **중첩 트랜잭션 경고** — `Payment_model` 과 `Conversion_model` 양쪽에 있다 ✅
+
+**메인이 마저 만든 것**
+
+| 파일 | |
+|---|---|
+| `controllers/Webhook.php` | 서명 → 본문 → 조회 → `applyEvent` → 200. **무시도 200** |
+| `controllers/cli/Pg.php` | 스텁 PG. `sign` 이 셸 변수를 뱉어 `xargs -P8` 이 동시성을 만든다 |
+| `config/routes.php` | 웹훅 라우트 |
+| `.env.example` | `PG_WEBHOOK_SECRET` · `_TOLERANCE_SEC` · `PAYMENT_WEBHOOK_PRECHECK` |
+| `cli/Seed.php` | `user()` — FK 때문에 선택이 아니다 |
+
+`sign` 과 검증이 **같은 `WebhookSignature` 를 쓴다.** 서명하는 쪽을 따로
+구현하면 "우리 검증기만 통과하는 서명" 을 만들어 놓고 맞다고 믿게 된다.
+
