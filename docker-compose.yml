@@ -64,6 +64,7 @@ services:
     env_file: [.env]
     volumes:
       - .:/var/www/html
+      - app_logs:/var/log/touchpoint   # 컨테이너를 재생성해도 남는 앱 로그 → MY_Log
     mem_limit: 256m
     depends_on:
       mysql-primary:
@@ -83,6 +84,7 @@ services:
     env_file: [.env]
     volumes:
       - .:/var/www/html
+      - app_logs:/var/log/touchpoint   # 컨테이너를 재생성해도 남는 앱 로그 → MY_Log
     mem_limit: 128m
     depends_on:
       mysql-primary:
@@ -161,6 +163,7 @@ services:
         condition: service_healthy
 
 volumes:
+  app_logs:
   certbot_conf:
   certbot_www:
   mysql_primary:

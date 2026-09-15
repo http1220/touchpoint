@@ -16,6 +16,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  *
  *   visits · touchpoints · dispatch_log   3개월   통신비밀보호법(방문기록)
  *   payment_client_context · dispatch_outbox   3개월   광고 전송용 원문 — 방문기록과 같이
+ *   앱 로그 파일 (/var/log/touchpoint)          3개월   방문·결제 식별자가 실린다
  *   users · conversions · payments …      5년     전자상거래법 · 전자금융거래법
  *
  * 20배 차이 나는 것을 같은 테이블에 두면 파기가 불가능해진다.
@@ -58,6 +59,8 @@ class Purge extends MY_Controller
 			$this->line(sprintf('  %-24s %7d 건', $table, $n));
 		}
 
+		$this->line(sprintf('  %-24s %7d 개', '앱 로그 파일', count($this->expiredLogFiles($days))));
+
 		$this->line('실제로 지우려면: cli/purge run '.(int) $days);
 	}
 
@@ -99,9 +102,50 @@ class Purge extends MY_Controller
 				$table, $total, (int) round((microtime(TRUE) - $startedAt) * 1000)
 			));
 		}
+
+		$removed = 0;
+
+		foreach ($this->expiredLogFiles($days) as $path)
+		{
+			$removed += @unlink($path) ? 1 : 0;
+		}
+
+		$this->line(sprintf('  %-24s %7d 개 삭제', '앱 로그 파일', $removed));
 	}
 
 	// ────────────────────────────────────────────────────────
+
+	/**
+	 * 보존기간을 넘은 앱 로그 파일. 로그에도 방문·결제 식별자가 실린다.
+	 *
+	 * 판정은 파일 이름의 날짜로 한다(mtime 아님) → src/Support/LogFile.
+	 * 우리가 만든 이름 규칙에 맞지 않는 파일은 건드리지 않는다.
+	 *
+	 * @return list<string> 전체 경로
+	 */
+	private function expiredLogFiles($days)
+	{
+		$dir = getenv('APP_LOG_DIR');
+		$dir = ($dir === FALSE) ? '/var/log/touchpoint' : rtrim((string) $dir, '/');
+
+		if ($dir === '' OR ! is_dir($dir))
+		{
+			return array();
+		}
+
+		$cutoff = new DateTimeImmutable(self::cutoff($days), new DateTimeZone('UTC'));
+		$out    = array();
+
+		foreach ((array) scandir($dir) as $name)
+		{
+			if (is_string($name) && App\Support\LogFile::isExpired($name, $cutoff))
+			{
+				$out[] = $dir.'/'.$name;
+			}
+		}
+
+		return $out;
+	}
 
 	/**
 	 * 지울 테이블과 기준 컬럼.

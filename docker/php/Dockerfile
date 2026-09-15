@@ -33,6 +33,13 @@ RUN { \
 
 WORKDIR /var/www/html
 
+# 앱 로그 파일 자리. 명명 볼륨(app_logs)이 여기 붙는다 — 빈 볼륨은 처음 붙을 때
+# 이미지의 이 디렉터리 소유권을 물려받으므로 php-fpm 워커(www-data)가 쓸 수 있다.
+# 컨테이너 로그(stderr)는 재생성하면 사라져서 파일을 같이 남긴다 → MY_Log
+RUN mkdir -p /var/log/touchpoint \
+ && chown www-data:www-data /var/log/touchpoint \
+ && chmod 2775 /var/log/touchpoint
+
 RUN { \
       echo '[www]'; \
       echo 'pm = dynamic'; \

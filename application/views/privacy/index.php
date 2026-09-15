@@ -92,6 +92,8 @@ footer{margin-top:3rem;color:#5b6270;font-size:.8rem}
       <td>3개월</td></tr>
   <?php /* create_dispatch — dispatch_log */ ?>
   <tr><td>전송 기록</td><td>외부 매체로 보낸 시각, 응답 코드, 소요 시간</td><td>3개월</td></tr>
+  <?php /* application/core/MY_Log · src/Support/LogFile — 09-15 추가 */ ?>
+  <tr><td>서버 로그</td><td>처리 결과 메시지, 요청 상관 ID, 방문·결제·전환 번호, 요청을 보낸 사이트 주소</td><td>3개월</td></tr>
   <?php /* create_sessions — ci_sessions */ ?>
   <tr><td>세션</td><td>세션 식별자, IP 주소</td><td>만료(2시간) 후 삭제</td></tr>
   <?php /* create_users_conversions · create_payments_coins */ ?>

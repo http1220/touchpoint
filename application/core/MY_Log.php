@@ -20,6 +20,14 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  *    앱까지 따라갈 수 있다. → docs/decisions/ADR-012-observability-scope.md
  *
  * 로그 로테이션도 이 방식이면 우리 문제가 아니다. 도커 로그 드라이버가 한다.
+ *
+ * ── 09-15 정정 ──
+ *
+ * 위 판단에 빠진 것이 있었다. 도커 로그 드라이버가 들고 있는 로그는 **컨테이너와
+ * 수명을 같이한다.** 재생성 한 번에 사라진다. 그래서 같은 줄을 명명 볼륨의
+ * 일자별 파일에도 붙인다(appendToFile). ② 의 권한 문제는 볼륨 디렉터리를
+ * 이미지에서 www-data 소유로 만들고, 파일을 SAPI 별로 나눠 피한다.
+ * 파일 로테이션은 날짜별 파일 + 3개월 파기(cli/purge)가 맡는다.
  */
 class MY_Log extends CI_Log
 {
@@ -59,8 +67,47 @@ class MY_Log extends CI_Log
 		), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 		// 실패해도 요청을 죽이지 않는다. 로그 때문에 응답이 실패하면 본말전도다.
-		return @file_put_contents('php://stderr', $line."\n") !== FALSE;
+		$ok = @file_put_contents('php://stderr', $line."\n") !== FALSE;
+
+		$this->appendToFile($line);
+
+		return $ok;
 	}
+
+	/**
+	 * 같은 줄을 컨테이너 밖에 사는 일자별 파일에도.
+	 *
+	 * stderr 만으로는 컨테이너를 재생성하면 로그가 사라진다(09-15 발견)
+	 * → src/Support/LogFile 머리말. 디렉터리는 명명 볼륨(`app_logs`)이다.
+	 *
+	 * 쓰기에 실패해도 조용히 넘어간다 — 위 ② 의 "조용히 사라진다" 가 다시
+	 * 생기지 않게, **실패는 한 번만 stderr 에 알린다.**
+	 */
+	private function appendToFile($line)
+	{
+		$dir = getenv('APP_LOG_DIR');
+		$dir = ($dir === FALSE) ? '/var/log/touchpoint' : rtrim((string) $dir, '/');
+
+		if ($dir === '' OR ! class_exists('App\Support\LogFile'))
+		{
+			return;
+		}
+
+		$path = $dir.'/'.App\Support\LogFile::name(PHP_SAPI, new DateTimeImmutable('now', new DateTimeZone('UTC')));
+
+		if (@file_put_contents($path, $line."\n", FILE_APPEND | LOCK_EX) === FALSE && ! self::$fileWarned)
+		{
+			self::$fileWarned = TRUE;
+			@file_put_contents('php://stderr', json_encode(array(
+				'ts'    => gmdate('Y-m-d\TH:i:s\Z'),
+				'level' => 'ERROR',
+				'msg'   => 'MY_Log: 로그 파일에 쓰지 못했다 — '.$path.' (볼륨·권한 확인). 이후 실패는 알리지 않는다',
+			), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n");
+		}
+	}
+
+	/** @var bool 프로세스당 한 번만 알린다. php-fpm 워커는 요청을 여럿 처리한다 */
+	private static $fileWarned = FALSE;
 
 	/**
 	 * 이번 요청의 상관 ID.
