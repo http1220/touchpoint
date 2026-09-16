@@ -390,9 +390,19 @@ class Verify extends MY_Controller
             $conversions[$uid][$kind] = TRUE;
         }
 
-        $r = App\Payment\LedgerReconciliation::of($payments, $lots, $conversions);
+        // 실험으로 일부러 어긋나게 만든 결제. uid 로 하나씩, 사유와 함께 → config/reconciliation.php
+        $this->config->load('reconciliation', TRUE, TRUE);
+        $exclude = (array) $this->config->item('reconciliation_excluded', 'reconciliation');
+
+        $r = App\Payment\LedgerReconciliation::of($payments, $lots, $conversions, $exclude);
 
         $this->line(sprintf('결제 대사 — 최근 %d일 · 결제 %d건', $days, $r->checked));
+
+        // 뺀 것은 매번 보여 준다. 제외 목록이 있다는 사실이 가려지면 안 된다.
+        foreach ($r->excluded as $uid => $reason)
+        {
+            $this->line('  제외 '.$uid.'  '.$reason);
+        }
 
         if ($r->isClean())
         {

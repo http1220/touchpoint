@@ -47,10 +47,12 @@ final class LedgerReconciliation
 
     /**
      * @param list<array{uid: string, kind: string, detail: string}> $issues
+     * @param array<string, string>                                   $excluded 실제로 뺀 결제 uid => 사유
      */
     private function __construct(
         public readonly int $checked,
         public readonly array $issues,
+        public readonly array $excluded = [],
     ) {
     }
 
@@ -58,13 +60,24 @@ final class LedgerReconciliation
      * @param list<array{uid: string, status: string, amount_minor: int, currency: string}> $payments
      * @param array<string, list<array{amount: int, remaining: int, revoked: bool}>>       $lotsByPayment
      * @param array<string, array{purchase?: bool, refund?: bool}>                          $conversionsByPayment
+     * @param array<string, string>                                                         $exclude 뺄 결제 uid => 사유.
+     *        **실험으로 일부러 어긋나게 만든 결제만** 넣는다 → application/config/reconciliation.php
      */
-    public static function of(array $payments, array $lotsByPayment, array $conversionsByPayment): self
+    public static function of(array $payments, array $lotsByPayment, array $conversionsByPayment, array $exclude = []): self
     {
         $issues = [];
+        $excluded = [];
 
         foreach ($payments as $p) {
             $uid = $p['uid'];
+
+            if (isset($exclude[$uid])) {
+                // 판정하지 않되 뺐다는 사실은 결과에 남긴다. 조용히 사라지면 안 된다.
+                $excluded[$uid] = $exclude[$uid];
+
+                continue;
+            }
+
             $status = $p['status'];
             $paid = in_array($status, self::PAID, true);
             $lots = $lotsByPayment[$uid] ?? [];
@@ -110,7 +123,8 @@ final class LedgerReconciliation
             }
         }
 
-        return new self(count($payments), $issues);
+        // checked 는 실제로 판정한 건수다. 뺀 결제는 excluded 로 따로 센다.
+        return new self(count($payments) - count($excluded), $issues, $excluded);
     }
 
     public function isClean(): bool

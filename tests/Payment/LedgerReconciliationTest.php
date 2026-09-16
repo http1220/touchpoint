@@ -106,4 +106,41 @@ final class LedgerReconciliationTest extends TestCase
 
         self::assertSame([L::COIN_DUPLICATED => 1, L::COIN_MISSING => 2], $r->counts());
     }
+
+    // ── 실험 결제 제외 ──────────────────────────────────────
+
+    public function test_제외한_결제는_판정하지_않지만_제외했다는_사실은_남는다(): void
+    {
+        $r = L::of(
+            [$this->pay('ctl', 'captured'), $this->pay('real', 'captured')],
+            ['ctl' => [$this->lot(), $this->lot()], 'real' => [$this->lot()]],
+            ['ctl' => ['purchase' => true], 'real' => ['purchase' => true]],
+            ['ctl' => 'D-3 대조군']
+        );
+
+        self::assertTrue($r->isClean(), '대조군의 코인 중복은 판정하지 않는다');
+        self::assertSame(['ctl' => 'D-3 대조군'], $r->excluded);
+        self::assertSame(1, $r->checked, '판정한 건수에서 뺀다');
+    }
+
+    public function test_제외_목록에_있어도_이번_범위에_없는_결제는_제외로_세지_않는다(): void
+    {
+        $r = L::of([$this->pay('a', 'captured')], ['a' => [$this->lot()]], ['a' => ['purchase' => true]], ['gone' => '파기됨']);
+
+        self::assertSame([], $r->excluded);
+        self::assertSame(1, $r->checked);
+    }
+
+    public function test_제외는_지정한_결제만_가린다_같은_모양의_다른_어긋남은_잡는다(): void
+    {
+        $r = L::of(
+            [$this->pay('ctl', 'captured'), $this->pay('other', 'captured')],
+            ['ctl' => [$this->lot(), $this->lot()], 'other' => [$this->lot(), $this->lot()]],
+            ['ctl' => ['purchase' => true], 'other' => ['purchase' => true]],
+            ['ctl' => 'D-3 대조군']
+        );
+
+        self::assertSame([L::COIN_DUPLICATED => 1], $r->counts());
+        self::assertSame('other', $r->issues[0]['uid']);
+    }
 }
