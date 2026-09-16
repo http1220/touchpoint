@@ -5,6 +5,24 @@
 > 사고 15건 중 **이 코드베이스에서 테스트 코드로 재현·고정할 수 있는 것만** 추렸다.
 > 데이터센터 화재·스위치 고장처럼 인프라 자체가 원인인 사고는 뺐다(맨 아래).
 
+## 구현 결과 (2026-09-16)
+
+아래 우선순위 5개를 전부 구현했다. 단위 테스트 **413건**, CI 에 **DB 통합 잡** 추가(GitHub Actions 통과).
+
+| 순 | 무엇 | 어디 | 확인 |
+|---|---|---|---|
+| 1 | 코인 회수 멱등성 | `coin_lots.revoked_at` · `RefundPolicy::revocation(…, alreadyRevoked)` · `Coin_model::revokeByPayment` | 단위 2건 + 통합: 회수를 두 번 부르면 `회수 0 · 사용 0 · 이미 회수됨 1` |
+| 2 | 결제 내부 대사 | `src/Payment/LedgerReconciliation` · `cli/verify payments` (어긋나면 종료 코드 1) | 단위 11건 + 통합: 대조군의 코인 중복만 잡는다 |
+| 3 | 대사에 처리 창 | `Reconciliation::of(…, sentAt, now, window)` · `pending` · `isSettled()` · `cli/verify ga4` | 단위 4건. **+25h · 543 중 517** 을 넣으면 누락 0 · 대기 26 |
+| 4 | 웹훅 동시성 (DB) | `cli/selftest` · `tests/integration/run.sh` | 같은 키 결제 8 동시 → 1행 · captured 8 동시 → 전이 1·코인 1 · **대조군은 코인 8** · 환불 8 동시 → 전이 1 · 아웃박스 200 × 워커 4 → sent 200 · 중복 기록 0 |
+| 5 | 마이그레이션 왕복 (DB) | `tests/integration/migrations.sh` | 13개 전부 왕복 스키마 동일. **`down()` 을 일부러 깨뜨리면 `Duplicate column` 으로 실패**하는 것도 확인 |
+
+**운영 데이터에 대사를 돌렸다.** 최근 90일 결제 11건 중 어긋남 1건 — `coin_duplicated`, 멱등 키 `ctl2-…`, 09-14 03:43. **D-3 대조군 실험에서 일부러 만든 코인 2회 지급**이다. 그 밖의 어긋남은 없었다. 카카오페이 사고에서 없었던 "몇 건이 어긋났는가" 에 답하는 도구가 이제 있다.
+
+> 통합 테스트는 운영에서 돌지 않는다 — `cli/selftest` 는 `production` 이면 종료 코드 2 로 거절한다(서버에서 확인).
+
+---
+
 ## 판정 기준
 
 | 표시 | 뜻 |
