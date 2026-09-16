@@ -12,6 +12,7 @@ use App\Verify\Reconciliation;
  *   php public/index.php cli/verify events              이벤트 이름별 건수만
  *   php public/index.php cli/verify ga4                 오늘 보낸 것 대조
  *   php public/index.php cli/verify ga4 2026-09-13 today
+ *   php public/index.php cli/verify payments [일수]  결제 ↔ 코인 ↔ 전환 내부 대사 (09-16)
  *
  * **왜 이게 있어야 하는가.** MP 운영 엔드포인트는 페이로드가 틀려도 204 다.
  * 전송 로그의 "성공률 100%" 는 *도달* 만 말하고 *집계* 는 말하지 못한다.
@@ -308,6 +309,90 @@ class Verify extends MY_Controller
 
             return NULL;
         }
+    }
+
+    /**
+     * 결제 ↔ 코인 ↔ 전환 대사. **어긋난 것이 있으면 종료 코드 1.**
+     *
+     *   php public/index.php cli/verify payments        최근 90일에 만든 결제
+     *   php public/index.php cli/verify payments 7
+     *
+     * 판정은 src/Payment/LedgerReconciliation 이 한다. 여기서는 세 목록을
+     * **프라이머리에서** 읽기만 한다 — 복제본에서 읽으면 방금 확정된 결제의
+     * 코인이 "없음" 으로 보인다(복제 지연, E-1).
+     *
+     * 종료 코드를 쓰는 이유: CI 통합 테스트와 cron 이 같은 명령으로 판정한다.
+     */
+    public function payments($days = 90)
+    {
+        $days  = max(1, (int) $days);
+        $since = gmdate('Y-m-d H:i:s', time() - $days * 86400);
+
+        $payments = array();
+
+        foreach ($this->db->query(
+            'SELECT LOWER(HEX(payment_uid)) AS uid, status, amount_minor, currency
+               FROM payments WHERE created_at >= ?', array($since)
+        )->result_array() as $row)
+        {
+            $payments[] = array(
+                'uid'          => $row['uid'],
+                'status'       => $row['status'],
+                'amount_minor' => (int) $row['amount_minor'],
+                'currency'     => $row['currency'],
+            );
+        }
+
+        $lots = array();
+
+        foreach ($this->db->query(
+            'SELECT LOWER(HEX(p.payment_uid)) AS uid, l.amount, l.remaining, l.revoked_at IS NOT NULL AS revoked
+               FROM coin_lots l JOIN payments p ON p.id = l.payment_id
+              WHERE p.created_at >= ?', array($since)
+        )->result_array() as $row)
+        {
+            $lots[$row['uid']][] = array(
+                'amount'    => (int) $row['amount'],
+                'remaining' => (int) $row['remaining'],
+                'revoked'   => (bool) $row['revoked'],
+            );
+        }
+
+        $conversions = array();
+
+        // dedup_key 규칙: purchase:<uid> · refund:<uid> → Payment_model::DEDUP_PREFIX · REFUND_PREFIX
+        foreach ($this->db->query(
+            'SELECT c.dedup_key FROM conversions c
+               JOIN payments p ON c.dedup_key IN (CONCAT("purchase:", LOWER(HEX(p.payment_uid))), CONCAT("refund:", LOWER(HEX(p.payment_uid))))
+              WHERE p.created_at >= ?', array($since)
+        )->result_array() as $row)
+        {
+            list($kind, $uid) = explode(':', $row['dedup_key'], 2);
+            $conversions[$uid][$kind] = TRUE;
+        }
+
+        $r = App\Payment\LedgerReconciliation::of($payments, $lots, $conversions);
+
+        $this->line(sprintf('결제 대사 — 최근 %d일 · 결제 %d건', $days, $r->checked));
+
+        if ($r->isClean())
+        {
+            $this->line('  어긋난 것 없음');
+
+            return;
+        }
+
+        foreach ($r->counts() as $kind => $n)
+        {
+            $this->line(sprintf('  %-24s %d', $kind, $n));
+        }
+
+        foreach (array_slice($r->issues, 0, 50) as $i)
+        {
+            $this->line('  - '.$i['uid'].'  '.$i['kind'].'  '.$i['detail']);
+        }
+
+        exit(1);
     }
 
     private function fail($msg)
