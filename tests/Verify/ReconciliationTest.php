@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Verify;
 
 use App\Verify\Reconciliation;
+use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -81,5 +82,71 @@ final class ReconciliationTest extends TestCase
 
         self::assertSame(0.0, $r->reflectionRate());
         self::assertSame(0, $r->sentCount);
+    }
+
+    // ── 처리 창 — "늦음" 과 "사라짐" 을 가른다 ───────────────
+
+    /**
+     * 09-13 에 실제로 한 오판을 입력으로 넣는다.
+     *
+     * 543건을 보냈고 +25시간에 517건이 보였다. 그때 "26건 영구 유실" 이라고
+     * 적었는데 +40시간에 543건 전부 보였다 → docs/benchmarks.md 5-1
+     */
+    public function test_처리_창_안에서_안_보이는_것은_누락이_아니라_대기다(): void
+    {
+        [$sent, $observed, $sentAt] = $this->ga4Run(sent: 543, observed: 517, sentAt: '2026-09-12 13:00:00');
+
+        $at25h = Reconciliation::of($sent, $observed, $sentAt, new DateTimeImmutable('2026-09-13 14:00:00'), Reconciliation::GA4_WINDOW_SECONDS);
+
+        self::assertCount(26, $at25h->pending, '+25h 는 GA4 처리 창(48h) 안이다');
+        self::assertSame([], $at25h->missing, '그때 "영구 유실" 이라고 적은 것이 오판이었다');
+        self::assertTrue($at25h->isClean());
+        self::assertFalse($at25h->isSettled(), '반영률 95.2% 는 최종값이 아니다');
+        self::assertEqualsWithDelta(0.952, $at25h->reflectionRate(), 0.001);
+    }
+
+    public function test_처리_창이_지나도_안_보이면_그때_누락이다(): void
+    {
+        [$sent, $observed, $sentAt] = $this->ga4Run(sent: 10, observed: 9, sentAt: '2026-09-12 13:00:00');
+
+        $at49h = Reconciliation::of($sent, $observed, $sentAt, new DateTimeImmutable('2026-09-14 14:00:00'), Reconciliation::GA4_WINDOW_SECONDS);
+
+        self::assertCount(1, $at49h->missing);
+        self::assertSame([], $at49h->pending);
+        self::assertFalse($at49h->isClean());
+        self::assertTrue($at49h->isSettled());
+    }
+
+    public function test_보낸_시각이_없으면_예전처럼_전부_누락이다(): void
+    {
+        $r = Reconciliation::of(['a', 'b'], ['a' => 1], [], new DateTimeImmutable(), Reconciliation::GA4_WINDOW_SECONDS);
+
+        self::assertSame(['b'], $r->missing);
+        self::assertSame([], $r->pending);
+    }
+
+    public function test_창_경계는_창을_넘긴_쪽이_누락이다(): void
+    {
+        $sentAt = new DateTimeImmutable('2026-09-12 00:00:00');
+        $window = 3600;
+
+        $justBefore = Reconciliation::of(['a'], [], ['a' => $sentAt], $sentAt->modify('+3599 seconds'), $window);
+        $exactly = Reconciliation::of(['a'], [], ['a' => $sentAt], $sentAt->modify('+3600 seconds'), $window);
+
+        self::assertSame(['a'], $justBefore->pending);
+        self::assertSame(['a'], $exactly->missing);
+    }
+
+    /** @return array{0: list<string>, 1: array<string,int>, 2: array<string,DateTimeImmutable>} */
+    private function ga4Run(int $sent, int $observed, string $sentAt): array
+    {
+        $ids = array_map(static fn (int $i): string => sprintf('t%04d', $i), range(1, $sent));
+        $at = new DateTimeImmutable($sentAt);
+
+        return [
+            $ids,
+            array_fill_keys(array_slice($ids, 0, $observed), 1),
+            array_fill_keys($ids, $at),
+        ];
     }
 }

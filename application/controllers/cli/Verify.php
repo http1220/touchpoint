@@ -138,7 +138,8 @@ class Verify extends MY_Controller
             return;
         }
 
-        $sent = $this->sentTransactionIds($start, $end);
+        $sentAt = $this->sentTransactionIds($start, $end);
+        $sent   = array_keys($sentAt);
 
         if ($sent === array())
         {
@@ -158,18 +159,29 @@ class Verify extends MY_Controller
             return;
         }
 
-        $r = Reconciliation::of($sent, $observed);
+        /*
+         * 보낸 시각과 GA4 처리 창(48h)을 넘긴다. 창 안에서 안 보이는 것은
+         * 누락이 아니라 대기다 — +25h 의 95.2% 를 "4.8% 영구 유실" 로 적었던
+         * 오판을 여기서 막는다 → docs/benchmarks.md 5-1
+         */
+        $r = Reconciliation::of($sent, $observed, $sentAt, new DateTimeImmutable('now', new DateTimeZone('UTC')), Reconciliation::GA4_WINDOW_SECONDS);
 
         $this->line('대조 ('.$start.' ~ '.$end.')');
         $this->line(sprintf('  우리가 보낸 것      %6d', $r->sentCount));
         $this->line(sprintf('  매체가 집계한 것    %6d', $r->observedCount));
         $this->line('');
         $this->line(sprintf('  일치                %6d', count($r->matched)));
-        $this->line(sprintf('  누락(보냈는데 없음) %6d', count($r->missing)));
+        $this->line(sprintf('  대기(처리 창 48h 안) %5d', count($r->pending)));
+        $this->line(sprintf('  누락(창이 지나도 없음) %3d', count($r->missing)));
         $this->line(sprintf('  초과(안 보냈는데)   %6d', count($r->unexpected)));
         $this->line(sprintf('  중복(두 번 세어짐)  %6d', count($r->duplicated)));
         $this->line('');
         $this->line(sprintf('  **반영률 %.1f%%**  (전송 성공률과 다른 숫자다)', $r->reflectionRate() * 100));
+
+        if ( ! $r->isSettled())
+        {
+            $this->line('  ↳ 아직 처리 창 안에 있는 전송이 있어 최종값이 아닙니다. 48시간이 지난 뒤 다시 보세요.');
+        }
 
         /*
          * 관측된 것이 적으면 통째로 찍는다.
@@ -225,8 +237,8 @@ class Verify extends MY_Controller
         if ( ! $r->isClean())
         {
             $this->line('');
-            $this->line('  누락이 있다면 204 를 받고도 버려진 전송이 있다는 뜻입니다.');
-            $this->line('  처리 지연일 수도 있으니 몇 시간 뒤 다시 돌려 보세요.');
+            $this->line('  누락은 처리 창(48h)이 지나도 안 보인 것입니다. 204 를 받고도 버려진 전송입니다.');
+            $this->line('  중복은 같은 transaction_id 가 매체에서 두 번 세어진 것입니다.');
         }
     }
 
@@ -237,7 +249,7 @@ class Verify extends MY_Controller
      *
      * `transaction_id` 로 싣는 값이 `conversion_uid` 다 → src/Channel/Ga4Channel
      *
-     * @return list<string>
+     * @return array<string, DateTimeImmutable> uid => 보낸 시각(UTC)
      */
     private function sentTransactionIds($start, $end)
     {
@@ -260,7 +272,7 @@ class Verify extends MY_Controller
          * 남기는 자리가 없다. 남기는 편이 낫다 → 아래 주석
          */
         $rows = $this->db->query(
-            'SELECT LOWER(HEX(c.conversion_uid)) AS uid
+            'SELECT LOWER(HEX(c.conversion_uid)) AS uid, o.sent_at
                FROM dispatch_outbox o
                JOIN conversions c ON c.id = o.conversion_id
               WHERE o.channel = ? AND o.status = ?
@@ -272,7 +284,14 @@ class Verify extends MY_Controller
             array('ga4', 'sent', $from, $to)
         )->result_array();
 
-        return array_column($rows, 'uid');
+        $out = array();
+
+        foreach ($rows as $row)
+        {
+            $out[$row['uid']] = new DateTimeImmutable($row['sent_at'], new DateTimeZone('UTC'));
+        }
+
+        return $out;
     }
 
     /** @return Ga4Reader|null */
