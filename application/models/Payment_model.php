@@ -560,13 +560,23 @@ class Payment_model extends CI_Model
 	 *      같은 트랜잭션이라 "환불은 됐는데 매체엔 매출이 그대로" 가 구조적으로
 	 *      생기지 않는다 → ADR-003
 	 *
-	 * @return array [lot_id, conversion_uid, coins_revoked, coins_spent]
+	 * @return array [lot_id, conversion_uid, coins_revoked, coins_spent, coins_already_revoked]
 	 */
 	private function onRefunded(array $payment, $now)
 	{
 		$this->load->model('coin_model');
 
-		$coins = $this->coin_model->revokeByPayment((int) $payment['id']);
+		$coins = $this->coin_model->revokeByPayment((int) $payment['id'], $now);
+
+		if ($coins['already'] > 0)
+		{
+			/*
+			 * 이미 회수된 lot 이 있다. 정상 경로에서는 CAS 가 두 번째 refunded 전이를
+			 * 막으므로 여기 오지 않는다. 오면 같은 작업이 두 번 실행된 것이다 —
+			 * 회수 자체는 멱등하게 끝났지만 원인을 봐야 한다.
+			 */
+			log_message('error', sprintf('payment refund: 이미 회수된 lot %d개 — 환불 처리가 두 번 실행됐다. payment_id=%d', $coins['already'], (int) $payment['id']));
+		}
 
 		if ($coins['spent'] > 0)
 		{
@@ -586,6 +596,7 @@ class Payment_model extends CI_Model
 			'conversion_uid' => $this->recordRefund($payment, $now),
 			'coins_revoked'  => $coins['revoked'],
 			'coins_spent'    => $coins['spent'],
+			'coins_already_revoked' => $coins['already'],
 		);
 	}
 

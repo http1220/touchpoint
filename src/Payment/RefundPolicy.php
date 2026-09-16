@@ -51,12 +51,21 @@ final class RefundPolicy
     /**
      * lot 하나에서 회수할 코인과 이미 쓴 코인.
      *
-     * @return array{revoke: int, spent: int}
+     * **이미 회수한 lot 이면 아무것도 계산하지 않는다.** remaining 이 0 인
+     * 이유가 "다 썼다" 인지 "우리가 회수했다" 인지 remaining 만으로는 모른다.
+     * 모르는 채로 계산하면 두 번째 회수가 "전부 썼다" 로 보고된다
+     * (09-16 사고 조사 중 발견 → docs/incidents/testable-cases.md 2장).
+     *
+     * @return array{revoke: int, spent: int, already: bool}
      */
-    public static function revocation(int $amount, int $remaining): array
+    public static function revocation(int $amount, int $remaining, bool $alreadyRevoked = false): array
     {
+        if ($alreadyRevoked) {
+            return ['revoke' => 0, 'spent' => 0, 'already' => true];
+        }
+
         $remaining = max(0, min($amount, $remaining));
 
-        return ['revoke' => $remaining, 'spent' => $amount - $remaining];
+        return ['revoke' => $remaining, 'spent' => $amount - $remaining, 'already' => false];
     }
 }

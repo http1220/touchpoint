@@ -91,23 +91,46 @@ class Coin_model extends CI_Model
 	 * lot 을 지우지 않는다. coin_spends 가 lot_id 를 FK 로 가리키고, 무엇을
 	 * 얼마나 쓴 뒤 환불됐는지가 남아야 분쟁에 답할 수 있다.
 	 *
-	 * @return array{lots: int, revoked: int, spent: int}
+	 * **멱등하다.** 회수한 lot 에는 `revoked_at` 을 남기고, 다시 부르면
+	 * "이미 회수됨" 으로 센다. 표시가 없으면 두 번째 호출이 remaining 0 을
+	 * "전부 썼다" 로 읽는다 → migrations/20260916000100
+	 *
+	 * 표시 UPDATE 도 조건부다(`AND revoked_at IS NULL`). FOR UPDATE 가 이미
+	 * 막지만, 이 메서드가 트랜잭션 밖에서 불리는 날에도 한 번만 회수되게.
+	 *
+	 * @return array{lots: int, revoked: int, spent: int, already: int}
 	 */
-	public function revokeByPayment($paymentId)
+	public function revokeByPayment($paymentId, $now = NULL)
 	{
+		$now  = $now === NULL ? tp_now_utc() : (string) $now;
 		$lots = $this->db
-			->query('SELECT id, amount, remaining FROM '.self::TABLE.' WHERE payment_id = ? FOR UPDATE', array((int) $paymentId))
+			->query('SELECT id, amount, remaining, revoked_at FROM '.self::TABLE.' WHERE payment_id = ? FOR UPDATE', array((int) $paymentId))
 			->result_array();
 
-		$out = array('lots' => count($lots), 'revoked' => 0, 'spent' => 0);
+		$out = array('lots' => count($lots), 'revoked' => 0, 'spent' => 0, 'already' => 0);
 
 		foreach ($lots as $lot)
 		{
-			$r = \App\Payment\RefundPolicy::revocation((int) $lot['amount'], (int) $lot['remaining']);
+			$r = \App\Payment\RefundPolicy::revocation((int) $lot['amount'], (int) $lot['remaining'], $lot['revoked_at'] !== NULL);
 
-			if ($r['revoke'] > 0)
+			if ($r['already'])
 			{
-				$this->db->query('UPDATE '.self::TABLE.' SET remaining = 0 WHERE id = ?', array((int) $lot['id']));
+				$out['already']++;
+
+				continue;
+			}
+
+			$this->db->query(
+				'UPDATE '.self::TABLE.' SET remaining = 0, revoked_at = ? WHERE id = ? AND revoked_at IS NULL',
+				array($now, (int) $lot['id'])
+			);
+
+			if ((int) $this->db->affected_rows() !== 1)
+			{
+				// 그 사이 누가 회수했다. 이번 호출은 아무것도 회수하지 않았다.
+				$out['already']++;
+
+				continue;
 			}
 
 			$out['revoked'] += $r['revoke'];

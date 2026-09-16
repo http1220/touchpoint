@@ -30,14 +30,32 @@ final class RefundPolicyTest extends TestCase
 
     public function test_남은_만큼만_회수하고_쓴_만큼을_알린다(): void
     {
-        self::assertSame(['revoke' => 100, 'spent' => 0], RefundPolicy::revocation(100, 100));
-        self::assertSame(['revoke' => 70, 'spent' => 30], RefundPolicy::revocation(100, 70));
-        self::assertSame(['revoke' => 0, 'spent' => 100], RefundPolicy::revocation(100, 0));
+        self::assertSame(['revoke' => 100, 'spent' => 0, 'already' => false], RefundPolicy::revocation(100, 100));
+        self::assertSame(['revoke' => 70, 'spent' => 30, 'already' => false], RefundPolicy::revocation(100, 70));
+        self::assertSame(['revoke' => 0, 'spent' => 100, 'already' => false], RefundPolicy::revocation(100, 0));
     }
 
     public function test_잔액이_이상해도_음수로_회수하지_않는다(): void
     {
-        self::assertSame(['revoke' => 0, 'spent' => 100], RefundPolicy::revocation(100, -5));
-        self::assertSame(['revoke' => 100, 'spent' => 0], RefundPolicy::revocation(100, 120));
+        self::assertSame(['revoke' => 0, 'spent' => 100, 'already' => false], RefundPolicy::revocation(100, -5));
+        self::assertSame(['revoke' => 100, 'spent' => 0, 'already' => false], RefundPolicy::revocation(100, 120));
+    }
+
+    public function test_이미_회수한_lot_은_다시_계산하지_않는다(): void
+    {
+        // 첫 회수는 remaining 을 0 으로 만든다. 그 lot 을 다시 계산하면
+        // "100 을 전부 썼다" 가 된다 — 실제로는 하나도 안 썼는데.
+        $first = RefundPolicy::revocation(100, 100);
+        $second = RefundPolicy::revocation(100, 0, alreadyRevoked: true);
+
+        self::assertSame(['revoke' => 100, 'spent' => 0, 'already' => false], $first);
+        self::assertSame(['revoke' => 0, 'spent' => 0, 'already' => true], $second);
+    }
+
+    public function test_회수_표시가_없으면_남은_0_은_사용으로_읽힌다_그래서_표시가_필요하다(): void
+    {
+        // 표시 없이 두 번째 회수를 하면 이렇게 된다. 이 테스트가 깨지면
+        // 위의 멱등 처리가 왜 있는지 다시 봐야 한다.
+        self::assertSame(100, RefundPolicy::revocation(100, 0)['spent']);
     }
 }
