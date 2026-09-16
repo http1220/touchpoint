@@ -1,6 +1,6 @@
 # touchpoint · CI
 #
-# 여기서 도는 것은 셋뿐이다 — 문법, 단위 테스트, 구성 파일 유효성.
+# 여기서 도는 것은 넷이다 — 문법 · 단위 테스트, DB 통합 테스트, 구성 파일 유효성.
 # 배포는 하지 않는다. 서버가 한 대뿐이라 자동 배포의 이득보다
 # 잘못 나갔을 때의 손해가 크다. → docs/decisions/ADR-011-github-actions-over-jenkins.md
 #
@@ -76,6 +76,61 @@ jobs:
             exit 1
           fi
           echo "경계 유지됨"
+
+  # 결제 중복·순서 역전을 실제로 막는 것은 DB 다(조건부 UPDATE · UNIQUE · SKIP LOCKED).
+  # 단위 테스트는 DB 가 없어 그 자리에 닿지 않았고, 운영 서버에서 손으로 잰 기록뿐이었다.
+  # 실제 사고와의 대응 → docs/incidents/testable-cases.md
+  integration:
+    name: DB 통합 (동시성 · 멱등성 · 마이그레이션 왕복)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: attribution
+          MYSQL_USER: ab
+          MYSQL_PASSWORD: ci
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-root"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+
+    # 운영과 같은 이름의 설정을 환경 변수로 넣는다. .env 파일은 만들지 않는다.
+    env:
+      CI_ENVIRONMENT: testing
+      DB_WRITE_HOST: 127.0.0.1
+      DB_READ_RDB1: 127.0.0.1
+      DB_READ_RDB2: 127.0.0.1
+      DB_PORT: 3306
+      MYSQL_DATABASE: attribution
+      MYSQL_USER: ab
+      MYSQL_PASSWORD: ci
+      ENCRYPTION_KEY: '00000000000000000000000000000000'
+      SHOP_DOMAIN: example.com
+      APP_LOG_DIR: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, intl, bcmath, mysqli, pdo_mysql
+          coverage: none
+          ini-values: date.timezone=UTC
+
+      - name: 의존성 설치
+        run: composer install --prefer-dist --no-progress --no-interaction --no-scripts
+
+      # 빈 DB 에서 먼저 돈다. 끝나면 최신 상태로 남는다.
+      - name: 마이그레이션 왕복 (down() 이 실제로 되돌리는가)
+        run: sh tests/integration/migrations.sh
+
+      - name: 동시성 · 멱등성 · 대사
+        run: sh tests/integration/run.sh
 
   infra:
     name: 인프라 구성 파일
