@@ -1,6 +1,9 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+use App\Support\PublishDay;
+use App\Support\SystemClock;
+
 /**
  * 루트 도메인의 홈. 웹툰 서비스의 첫 화면이다.
  *
@@ -53,9 +56,10 @@ class Home extends MY_Controller
 			'top'         => $this->work_model->topByEpisodes($db, $lang, 5),
 			'recent'      => $this->work_model->recentEpisodes($db, $lang, 8),
 			'locales'     => $this->work_model->locales($db),
-			'today'       => (int) gmdate('N'),
+			'lang'        => $lang,
+			// 연재 요일은 서비스 지역의 달력이다. UTC(gmdate)로 판정하면 한국 00~09시에 어제가 "오늘"이 된다
+			'today'       => PublishDay::today(new SystemClock()),
 			'read_target' => $this->readTarget(),
-			'shop'        => (string) (getenv('SHOP_DOMAIN') ?: ''),
 			'trace_id'    => $this->trace_id,
 		));
 	}

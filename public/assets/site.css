@@ -433,18 +433,179 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
   justify-content: flex-end;
 }
 
-/* 나레이션 박스 — 칸 왼쪽 위 모서리. 테두리를 칸과 나눈다 */
+/* 나레이션 박스 — 해설 층. 결론 한 문장 + docs 링크.
+   기본은 칸 안에 놓이는 상자, --corner 는 칸 왼쪽 위 모서리에 붙어 테두리를 칸과 나눈다 */
 .caption {
-  width: fit-content;
-  max-width: calc(100% + var(--panel-padding));
-  margin: calc(-1 * var(--panel-padding)) 0 var(--space-4) calc(-1 * var(--panel-padding));
+  margin: 0 0 var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--caption-bg);
-  border-right: var(--caption-rule);
-  border-bottom: var(--caption-rule);
+  border: var(--caption-rule);
   font-size: var(--caption-font-size);
   line-height: var(--note-line-height);
 }
+.caption--corner {
+  width: fit-content;
+  max-width: calc(100% + var(--panel-padding));
+  margin: calc(-1 * var(--panel-padding)) 0 var(--space-4) calc(-1 * var(--panel-padding));
+  border-width: 0 var(--border-width) var(--border-width) 0;
+}
+/* 아래에 무게를 둔 칸에서도 모서리 박스는 위에 남는다 — auto 여백이 빈 공간을 먹는다 */
+.panel--bottom > .caption--corner { margin-bottom: auto; }
+.captions { margin-top: var(--space-4); }
+
+/* 끊기면 뜻이 흐려지는 말 묶음 — 가운뎃점(·)은 keep-all 에서도 줄바꿈 자리가 된다 */
+.nowrap { white-space: nowrap; }
+.captions > .caption:last-child { margin-bottom: 0; }
+
+/* 칸 안의 제목은 칸 테두리가 위 여백을 대신한다 */
+.panel h1, .panel h2, .panel h3 { margin-top: 0; }
+
+/* 배지 — 모든 배지는 글자를 가진다. 색은 의미가 있을 때만 */
+.badge {
+  display: inline-block;
+  padding: 0 0.4em;
+  font-size: var(--badge-font-size);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.6;
+  white-space: nowrap;
+  color: var(--badge-neutral-fg);
+  background: var(--badge-neutral-bg);
+  border: var(--border-width) solid var(--badge-neutral-border);
+  border-radius: var(--border-radius-sm);
+  vertical-align: 0.1em;
+}
+.badge--strong  { color: var(--badge-strong-fg);  background: var(--badge-strong-bg);  border-color: var(--badge-strong-bg); }
+.badge--success { color: var(--badge-success-fg); background: var(--badge-success-bg); border-color: transparent; }
+.badge--warning { color: var(--badge-warning-fg); background: var(--badge-warning-bg); border-color: transparent; }
+.badge--error   { color: var(--badge-error-fg);   background: var(--badge-error-bg);   border-color: transparent; }
+
+.empty, .muted { color: var(--color-text-tertiary); }
+.empty { margin: 0; font-size: var(--note-font-size); }
+
+/* 표지 자리표시 — 이미지인 척하지 않는다. id mod 6 */
+.cover-0 { background: var(--color-cover-0); }
+.cover-1 { background: var(--color-cover-1); }
+.cover-2 { background: var(--color-cover-2); }
+.cover-3 { background: var(--color-cover-3); }
+.cover-4 { background: var(--color-cover-4); }
+.cover-5 { background: var(--color-cover-5); }
+
+/* 작품 카드 — 표지 + 제목 + 배지. 오늘 칸은 large, 요일 줄은 small */
+.works {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.work {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: start;
+  color: inherit;
+  text-decoration: none;
+}
+.work__cover {
+  display: block;
+  width: 2.5rem;
+  aspect-ratio: 3 / 4;
+  padding: 1px 3px;
+  border: var(--border-width) solid var(--color-border-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+.work--large .work__cover { width: 4.5rem; }
+.work__body { display: block; min-width: 0; }
+.work__title {
+  display: block;
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  text-decoration: underline;
+  text-decoration-thickness: var(--border-width);
+  text-underline-offset: 0.2em;
+}
+.work:hover .work__title { text-decoration-thickness: var(--border-width-strong); }
+.work--large .work__title { font-size: var(--font-size-md); }
+.work__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-size: var(--note-font-size);
+  color: var(--color-text-secondary);
+}
+.work__eps { font-variant-numeric: var(--font-numeric); }
+
+/* 서비스 머리 — 칸이 아니다. 워드마크와 언어 */
+.masthead {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--panel-frame);
+}
+.masthead__mark {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
+}
+.masthead__sub {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--letter-spacing-normal);
+  color: var(--color-text-secondary);
+}
+
+/* 언어 — 붙은 버튼 한 줄. 지금 언어는 먹으로 채운다 */
+.lang { display: flex; margin: 0; padding: 0; list-style: none; }
+.lang li + li a { border-left-width: 0; }
+.lang a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: var(--border-width) solid var(--color-border-strong);
+  font-family: var(--font-family-mono);
+  font-size: var(--note-font-size);
+  color: inherit;
+  text-decoration: none;
+}
+.lang a:hover { background: var(--color-bg-secondary); }
+.lang a[aria-current="true"] { color: var(--badge-strong-fg); background: var(--badge-strong-bg); border-color: var(--badge-strong-bg); }
+
+/* 시연 안내 · 오늘 · 요일 줄 */
+.intro h1 { font-size: var(--font-size-lg); }
+.today__title, .day__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-md);
+}
+.day--today { background: var(--today-bg); }
+.day__name { font-size: var(--font-size-base); margin-bottom: var(--space-2); }
+
+/* 순위 목록 · 데이터 표 — 시트 3 */
+.rank { margin: 0 0 var(--space-4); padding-left: 1.5em; }
+.rank li { margin: var(--space-1) 0; }
+.rank__meta { margin-left: var(--space-2); font-size: var(--note-font-size); color: var(--color-text-secondary); font-variant-numeric: var(--font-numeric); }
+
+.data { width: 100%; border-collapse: collapse; font-size: var(--table-font-size); font-variant-numeric: var(--font-numeric); }
+.data th, .data td { padding: var(--space-2) var(--space-3) var(--space-2) 0; text-align: left; vertical-align: top; border-bottom: var(--table-row-rule); }
+.data thead th { color: var(--table-head-color); font-weight: var(--font-weight-normal); border-bottom: var(--panel-frame); }
+.data .n { text-align: right; }
 
 /* 제목 위 작은 표지 — 화면 번호 · 상태 코드 */
 .eyebrow {
@@ -580,4 +741,25 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-404 > .panel--title { grid-column: 1 / span 7; grid-row: 2 / span 3; }
   .layout-404 > .panel--route { grid-column: 8 / span 5; }
   .layout-404 .panel--title h1 { font-size: var(--font-size-2xl); }
+
+  /* 홈 시트 1 — 안내 칸(6열, 세 줄 높이) + ①②③ 칸(6열씩) + 오늘(12열) */
+  .layout-home-1 { grid-template-rows: auto auto repeat(3, minmax(min-content, 1fr)) auto; }
+  .layout-home-1 > .intro { grid-column: 1 / span 6; grid-row: 3 / span 3; }
+  .layout-home-1 > .step  { grid-column: 7 / span 6; }
+  .layout-home-1 > .today { grid-column: 1 / -1; }
+  .layout-home-1 .intro h1 { font-size: var(--font-size-xl); }
+  .layout-home-1 .step__num { display: inline; margin-right: var(--space-2); font-size: var(--font-size-md); }
+  .layout-home-1 .step__name { display: inline; }
+
+  /* 홈 시트 2 — 제목 칸(3열, 일곱 줄 높이) + 요일 칸(9열 × 7) */
+  .layout-home-week { grid-template-rows: repeat(7, minmax(min-content, 1fr)); }
+  .layout-home-week > .week-intro { grid-column: 1 / span 3; grid-row: 1 / span 7; }
+  .layout-home-week > .day { grid-column: 4 / span 9; display: grid; grid-template-columns: 3rem minmax(0, 1fr); align-items: center; padding-top: var(--space-2); padding-bottom: var(--space-2); }
+  .layout-home-week .day__name { flex-direction: column; align-items: flex-start; margin: 0; }
+
+  /* 홈 시트 3 — 순위(5열) + 최근 회차(7열) */
+  /* 칸은 내용 높이만. 남는 판면은 빈 테두리가 아니라 종이로 둔다 */
+  .layout-home-lists { grid-template-rows: auto; align-content: start; align-items: start; }
+  .layout-home-lists > :first-child { grid-column: 1 / span 5; }
+  .layout-home-lists > :last-child  { grid-column: 6 / span 7; }
 }

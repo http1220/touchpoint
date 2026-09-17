@@ -1,172 +1,180 @@
 <?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+use App\Support\PublishDay;
+
 /**
  * 홈. 서버 렌더 · JS 없음 (ADR-009).
  *
- * @var array $byDay 1=월 … 7=일
- * @var array $top
- * @var array $recent
- * @var array $locales
- * @var int   $today
+ * 시트 세 장이다 — 넓은 가로 화면에서는 4:3 판, 세로 폰에서는 칸이 한 줄.
+ *   1  시연 바 · 서비스 머리 · 시연 안내(한 문장 + ①②③) · 오늘
+ *   2  연재 요일 7줄
+ *   3  회차가 많은 작품 · 최근 올라온 회차
+ *
+ * 칸의 순서는 DOM 순서 그대로다. 배치는 site.css 의 span 만 바꾼다.
+ *
+ * @var array  $byDay 1=월 … 7=일 — 7칸이 전부 온다(비어 있어도)
+ * @var array  $top
+ * @var array  $recent
+ * @var array  $locales
+ * @var string $lang
+ * @var int    $today KST 요일 (PublishDay)
  */
-$DAYS = array(1 => '월', 2 => '화', 3 => '수', 4 => '목', 5 => '금', 6 => '토', 7 => '일');
-
 $AGE = array('all' => '전체', '12' => '12+', '15' => '15+', '19' => '19+');
 
 $STATUS = array('ongoing' => '연재중', 'finished' => '완결', 'rest' => '휴재');
+
+$repo = 'https://github.com/http1220/touchpoint/blob/main/';
+
+/** 작품 카드 — 오늘 칸과 요일 줄이 같이 쓴다 */
+$card = function (array $w, $size) use ($AGE, $STATUS)
+{
+	$id = (int) $w['id'];
+	?>
+	<li>
+	  <a class="work work--<?= $size ?>" href="<?= html_escape(tp_host_url('lp', '/l/'.$id)) ?>">
+	    <span class="work__cover cover-<?= $id % 6 ?>" aria-hidden="true">#<?= $id ?></span>
+	    <span class="work__body">
+	      <span class="work__title"><?= html_escape($w['title']) ?></span>
+	      <span class="work__meta">
+	        <span class="badge"><?= html_escape($AGE[$w['age_rating_code']] ?? $w['age_rating_code']) ?></span>
+	        <?php if ($w['wait_free_hours'] !== NULL): ?>
+	          <span class="badge"><?= (int) $w['wait_free_hours'] ?>시간 후 무료</span>
+	        <?php endif; ?>
+	        <?php if ($w['status'] !== 'ongoing'): ?>
+	          <span class="badge"><?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
+	        <?php endif; ?>
+	        <span class="work__eps"><?= (int) $w['ep_count'] ?>화</span>
+	      </span>
+	    </span>
+	  </a>
+	</li>
+	<?php
+};
 ?><!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>touchpoint — 웹툰</title>
+<?php $this->load->view('partials/head', array('title' => 'touchpoint — 웹툰')); ?>
 <?php foreach ($locales as $l): ?>
 <link rel="alternate" hreflang="<?= html_escape($l['bcp47']) ?>" href="/?lang=<?= html_escape($l['slug']) ?>">
 <?php endforeach; ?>
-<style>
-:root{--bg:#0f1115;--fg:#e6e8ec;--dim:#8b93a1;--line:#232733;--card:#171b23;--accent:#ffd166}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);
-     font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
-a{color:inherit;text-decoration:none}
-.wrap{max-width:62rem;margin:0 auto;padding:1.5rem 1.25rem 4rem}
-header{display:flex;align-items:baseline;gap:.75rem;flex-wrap:wrap;
-       padding-bottom:1rem;border-bottom:1px solid var(--line)}
-header b{font-size:1.15rem}
-header .tag{color:var(--dim);font-size:.85rem}
-nav.lang{margin-left:auto;display:flex;gap:.5rem}
-nav.lang a{color:var(--dim);font-size:.85rem;padding:.1rem .45rem;border:1px solid var(--line);border-radius:3px}
-h2{font-size:1rem;margin:2.25rem 0 .75rem}
-.days{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
-.days span{padding:.3rem .7rem;border:1px solid var(--line);border-radius:999px;
-           font-size:.85rem;color:var(--dim)}
-.days span.on{background:var(--accent);color:#1a1a1a;border-color:var(--accent);font-weight:600}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr));gap:.85rem}
-.card{background:var(--card);border:1px solid var(--line);border-radius:6px;
-      padding:.75rem;display:flex;flex-direction:column;gap:.35rem}
-.card:hover{border-color:#3a4152}
-.thumb{aspect-ratio:3/4;border-radius:4px;display:flex;align-items:center;justify-content:center;
-       font-size:.75rem;color:#5b6270;background:linear-gradient(160deg,#1d2230,#141821)}
-.t{font-weight:600;line-height:1.35}
-.meta{color:var(--dim);font-size:.8rem;display:flex;gap:.35rem;flex-wrap:wrap;align-items:center}
-.b{display:inline-block;padding:.02rem .35rem;border-radius:3px;font-size:.75rem;line-height:1.5}
-.b.free{background:#1f3a2a;color:#7fd6a0}
-.b.wait{background:#3a3520;color:#e0c77f}
-.b.age{background:#2a2030;color:#c9a0d6}
-.b.paid{background:#2a2530;color:#9aa0ab}
-.b.rest{background:#2a2a2a;color:#a0a0a0}
-table{width:100%;border-collapse:collapse;font-size:.9rem}
-td,th{text-align:left;padding:.4rem .5rem .4rem 0;border-bottom:1px solid var(--line)}
-th{color:var(--dim);font-weight:400}
-ol{margin:0;padding-left:1.25rem}
-ol li{margin:.3rem 0}
-.note{margin-top:2.5rem;padding:1rem;background:#12161d;border-left:2px solid #3a4152;
-      color:#a8b0bd;font-size:.88rem}
-.note strong{color:var(--fg)}
-.note code{background:#1a1e27;padding:.05rem .3rem;border-radius:3px}
-footer{margin-top:2rem;color:#5b6270;font-size:.8rem}
-</style>
 </head>
 <body>
-<div class="wrap">
+<main class="stage">
 
-<header>
-  <b>touchpoint</b>
-  <span class="tag">웹툰 · 어트리뷰션 파이프라인 시연</span>
-  <nav class="lang">
-    <?php foreach ($locales as $l): ?>
-      <a href="/?lang=<?= html_escape($l['slug']) ?>"><?= html_escape($l['slug']) ?></a>
-    <?php endforeach; ?>
-  </nav>
-</header>
+  <!-- ── 시트 1 ─────────────────────────────── -->
+  <div class="sheet layout-home-1">
+    <?php $this->load->view('partials/demo_bar', array('demo_step' => 1)); ?>
 
-<h2>요일 연재</h2>
-<div class="days">
-  <?php foreach ($DAYS as $n => $label): ?>
-    <span class="<?= $n === $today ? 'on' : '' ?>"><?= html_escape($label) ?><?= $n === $today ? ' 오늘' : '' ?></span>
-  <?php endforeach; ?>
-</div>
+    <header class="masthead">
+      <p class="masthead__mark">touchpoint <span class="masthead__sub">웹툰</span></p>
+      <nav aria-label="작품 언어">
+        <ul class="lang">
+          <?php foreach ($locales as $l): ?>
+            <li><a href="/?lang=<?= html_escape($l['slug']) ?>"<?= $l['slug'] === $lang ? ' aria-current="true"' : '' ?>><?= html_escape($l['slug']) ?></a></li>
+          <?php endforeach; ?>
+        </ul>
+      </nav>
+    </header>
 
-<?php if ($byDay[$today] === array()): ?>
-  <p style="color:#5b6270">오늘 올라오는 작품이 없습니다.</p>
-<?php else: ?>
-  <div class="grid">
-  <?php foreach ($byDay[$today] as $w): ?>
-    <a class="card" href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>">
-      <div class="thumb">작품 <?= (int) $w['id'] ?></div>
-      <div class="t"><?= html_escape($w['title']) ?></div>
-      <div class="meta">
-        <span class="b age"><?= html_escape($AGE[$w['age_rating_code']] ?? $w['age_rating_code']) ?></span>
-        <?php if ($w['wait_free_hours'] !== NULL): ?>
-          <span class="b wait"><?= (int) $w['wait_free_hours'] ?>시간 후 무료</span>
-        <?php endif; ?>
-        <?php if ($w['status'] !== 'ongoing'): ?>
-          <span class="b rest"><?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
-        <?php endif; ?>
-      </div>
-      <div class="meta"><?= (int) $w['ep_count'] ?>화</div>
+    <section class="panel panel--bottom intro" aria-labelledby="intro-title">
+      <p class="caption caption--corner">
+        이 홈은 <strong>측정할 대상</strong>으로 만든 웹툰 서비스 모형입니다.
+        작품·회차는 실제 DB 이고, 표지는 자리표시입니다.
+      </p>
+      <p class="eyebrow">시연 안내</p>
+      <h1 id="intro-title">광고 클릭에서 GA4 보고서까지 실제로 돌려 봤고, 숫자는 <span class="nowrap">분모·표본·측정 시각과</span> 함께만 보여 줍니다.</h1>
+    </section>
+
+    <a class="panel step" href="<?= html_escape(tp_host_url('lp', '/go?work=1&pid=home&utm_source=home&utm_medium=internal')) ?>">
+      <span class="step__num" aria-hidden="true">①</span>
+      <span class="step__name">광고 클릭을 흉내 낸다</span>
+      <span class="step__desc">유입 파라미터를 달고 브리지(302)를 거쳐 랜딩으로 — 최초 유입이 기록된다</span>
     </a>
-  <?php endforeach; ?>
+    <a class="panel step" href="<?= html_escape(tp_host_url('lp', '/l/1')) ?>">
+      <span class="step__num" aria-hidden="true">②</span>
+      <span class="step__name">랜딩에서 유입 기록을 본다</span>
+      <span class="step__desc">파라미터 없이 다시 열어도 최초·마지막 유입은 덮어쓰이지 않는다</span>
+    </a>
+    <a class="panel step" href="<?= html_escape(tp_host_url('app', '/metrics')) ?>">
+      <span class="step__num" aria-hidden="true">③</span>
+      <span class="step__name">지표에서 숫자를 본다</span>
+      <span class="step__desc">도달률은 분모와 함께, 반영률은 매체를 되읽어서만</span>
+    </a>
+
+    <section class="panel today" aria-labelledby="today-title">
+      <h2 id="today-title" class="today__title">오늘 <span class="badge badge--strong"><?= html_escape(PublishDay::LABELS[$today]) ?>요일</span></h2>
+      <?php if ($byDay[$today] === array()): ?>
+        <p class="empty">오늘 올라오는 작품이 없습니다.</p>
+      <?php else: ?>
+        <ul class="works">
+          <?php foreach ($byDay[$today] as $w) { $card($w, 'large'); } ?>
+        </ul>
+      <?php endif; ?>
+    </section>
   </div>
-<?php endif; ?>
 
-<h2>회차가 많은 작품</h2>
-<ol>
-<?php foreach ($top as $w): ?>
-  <li>
-    <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"><?= html_escape($w['title']) ?></a>
-    <span class="meta"><?= (int) $w['ep_count'] ?>화 ·
-      <?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
-  </li>
-<?php endforeach; ?>
-</ol>
-<p class="meta" style="margin-top:.5rem">
-  조회수나 평점이 아니라 <strong>회차 수</strong>로 줄을 세웁니다 —
-  조사한 두 플랫폼 모두 조회수를 공개하지 않았고,
-  <strong>없는 지표를 화면에 지어내지 않기 위해서</strong>입니다.
-</p>
+  <!-- ── 시트 2 ─────────────────────────────── -->
+  <div class="sheet layout-home-week">
+    <section class="panel panel--bottom week-intro" aria-labelledby="week-title">
+      <p class="eyebrow">요일은 KST 기준</p>
+      <h2 id="week-title">연재 요일</h2>
+      <div class="captions">
+        <p class="caption">작품 하나가 <strong>여러 요일</strong>에 연재됩니다 — 그래서 연재 요일은 별도 테이블입니다.
+          <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a></p>
+        <p class="caption"><strong>N시간 후 무료</strong>는 작품의 속성이고, 무료·유료는 회차의 속성입니다. 연령은 참/거짓이 아니라 코드입니다.</p>
+      </div>
+    </section>
 
-<h2>최근 올라온 회차</h2>
-<table>
-  <tr><th>작품</th><th>회차</th><th>공개</th><th></th></tr>
-<?php foreach ($recent as $e): ?>
-  <tr>
-    <td><a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $e['work_id'])) ?>"><?= html_escape($e['title']) ?></a></td>
-    <td><?= (int) $e['seq'] ?>화</td>
-    <td class="meta"><?= html_escape(substr((string) $e['published_at'], 0, 10)) ?></td>
-    <td><span class="b <?= $e['is_charged'] ? 'paid' : 'free' ?>"><?= $e['is_charged'] ? '유료' : '무료' ?></span></td>
-  </tr>
-<?php endforeach; ?>
-</table>
+    <?php foreach (PublishDay::LABELS as $n => $label): ?>
+      <section class="panel day<?= $n === $today ? ' day--today' : '' ?>" aria-labelledby="day-<?= $n ?>">
+        <h3 class="day__name" id="day-<?= $n ?>"><?= html_escape($label) ?><?php if ($n === $today): ?> <span class="badge badge--strong">오늘</span><?php endif; ?></h3>
+        <?php if ($byDay[$n] === array()): ?>
+          <p class="empty">연재 없음</p>
+        <?php else: ?>
+          <ul class="works">
+            <?php foreach ($byDay[$n] as $w) { $card($w, 'small'); } ?>
+          </ul>
+        <?php endif; ?>
+      </section>
+    <?php endforeach; ?>
+  </div>
 
-<div class="note">
-  <strong>이 화면이 보여 주는 것은 디자인이 아니라 스키마입니다.</strong>
-  웹툰 서비스를 만드는 프로젝트가 아니라, <strong>전환을 측정할 대상</strong>이
-  필요해서 도메인을 공개 자료로 역추론한 결과입니다.
-  <ul style="margin:.6rem 0 0;padding-left:1.1rem">
-    <li>작품이 연재요일을 <strong>여럿</strong> 가집니다 — 그래서
-        <code>work_publish_days</code> 가 별도 테이블입니다</li>
-    <li>"기다리면 무료" 는 <strong>작품</strong> 속성, 무료/유료는
-        <strong>회차</strong> 속성입니다 — 붙는 자리가 다릅니다</li>
-    <li>연령등급이 <code>boolean</code> 이 아니라 코드입니다 —
-        국가마다 등급 체계가 달라 참/거짓으로는 담기지 않습니다</li>
-    <li>언어·문자·지역이 <strong>다른 축</strong>입니다 — 간체와 번체가
-        둘 다 <code>zh</code> 인데 문자로 갈립니다</li>
-  </ul>
-  <p style="margin:.6rem 0 0">
-    작품을 누르면 <strong>광고 랜딩</strong>으로 갑니다 —
-    거기서부터가 이 프로젝트의 본론입니다.
-    <a href="<?= html_escape(tp_host_url('lp', '/go?work=1&pid=home&utm_source=home&utm_medium=internal')) ?>"
-       style="color:#7fb3ff">광고 클릭을 흉내 내 보기 →</a>
-  </p>
-</div>
+  <!-- ── 시트 3 ─────────────────────────────── -->
+  <div class="sheet layout-home-lists">
+    <section class="panel" aria-labelledby="top-title">
+      <h2 id="top-title">회차가 많은 작품</h2>
+      <ol class="rank">
+      <?php foreach ($top as $w): ?>
+        <li>
+          <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"><?= html_escape($w['title']) ?></a>
+          <span class="rank__meta"><?= (int) $w['ep_count'] ?>화 · <?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
+        </li>
+      <?php endforeach; ?>
+      </ol>
+      <p class="caption">조회수나 평점이 아니라 <strong>회차 수</strong>로 줄을 세웁니다 — 조사한 플랫폼 모두 조회수를 공개하지 않았고, 없는 지표를 지어내지 않습니다.</p>
+    </section>
 
-<footer>
-  읽기 대상 <code><?= html_escape($read_target) ?></code> ·
-  상관 ID <?= html_escape($trace_id) ?> ·
-  <a href="https://github.com/http1220/touchpoint" style="color:#5b6270">소스</a> ·
-  <a href="/privacy" style="color:#5b6270">개인정보처리방침</a>
-</footer>
+    <section class="panel" aria-labelledby="recent-title">
+      <h2 id="recent-title">최근 올라온 회차</h2>
+      <table class="data">
+        <thead><tr><th scope="col">작품</th><th scope="col" class="n">회차</th><th scope="col">공개</th><th scope="col">구분</th></tr></thead>
+        <tbody>
+        <?php foreach ($recent as $e): ?>
+          <tr>
+            <td><a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $e['work_id'])) ?>"><?= html_escape($e['title']) ?></a></td>
+            <td class="n"><?= (int) $e['seq'] ?>화</td>
+            <td class="muted"><?= html_escape(substr((string) $e['published_at'], 0, 10)) ?></td>
+            <td><span class="badge<?= $e['is_charged'] ? '' : ' badge--success' ?>"><?= $e['is_charged'] ? '유료' : '무료' ?></span></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </section>
+  </div>
 
-</div>
+</main>
+
+<?php $this->load->view('partials/footer'); ?>
 </body>
 </html>
