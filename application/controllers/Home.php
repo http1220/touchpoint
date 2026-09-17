@@ -1,6 +1,7 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+use App\Support\LocaleChoice;
 use App\Support\PublishDay;
 use App\Support\SystemClock;
 
@@ -34,6 +35,9 @@ use App\Support\SystemClock;
  */
 class Home extends MY_Controller
 {
+	/** 파라미터 없는 / 가 이 로케일의 정본이다 */
+	const DEFAULT_LOCALE = 'ko';
+
 	public function index()
 	{
 		/*
@@ -46,17 +50,54 @@ class Home extends MY_Controller
 
 		$this->load->model('work_model');
 
-		$db   = $this->read();
-		$lang = 'ko';
+		$db      = $this->read();
+		$locales = $this->work_model->locales($db);
+
+		/*
+		 * ?lang= — 활성 로케일만 받는다. 기본 로케일과 받을 수 없는 값은 그리지 않고
+		 * 정본으로 보낸다. 판정은 src/ 에 있다(프레임워크 없이 테스트된다) → LocaleChoice
+		 *
+		 * 전에는 $lang 이 'ko' 로 고정이라 언어 링크를 눌러도 아무것도 바뀌지 않았다.
+		 */
+		$choice = LocaleChoice::from($this->input->get('lang'), array_column($locales, 'slug'), self::DEFAULT_LOCALE);
+
+		if ($choice->redirect !== NULL)
+		{
+			$this->output
+				->set_status_header(302)
+				->set_header('Cache-Control: no-store')
+				->set_header('Location: /'.($choice->redirect === '' ? '' : '?'.$choice->redirect));
+
+			return;
+		}
+
+		// 기본 로케일을 앞에 둔다. 나머지는 slug 순
+		usort($locales, static function ($a, $b) {
+			return array((int) ($a['slug'] !== self::DEFAULT_LOCALE), $a['slug'])
+			   <=> array((int) ($b['slug'] !== self::DEFAULT_LOCALE), $b['slug']);
+		});
+
+		$locale = array('slug' => self::DEFAULT_LOCALE, 'lang' => self::DEFAULT_LOCALE, 'bcp47' => 'ko-KR');
+
+		foreach ($locales as $l)
+		{
+			if ($l['slug'] === $choice->slug)
+			{
+				$locale = $l;
+			}
+		}
+
+		$lang = $locale['lang'];
 
 		$this->output->set_header('Cache-Control: no-store');
 
 		$this->load->view('home/index', array(
-			'byDay'       => $this->work_model->byPublishDay($db, $lang),
-			'top'         => $this->work_model->topByEpisodes($db, $lang, 5),
-			'recent'      => $this->work_model->recentEpisodes($db, $lang, 8),
-			'locales'     => $this->work_model->locales($db),
-			'lang'        => $lang,
+			'byDay'          => $this->work_model->byPublishDay($db, $lang),
+			'top'            => $this->work_model->topByEpisodes($db, $lang, 5),
+			'recent'         => $this->work_model->recentEpisodes($db, $lang, 8),
+			'locales'        => $locales,
+			'locale'         => $locale,
+			'default_locale' => self::DEFAULT_LOCALE,
 			// 연재 요일은 서비스 지역의 달력이다. UTC(gmdate)로 판정하면 한국 00~09시에 어제가 "오늘"이 된다
 			'today'       => PublishDay::today(new SystemClock()),
 			'read_target' => $this->readTarget(),

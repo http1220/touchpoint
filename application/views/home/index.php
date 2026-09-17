@@ -16,8 +16,9 @@ use App\Support\PublishDay;
  * @var array  $byDay 1=월 … 7=일 — 7칸이 전부 온다(비어 있어도)
  * @var array  $top
  * @var array  $recent
- * @var array  $locales
- * @var string $lang
+ * @var array  $locales 활성 로케일 — 기본 로케일이 맨 앞
+ * @var array  $locale  지금 그리는 로케일 (slug · lang · bcp47)
+ * @var string $default_locale
  * @var int    $today KST 요일 (PublishDay)
  */
 $AGE = array('all' => '전체', '12' => '12+', '15' => '15+', '19' => '19+');
@@ -26,8 +27,19 @@ $STATUS = array('ongoing' => '연재중', 'finished' => '완결', 'rest' => '휴
 
 $repo = 'https://github.com/http1220/touchpoint/blob/main/';
 
+/** 로케일의 정본 URL — 기본 로케일은 파라미터 없는 / 다 (LocaleChoice 와 같은 규칙) */
+$locale_url = function ($slug) use ($default_locale)
+{
+	return tp_host_url('root', $slug === $default_locale ? '/' : '/?lang='.$slug);
+};
+
+$is_default = $locale['slug'] === $default_locale;
+
+// 화면 문구는 한국어(<html lang="ko">)이고 작품 제목만 로케일을 따른다. 제목에만 lang 을 붙인다
+$title_lang = $is_default ? '' : ' lang="'.html_escape($locale['bcp47']).'"';
+
 /** 작품 카드 — 오늘 칸과 요일 줄이 같이 쓴다 */
-$card = function (array $w, $size) use ($AGE, $STATUS)
+$card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
 {
 	$id = (int) $w['id'];
 	?>
@@ -35,7 +47,7 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
 	  <a class="work work--<?= $size ?>" href="<?= html_escape(tp_host_url('lp', '/l/'.$id)) ?>">
 	    <span class="work__cover cover-<?= $id % 6 ?>" aria-hidden="true">#<?= $id ?></span>
 	    <span class="work__body">
-	      <span class="work__title"><?= html_escape($w['title']) ?></span>
+	      <span class="work__title"<?= $title_lang ?>><?= html_escape($w['title']) ?></span>
 	      <span class="work__meta">
 	        <span class="badge"><?= html_escape($AGE[$w['age_rating_code']] ?? $w['age_rating_code']) ?></span>
 	        <?php if ($w['wait_free_hours'] !== NULL): ?>
@@ -56,8 +68,9 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
 <head>
 <?php $this->load->view('partials/head', array('title' => 'touchpoint — 웹툰')); ?>
 <?php foreach ($locales as $l): ?>
-<link rel="alternate" hreflang="<?= html_escape($l['bcp47']) ?>" href="/?lang=<?= html_escape($l['slug']) ?>">
+<link rel="alternate" hreflang="<?= html_escape($l['bcp47']) ?>" href="<?= html_escape($locale_url($l['slug'])) ?>">
 <?php endforeach; ?>
+<link rel="alternate" hreflang="x-default" href="<?= html_escape($locale_url($default_locale)) ?>">
 </head>
 <body>
 <main class="stage">
@@ -71,7 +84,7 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
       <nav aria-label="작품 언어">
         <ul class="lang">
           <?php foreach ($locales as $l): ?>
-            <li><a href="/?lang=<?= html_escape($l['slug']) ?>"<?= $l['slug'] === $lang ? ' aria-current="true"' : '' ?>><?= html_escape($l['slug']) ?></a></li>
+            <li><a href="<?= html_escape($locale_url($l['slug'])) ?>" hreflang="<?= html_escape($l['bcp47']) ?>"<?= $l['slug'] === $locale['slug'] ? ' aria-current="true"' : '' ?>><?= html_escape($l['slug']) ?></a></li>
           <?php endforeach; ?>
         </ul>
       </nav>
@@ -103,9 +116,27 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
     </a>
 
     <section class="panel today" aria-labelledby="today-title">
+      <?php if ( ! $is_default): ?>
+        <p class="caption caption--corner">
+          언어 <code><?= html_escape($locale['slug']) ?></code> — 바뀌는 것은 <strong>작품 데이터</strong>뿐입니다. 화면 문구는 번역하지 않았습니다.
+        </p>
+      <?php endif; ?>
       <h2 id="today-title" class="today__title">오늘 <span class="badge badge--strong"><?= html_escape(PublishDay::LABELS[$today]) ?>요일</span></h2>
       <?php if ($byDay[$today] === array()): ?>
-        <p class="empty">오늘 올라오는 작품이 없습니다.</p>
+        <?php
+          // 비어 있다는 사실만 말하면 고장 난 것처럼 보인다. 이 언어의 작품이 있는 요일을 함께 말한다
+          $days_with = array();
+          foreach (PublishDay::LABELS as $n => $label)
+          {
+              if ($byDay[$n] !== array()) { $days_with[] = $label; }
+          }
+        ?>
+        <p class="empty">
+          오늘 올라오는 작품이 없습니다.
+          <?php if ($days_with !== array()): ?>
+            이 언어의 작품은 <strong><?= html_escape(implode('·', $days_with)) ?></strong>에 연재됩니다 — 아래 연재 요일.
+          <?php endif; ?>
+        </p>
       <?php else: ?>
         <ul class="works">
           <?php foreach ($byDay[$today] as $w) { $card($w, 'large'); } ?>
@@ -123,6 +154,7 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
         <p class="caption">작품 하나가 <strong>여러 요일</strong>에 연재됩니다 — 그래서 연재 요일은 별도 테이블입니다.
           <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a></p>
         <p class="caption"><strong>N시간 후 무료</strong>는 작품의 속성이고, 무료·유료는 회차의 속성입니다. 연령은 참/거짓이 아니라 코드입니다.</p>
+        <p class="caption">언어·문자·지역은 <strong>다른 축</strong>입니다 — 간체와 번체는 둘 다 <code>zh</code> 이고 문자로 갈립니다. 언어를 바꾸면 작품 데이터만 바뀝니다.</p>
       </div>
     </section>
 
@@ -147,7 +179,7 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
       <ol class="rank">
       <?php foreach ($top as $w): ?>
         <li>
-          <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"><?= html_escape($w['title']) ?></a>
+          <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"<?= $title_lang ?>><?= html_escape($w['title']) ?></a>
           <span class="rank__meta"><?= (int) $w['ep_count'] ?>화 · <?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
         </li>
       <?php endforeach; ?>
@@ -162,7 +194,7 @@ $card = function (array $w, $size) use ($AGE, $STATUS)
         <tbody>
         <?php foreach ($recent as $e): ?>
           <tr>
-            <td><a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $e['work_id'])) ?>"><?= html_escape($e['title']) ?></a></td>
+            <td><a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $e['work_id'])) ?>"<?= $title_lang ?>><?= html_escape($e['title']) ?></a></td>
             <td class="n"><?= (int) $e['seq'] ?>화</td>
             <td class="muted"><?= html_escape(substr((string) $e['published_at'], 0, 10)) ?></td>
             <td><span class="badge<?= $e['is_charged'] ? '' : ' badge--success' ?>"><?= $e['is_charged'] ? '유료' : '무료' ?></span></td>
