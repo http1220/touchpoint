@@ -55,6 +55,8 @@ class Privacy extends MY_Controller
 			'opted_out' => AdOptOut::isOn($this->input->cookie(AdOptOut::COOKIE, TRUE)),
 			'pixel_on'  => tp_env_bool('META_PIXEL_BROWSER'),
 			'done'      => $this->input->get('done', TRUE),
+			// 바닥글이 쓴다. 이 화면은 DB 를 읽지 않으므로 읽기 대상은 넘기지 않는다
+			'trace_id'  => $this->trace_id,
 		));
 	}
 

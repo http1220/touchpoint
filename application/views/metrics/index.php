@@ -153,7 +153,7 @@ $thin_badge = function ($d) use ($small_sample)
         <p class="empty">아직 없습니다. 작품 랜딩의 "다른 작품"을 스크롤하고 눌러 보세요.</p>
       <?php else: ?>
         <div class="table-scroll" tabindex="0" role="region" aria-label="배너 노출·클릭 표 — 가로로 스크롤">
-          <table class="data">
+          <table class="data data--tight">
             <thead><tr><th scope="col">노출일</th><th scope="col">자리</th><th scope="col" class="n">노출</th><th scope="col" class="n">클릭</th><th scope="col" class="n">CTR</th></tr></thead>
             <tbody>
             <?php foreach ($ctr as $r): ?>
@@ -196,7 +196,7 @@ $thin_badge = function ($d) use ($small_sample)
         중복 차단은 행을 남기지 않아 이 화면이 셀 수 없다.
         <a href="<?= $repo ?>docs/failure-scenarios.md">failure-scenarios.md D-3<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="전환 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead><tr><th scope="col">유형</th><th scope="col" class="n">전환</th><th scope="col">적재됨 (/ 전환)</th><th scope="col">전송됨 (/ 전환)</th></tr></thead>
           <tbody>
             <?php if ($conversions === array()): ?>
@@ -228,7 +228,7 @@ $thin_badge = function ($d) use ($small_sample)
       <p class="caption"><strong><code>failed</code> 0 은 정상</strong> — 재시도는 <code>pending</code> 으로, 포기는 <code>dead</code> 로 가고 <code>failed</code> 를 쓰는 경로가 없다. <code>sending</code> 이 쌓이면 워커가 전송 중에 죽은 것이다.
         <a href="<?= $repo ?>docs/outbox-and-channels.md">outbox-and-channels.md<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="아웃박스 적재 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead>
             <tr>
               <th scope="col">채널</th>
@@ -277,7 +277,7 @@ $thin_badge = function ($d) use ($small_sample)
       <h2 id="reach">도달률 <span class="muted">2xx / 시도</span></h2>
       <p class="meta-line">분모는 전송 시도 수. 무응답(타임아웃·커넥션 실패)은 실패로 센다 — 빼면 분모가 조용히 줄어 도달률이 오른다. 반영률 되읽기: <code>cli/verify ga4</code></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="도달률 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead>
             <tr>
               <th scope="col">채널</th>
@@ -316,7 +316,7 @@ $thin_badge = function ($d) use ($small_sample)
       <p class="caption"><strong>2xx 안에서도 갈린다.</strong> GA4 <code>204</code> 는 운영, <code>200</code> 은 검증 엔드포인트 — 검증은 적재하지 않아 대조하면 누락으로 잡힌다(누락 40건 중 5건).
         <a href="<?= $repo ?>docs/outbox-and-channels.md">outbox-and-channels.md<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="HTTP 상태 분포 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead><tr><th scope="col">채널</th><th scope="col" class="n">상태</th><th scope="col" class="n">건수</th><th scope="col">비중 (/ 시도)</th></tr></thead>
           <tbody>
             <?php if ($statuses === array()): ?>
@@ -344,7 +344,7 @@ $thin_badge = function ($d) use ($small_sample)
       <p class="caption">분모는 <strong>재시도를 겪은 적재</strong>다. 0/0 을 100% 로 적지 않는다 — 실패가 없던 것과 전부 회복한 것은 다른 사실이다.
         <a href="<?= $repo ?>docs/failure-scenarios.md">failure-scenarios.md D-2<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="재시도 회복 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead><tr><th scope="col">채널</th><th scope="col" class="n">적재</th><th scope="col" class="n">재시도 겪음</th><th scope="col">최종 sent (/ 재시도 겪음)</th></tr></thead>
           <tbody>
             <?php if ($outbox['rows'] === array()): ?>
@@ -375,7 +375,7 @@ $thin_badge = function ($d) use ($small_sample)
         구간 합이 <code>total</code> 근처여야 어디가 느린지 말할 수 있다. 표본이 얇으면 p95 는 <strong>가장 느린 값을 빼고</strong> 고른다 — 그래서 최대와 표본을 같이 낸다.
         <a href="<?= $repo ?>docs/benchmarks.md">benchmarks.md 2장 · 3-2<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="구간별 소요 시간 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead>
             <tr>
               <th scope="col">채널</th>
@@ -422,7 +422,7 @@ $thin_badge = function ($d) use ($small_sample)
       <h2 id="retry-attempts">재시도 분포 <span class="muted">attempt 별</span></h2>
       <p class="caption"><code>attempt</code> 는 선점할 때 1 늘어난 값이라 <strong>첫 전송이 1</strong>이다. 2 이상이 쌓이면 그 채널이 한 번에 통과하지 못하고 있다.</p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="재시도 분포 표 — 가로로 스크롤">
-        <table class="data">
+        <table class="data data--tight">
           <thead><tr><th scope="col">채널</th><th scope="col" class="n">attempt</th><th scope="col" class="n">건수</th><th scope="col">비중</th><th scope="col">그중 2xx</th></tr></thead>
           <tbody>
             <?php if ($attempts === array()): ?>

@@ -188,7 +188,7 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
         <p class="empty">아직 없습니다.</p>
       <?php else: ?>
         <div class="table-scroll" tabindex="0" role="region" aria-label="수집 이벤트 표 — 가로로 스크롤">
-          <table class="data">
+          <table class="data data--tight">
             <thead><tr><th scope="col">이벤트</th><th scope="col">전송</th><th scope="col">오리진</th><th scope="col">발생(클라)</th><th scope="col">수신(서버)</th></tr></thead>
             <tbody>
               <?php foreach ($events as $e): ?>

@@ -644,7 +644,8 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
     linear-gradient(to left, var(--color-bg-primary) 60%, transparent) right center / 1.5rem 100% no-repeat local,
     linear-gradient(to left, var(--scroll-shade), transparent) right center / 0.75rem 100% no-repeat scroll;
 }
-.table-scroll .data { white-space: nowrap; }
+/* 줄바꿈 금지는 **숫자 표만**. 방침처럼 문장이 든 표에 걸면 한 줄이 1,700px 이 된다 */
+.table-scroll .data--tight { white-space: nowrap; }
 
 /* 첫 열(채널 · 이벤트)은 붙어 있다 — 밀어도 어느 줄의 숫자인지 안다 */
 .table-scroll .data th:first-child,
@@ -672,6 +673,19 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
 }
 .button:hover  { background: var(--color-bg-secondary); }
 .button:active { background: var(--color-bg-tertiary); }
+/* 링크를 버튼으로 쓸 때 — 방침의 광고 거부 */
+a.button { display: inline-flex; align-items: center; text-decoration: none; }
+p.buttons { margin-bottom: var(--space-4); }
+
+/* 방침 — 문구는 그대로, 틀만 칸으로 */
+.masthead__mark a { color: inherit; text-decoration: none; }
+.masthead__mark a:hover { text-decoration: underline; }
+.privacy-title h1 { font-size: var(--font-size-xl); }
+.privacy-toc h2 { font-size: var(--font-size-md); }
+.privacy-toc .rules { margin-bottom: 0; }
+.facts-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.panel ul { margin: 0 0 var(--space-4); padding-left: 1.3em; }
+.panel li { margin: var(--space-1) 0; }
 
 /* 지표 — 읽는 순서 · 목차 */
 .summary h1 { font-size: var(--font-size-xl); }
@@ -892,4 +906,11 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-metrics-3 > .retry-recovery { grid-column: 7 / span 6; }
   .layout-metrics-4 > .latency       { grid-column: 1 / -1; }
   .layout-metrics-4 > .retry-attempts { grid-column: 1 / span 7; }
+
+  /* 방침 시트 1 — 제목(7열) + 차례(5열). 이후 시트는 절을 전폭으로 쌓는다 */
+  .layout-privacy-1 { grid-template-rows: auto auto minmax(min-content, 1fr); }
+  .layout-privacy-1 > .privacy-title { grid-column: 1 / span 7; }
+  .layout-privacy-1 > .privacy-toc   { grid-column: 8 / span 5; }
+  .layout-privacy-doc { align-content: start; align-items: start; }
+  .layout-privacy-doc > .panel { grid-column: 1 / -1; }
 }
