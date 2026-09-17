@@ -85,6 +85,26 @@ class Work_model extends CI_Model
 		)->result_array();
 	}
 
+	/**
+	 * 작품 하나. 없으면 NULL.
+	 *
+	 * 랜딩은 없는 번호에도 열린다 — 방문·유입 기록은 작품 존재와 무관하게 남고,
+	 * 문서의 재현 명령(docs/api-spec.md · failure-scenarios.md)이 없는 번호 8733 을 쓴다.
+	 * 그래서 404 로 끊지 않고 화면이 "없는 작품"이라고 말한다.
+	 */
+	public function find($db, $id)
+	{
+		$row = $db->query(
+			'SELECT w.id, w.title, w.lang, w.status, w.age_rating_code, w.wait_free_hours, w.synopsis,
+			        (SELECT COUNT(*) FROM episodes e WHERE e.work_id = w.id) AS ep_count
+			   FROM works w
+			  WHERE w.id = ?',
+			array((int) $id)
+		)->row_array();
+
+		return $row === NULL || $row === array() ? NULL : $row;
+	}
+
 	/** 활성 로케일. hreflang 에 쓴다. */
 	public function locales($db)
 	{

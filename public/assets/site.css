@@ -597,6 +597,60 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
 .day--today { background: var(--today-bg); }
 .day__name { font-size: var(--font-size-base); margin-bottom: var(--space-2); }
 
+/* 랜딩 — 표지 칸 · 작품 머리 · 이번 요청 */
+.masthead__note { margin: 0; }
+.work-cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 10rem;
+}
+.work-cover__label { font-family: var(--font-family-mono); font-size: var(--font-size-lg); color: var(--color-text-secondary); }
+.work-cover__note  { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.work-info h1 { font-size: var(--font-size-xl); }
+.work-info__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin: 0 0 var(--space-3); font-size: var(--note-font-size); color: var(--color-text-secondary); }
+.work-info__synopsis { max-width: var(--max-width-content); margin: 0; }
+.visit-now__title { font-size: var(--font-size-md); }
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  margin: 0;
+  font-size: var(--note-font-size);
+}
+.facts dt { color: var(--color-text-secondary); }
+.facts dd { margin: 0; }
+.badge code { padding: 0; background: none; font-size: 1em; color: inherit; }
+
+/* 랜딩 기록 — 해설 층 목소리의 시트 */
+.meta-line { font-size: var(--note-font-size); color: var(--color-text-secondary); }
+.touch h3, .events h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); font-size: var(--font-size-base); }
+.touch__key { font-size: var(--font-size-xs); }
+.kv th { width: 7rem; color: var(--table-head-color); font-weight: var(--font-weight-normal); }
+.touch .empty { margin-top: var(--space-2); }
+.events .muted { font-size: var(--note-font-size); font-weight: var(--font-weight-normal); }
+
+/* 표가 칸보다 넓으면 표만 민다 — 페이지는 밀리지 않는다 */
+.table-scroll { overflow-x: auto; }
+.table-scroll .data { white-space: nowrap; }
+
+/* 버튼 — 테두리는 UI 경계 3:1(border-strong). 먹색 강조 없이 바탕만 바뀐다 */
+.buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.button {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--note-font-size);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+}
+.button:hover  { background: var(--color-bg-secondary); }
+.button:active { background: var(--color-bg-tertiary); }
+
 /* 순위 목록 · 데이터 표 — 시트 3 */
 .rank { margin: 0 0 var(--space-4); padding-left: 1.5em; }
 .rank li { margin: var(--space-1) 0; }
@@ -762,4 +816,21 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-home-lists { grid-template-rows: auto; align-content: start; align-items: start; }
   .layout-home-lists > :first-child { grid-column: 1 / span 5; }
   .layout-home-lists > :last-child  { grid-column: 6 / span 7; }
+
+  /* 랜딩 시트 1 — 표지(4열, 두 줄 높이) + 작품 머리 · 이번 요청(8열) + 다른 작품(12열) */
+  .layout-landing-1 { grid-template-rows: auto auto minmax(min-content, 1fr) auto auto; }
+  .layout-landing-1 > .work-cover { grid-column: 1 / span 4; grid-row: 3 / span 2; }
+  .layout-landing-1 > .work-info  { grid-column: 5 / span 8; }
+  .layout-landing-1 > .visit-now  { grid-column: 5 / span 8; }
+  .layout-landing-1 > .related    { grid-column: 1 / -1; }
+  .layout-landing-1 .work-info h1 { font-size: var(--font-size-2xl); }
+  .layout-landing-1 .facts { grid-template-columns: repeat(2, max-content minmax(0, 1fr)); }
+
+  /* 랜딩 시트 2 — 기록 머리(12) · 최초 | 마지막(6+6) · 이벤트(12) · 실험(12). 칸은 내용 높이만 */
+  .layout-landing-record { align-content: start; align-items: start; }
+  .layout-landing-record > .record-head,
+  .layout-landing-record > .events,
+  .layout-landing-record > .experiment { grid-column: 1 / -1; }
+  .layout-landing-record > .touch--first { grid-column: 1 / span 6; }
+  .layout-landing-record > .touch--last  { grid-column: 7 / span 6; }
 }

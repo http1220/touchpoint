@@ -64,6 +64,10 @@ class Landing extends MY_Controller
 		 * 클릭 링크의 sd 는 **여기서, 그리는 날로** 박는다 → src/Collect/ClickRequest
 		 */
 		$this->load->model('work_model');
+
+		// 작품 머리. 없는 번호면 NULL — 404 로 끊지 않는다(Work_model::find 주석)
+		$work_row = $this->work_model->find($this->read(), $id);
+
 		$related = array_values(array_filter(
 			$this->work_model->topByEpisodes($this->read(), 'ko', 5),
 			static function ($w) use ($id) { return (string) $w['id'] !== (string) $id; }
@@ -72,6 +76,7 @@ class Landing extends MY_Controller
 		$this->output->set_header('Cache-Control: no-store');
 		$this->load->view('landing/work', array(
 			'work'        => (string) $id,
+			'work_row'    => $work_row,
 			'visit_uid'   => $visit['uid_hex'],
 			'is_new'      => $visit['is_new'],
 			'result'      => $result,
@@ -79,7 +84,6 @@ class Landing extends MY_Controller
 			'events'      => $events,
 			'related'     => array_slice($related, 0, 4),
 			'stat_date'   => gmdate('Ymd'),
-			'shop'        => (string) (getenv('SHOP_DOMAIN') ?: ''),
 			'api_host'    => getenv('SHOP_DOMAIN') ? 'api.'.getenv('SHOP_DOMAIN') : '',
 			'read_target' => $this->readTarget(),
 			'trace_id'    => $this->trace_id,

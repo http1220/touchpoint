@@ -12,6 +12,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | @var string      $trace_id
 | @var string|null $read_target 없으면 적지 않는다
 | @var bool|null   $hide_privacy 방침 화면 자신
+| @var string|null $privacy_label 픽셀이 실린 화면(랜딩)은 "맞춤형 광고 거부"까지 적는다 — 거부로 가는 길이 보여야 한다
 */
 ?>
 <footer class="site-footer">
@@ -22,7 +23,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
     상관 ID <code><?= html_escape($trace_id) ?></code> ·
     <a href="https://github.com/http1220/touchpoint">소스<span aria-hidden="true">↗</span></a>
     <?php if (empty($hide_privacy)): ?>
-      · <a href="<?= html_escape(tp_host_url('root', '/privacy')) ?>">개인정보처리방침</a>
+      · <a href="<?= html_escape(tp_host_url('root', '/privacy')) ?>"><?= html_escape(isset($privacy_label) ? $privacy_label : '개인정보처리방침') ?></a>
     <?php endif; ?>
   </p>
 </footer>
