@@ -24,7 +24,7 @@
 
   /* 바탕 — 따뜻한 종이. 순백이 아니라 긴 한글 해설을 오래 읽는 면 */
   --color-bg-primary:   #fbfbf9;
-  --color-bg-secondary: #f3f2ee;   /* 시연 바 · 기록 패널 · 오늘 줄 · 코드 칩 */
+  --color-bg-secondary: #f3f2ee;   /* 나레이션 박스 · 기록 시트 · 오늘 줄 · 코드 칩 */
   --color-bg-tertiary:  #e9e7e1;   /* 표 머리 · 눌린 상태 */
   --color-bg-inverse:   #1c1b19;
   --color-bezel:        #e9e7e1;   /* 시트 밖 — 16:9 의 좌우, 시트 사이. 종이보다 한 단계 어둡다 */
@@ -115,11 +115,6 @@
 
   /* ─── 레이아웃 ─── */
   --max-width-content: 40rem;  /* 본문 한 줄 — 한글 약 40자 */
-  --max-width-wide:    52rem;  /* 표가 들어가는 본문 열 */
-  --max-width-page:    72rem;  /* 본문 열 + 간격 + 여백 열 */
-  --width-margin:      16rem;  /* 여백 주석 열 (1100px 이상) */
-  --gap-margin:        var(--space-7);
-  --gutter:            var(--space-4); /* 화면 좌우. 768px 이상에서 space-6 */
 
   --border-radius-sm:   2px;   /* 배지 · 코드 칩 */
   --border-radius-md:   4px;   /* 카드 · 버튼 · 표지 */
@@ -127,12 +122,11 @@
   /* lg 없음. 둥글기는 작게, 두 단계로 끝낸다 */
 
   --border-width:        1px;
-  --border-width-strong: 2px;  /* 현재 단계 밑줄 · 오늘 줄 · 기록 패널 머리선 */
+  --border-width-strong: 2px;  /* 현재 단계 밑줄 · 링크 hover · 서비스 머리 아래선 */
 
   --shadow-sm:          none;
   --shadow-md:          none;
   --shadow-lg:          none;
-  --shadow-scroll-edge: inset -12px 0 10px -10px rgba(28, 27, 25, 0.18); /* 더 밀어 볼 것이 있다는 표시 */
   --scroll-shade: rgba(28, 27, 25, 0.22);   /* 표 오른쪽 끝 그림자 색 — 밀어 볼 것이 남았다는 표시 */
   --shadow-focus:       none; /* 포커스는 그림자가 아니라 outline — 아래 focus-ring */
 
@@ -149,9 +143,8 @@
   /* slow · slower · bounce 없음. 스크롤 등장 · 떠오르는 카드를 만들지 않는다 */
 
   /* ─── 중단점 — CSS 변수는 @media 안에서 못 쓴다. 참조용으로 적고 규칙에는 숫자를 쓴다 ───
-     768px   좌우 여백이 넓어지고 카드가 한 줄에 더 들어간다
-     1100px  본문 열 + 여백 주석 열 두 열 그리드
-     1280px  확인 기준 데스크톱 */
+     768px + 가로   한 줄 모드 → 시트 모드(4:3 판, 12열 격자)
+     기준 화면      1024×768 · 1104×884(가로 폴더블) · 1920×1080(좌우 베젤) · 375×812(한 줄) */
 
   /* ─── 칸 그리드 — 만화의 칸·거터를 정렬 장치로만 쓴다 (2026-09-18) ───
      직사각형 칸 · 먹색 테두리 · 종이색 거터. 기울어진 칸 · 스크린톤 · 효과선은 쓰지 않는다 */
@@ -172,33 +165,19 @@
   --service-line-height: var(--line-height-relaxed);
   --service-color:       var(--color-text-primary);
 
-  /* 해설 층 — 여백 주석 · 기록 패널 · 시연 바. 한 단계 작고, 보조색, 가는 선 */
+  /* 해설 층 — 나레이션 박스 · 기록 시트 · 시연 바. 한 단계 작고, 보조색 */
   --note-font-size:   var(--font-size-sm);
   --note-line-height: var(--line-height-normal);
   --note-color:       var(--color-text-secondary);
-  --note-rule:        var(--border-width) solid var(--color-border-primary);
-  --note-marker-size:   var(--font-size-xs);
-  --note-marker-weight: var(--font-weight-bold);
-  --note-marker-color:  var(--color-text-primary);
 
-  /* 시연 바 */
-  --demo-bar-bg:            var(--color-bg-secondary);
   --demo-bar-color:         var(--color-text-secondary);
   --demo-bar-current-color: var(--color-text-primary);
-  --demo-bar-current-rule:  var(--border-width-strong) solid var(--color-text-primary);
 
-  /* 기록 패널 (랜딩) */
-  --record-bg:        var(--color-bg-secondary);
-  --record-head-rule: var(--border-width-strong) solid var(--color-text-primary);
-
-  /* 요일표 */
   --today-bg:   var(--color-bg-secondary);
-  --today-rule: var(--border-width-strong) solid var(--color-text-primary);
 
   /* 표 */
   --table-font-size:   var(--font-size-sm);
   --table-head-color:  var(--color-text-secondary);
-  --table-head-bg:     transparent;
   --table-row-rule:    var(--border-width) solid var(--color-border-primary);
   --table-sticky-bg:   var(--color-bg-primary);  /* 고정 열은 불투명해야 밀리는 칸을 가린다 */
 
@@ -260,7 +239,6 @@
   --color-cover-4: #2b2830;
   --color-cover-5: #2e2c24;
 
-  --shadow-scroll-edge: inset -12px 0 10px -10px rgba(0, 0, 0, 0.7);
   --scroll-shade: rgba(0, 0, 0, 0.8);
 }
 
@@ -300,7 +278,6 @@
     --color-cover-4: #2b2830;
     --color-cover-5: #2e2c24;
 
-    --shadow-scroll-edge: inset -12px 0 10px -10px rgba(0, 0, 0, 0.7);
     --scroll-shade: rgba(0, 0, 0, 0.8);
   }
 }

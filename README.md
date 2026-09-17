@@ -4,7 +4,7 @@
 
 **광고를 보고 들어온 사람이 결제까지 가는 길을 추적해서, 그 결과를 광고 매체에 되돌려 보내는 시스템입니다.**
 
-지금 실제로 돌아가고 있습니다 → **[웹툰 홈](https://sshwan.com/)** · **[광고 랜딩](https://lp.sshwan.com/l/8733)** · **[지표 화면](https://app.sshwan.com/metrics)**
+지금 실제로 돌아가고 있습니다 → **[웹툰 홈](https://sshwan.com/)** · **[광고 랜딩](https://lp.sshwan.com/l/1)** · **[지표 화면](https://app.sshwan.com/metrics)**
 
 *2026-09-14 기준*
 
