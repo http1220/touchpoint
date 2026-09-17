@@ -892,4 +892,9 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-privacy-1 > .privacy-toc   { grid-column: 8 / span 5; }
   .layout-privacy-doc { align-content: start; align-items: start; }
   .layout-privacy-doc > .panel { grid-column: 1 / -1; }
+
+  /* 진단 — 표(7열) + 확인할 것(5열) */
+  .layout-diag { align-content: start; align-items: start; }
+  .layout-diag > .diag-table { grid-column: 1 / span 7; }
+  .layout-diag > .diag-check { grid-column: 8 / span 5; }
 }

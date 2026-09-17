@@ -66,6 +66,7 @@ class Diag extends MY_Controller
 				'client_id'     => $gaClientId !== NULL ? $gaClientId : '(못 뽑음 — 서버 전송이 신규 사용자로 잡힌다)',
 				'서버 시각(UTC)' => tp_now_utc(),
 			),
+			'trace_id' => $this->trace_id,   // 공통 바닥글이 쓴다
 		);
 
 		$this->output->set_header('Cache-Control: no-store');

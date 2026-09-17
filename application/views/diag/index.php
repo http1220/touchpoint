@@ -1,47 +1,62 @@
-<?php defined('BASEPATH') OR exit('No direct script access allowed'); ?>
-<!doctype html>
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+/**
+ * 인프라 진단. 라우트 주석은 "개발 환경 전용" 이지만 운영에서도 열린다(어디서도 링크하지 않는다).
+ * 사이트에 하나 남은 옛 화면이라 틀만 다른 화면과 맞췄다 — **보여 주는 항목과 문구는 그대로**다.
+ *
+ * GA4·Meta 픽셀 로딩도 그대로 둔다. 화면 작업에서 수집 동작을 바꾸지 않는다.
+ *
+ * @var array  $rows
+ * @var string $trace_id
+ */
+?><!doctype html>
 <html lang="ko">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<head>
+<?php $this->load->view('partials/head', array('title' => '인프라 진단 · touchpoint')); ?>
 <?php $this->load->view('partials/gtag'); ?>
 <?php $this->load->view('partials/meta_pixel'); ?>
-<title>touchpoint · 인프라 진단</title>
-<style>
-  body{font:14px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:2rem;
-       background:#0f1115;color:#e6e8ec}
-  main{max-width:44rem;margin:0 auto}
-  h1{font-size:1.1rem;margin:0 0 .25rem}
-  .sub{color:#8b93a1;margin:0 0 1.5rem}
-  table{width:100%;border-collapse:collapse}
-  th,td{text-align:left;padding:.5rem .25rem;border-bottom:1px solid #232733;vertical-align:top}
-  th{color:#8b93a1;font-weight:400;width:11rem}
-  code{background:#1a1e27;padding:.1rem .35rem;border-radius:3px;word-break:break-all}
-  .ok{color:#5ec27a} .warn{color:#e0b341}
-  .note{margin-top:1.75rem;padding:.9rem 1rem;background:#171b23;border-left:2px solid #3a4152;color:#a8b0bd}
-</style>
-<main>
-  <h1>touchpoint</h1>
-  <p class="sub">인프라 진단 · CodeIgniter <?= html_escape(CI_VERSION) ?></p>
+</head>
+<body>
+<main class="stage">
+  <div class="sheet layout-diag">
+    <?php $this->load->view('partials/demo_bar', array('demo_step' => NULL)); ?>
 
-  <table>
-    <?php foreach ($rows as $k => $v): ?>
-      <tr><th><?= html_escape($k) ?></th><td><code><?= html_escape((string) $v) ?></code></td></tr>
-    <?php endforeach; ?>
-    <tr>
-      <th>TLS</th>
-      <td><?= ($this->input->server('HTTPS') OR $this->input->server('REQUEST_SCHEME') === 'https')
-            ? '<span class="ok">발급됨 — 브라우저 자물쇠 표시를 함께 확인하세요</span>'
-            : '<span class="warn">HTTP. ACME 발급이 아직 끝나지 않았거나 실패했습니다</span>' ?></td>
-    </tr>
-  </table>
+    <header class="masthead">
+      <p class="masthead__mark">touchpoint <span class="masthead__sub">진단</span></p>
+      <p class="eyebrow masthead__note">CodeIgniter <?= html_escape(CI_VERSION) ?></p>
+    </header>
 
-  <div class="note">
-    <strong>확인할 것</strong><br>
-    호스트 4개(<code>lp.</code> <code>m.</code> <code>app.</code> <code>api.</code>)가 모두 자물쇠 표시로 열리는지 ·
-    역할이 올바르게 판별되는지 · <code>읽기 대상</code>이 요청마다 rdb1/rdb2 로 갈리는지 ·
-    DevTools의 Application &gt; Cookies에서 <code>tp_probe_*</code> 쿠키의
-    <code>SameSite</code>·<code>Secure</code>·<code>Partitioned</code> 속성이
-    <code>docs/domains-and-cookies.md</code> 3장의 정책표와 일치하는지.
+    <section class="panel diag-table" aria-labelledby="diag-title">
+      <h1 id="diag-title">인프라 진단</h1>
+      <table class="data kv">
+        <tbody>
+          <?php foreach ($rows as $k => $v): ?>
+            <tr><th scope="row"><?= html_escape($k) ?></th><td><code><?= html_escape((string) $v) ?></code></td></tr>
+          <?php endforeach; ?>
+          <tr>
+            <th scope="row">TLS</th>
+            <td><?= ($this->input->server('HTTPS') OR $this->input->server('REQUEST_SCHEME') === 'https')
+                  ? '<span class="badge badge--success">발급됨</span> 브라우저 자물쇠 표시를 함께 확인하세요'
+                  : '<span class="badge badge--warning">HTTP</span> ACME 발급이 아직 끝나지 않았거나 실패했습니다' ?></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel diag-check" aria-labelledby="check-title">
+      <h2 id="check-title">확인할 것</h2>
+      <p class="caption">
+        호스트 4개(<code>lp.</code> <code>m.</code> <code>app.</code> <code>api.</code>)가 모두 자물쇠 표시로 열리는지 ·
+        역할이 올바르게 판별되는지 · <code>읽기 대상</code>이 요청마다 rdb1/rdb2 로 갈리는지 ·
+        DevTools의 Application &gt; Cookies에서 <code>tp_probe_*</code> 쿠키의
+        <code>SameSite</code>·<code>Secure</code>·<code>Partitioned</code> 속성이
+        <code>docs/domains-and-cookies.md</code> 3장의 정책표와 일치하는지.
+      </p>
+    </section>
   </div>
 </main>
+
+<?php $this->load->view('partials/footer'); ?>
+</body>
 </html>
