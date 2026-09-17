@@ -5,10 +5,11 @@
  * 각 화면이 자기 호스트의 /assets/site.css 를 읽는다 — 다른 오리진으로 요청이 나가지 않는다.
  *
  * 1. 토큰     — 값은 여기서만 정한다. 아래 규칙과 뷰는 var() 로만 쓴다
- * 2. 기본     — (6단계에서 채운다)
- * 3. 컴포넌트 — (6단계에서 채운다)
+ * 2. 기본     — 본문 · 제목 · 링크 · 포커스 · code
+ * 3. 컴포넌트 — 시트 · 칸 · 나레이션 박스 · 시연 바 · 바닥글 (한 줄 모드 기본, 가로로 넓으면 시트 모드)
  *
- * 방향: 기능주의 + 교정지 여백.
+ * 방향: 기능주의 + 칸 그리드. 만화의 칸·거터를 빌리되 정렬 장치로만 쓴다.
+ *   - 기준 화면은 가로 4:3 (펼친 폴더블 · 태블릿). 16:9 는 좌우 베젤, 세로 폰은 칸 한 줄
  *   - 유채색은 **의미가 있을 때만** 쓴다 (성공 · 경고 · 오류). 강조는 먹색의 굵기·밑줄·선으로 한다
  *   - 그림자를 쓰지 않는다. 예외는 기능이 있는 두 가지 — 표 스크롤 끝 그림자, 포커스 링
  *   - 글꼴을 내려받지 않는다. 외부 요청이 생기면 개인정보처리방침이 바뀌어야 한다
@@ -26,6 +27,7 @@
   --color-bg-secondary: #f3f2ee;   /* 시연 바 · 기록 패널 · 오늘 줄 · 코드 칩 */
   --color-bg-tertiary:  #e9e7e1;   /* 표 머리 · 눌린 상태 */
   --color-bg-inverse:   #1c1b19;
+  --color-bezel:        #e9e7e1;   /* 시트 밖 — 16:9 의 좌우, 시트 사이. 종이보다 한 단계 어둡다 */
 
   /* 글자 — 셋 다 모든 바탕에서 4.5:1 이상 */
   --color-text-primary:   #1c1b19;
@@ -150,6 +152,18 @@
      1100px  본문 열 + 여백 주석 열 두 열 그리드
      1280px  확인 기준 데스크톱 */
 
+  /* ─── 칸 그리드 — 만화의 칸·거터를 정렬 장치로만 쓴다 (2026-09-18) ───
+     직사각형 칸 · 먹색 테두리 · 종이색 거터. 기울어진 칸 · 스크린톤 · 효과선은 쓰지 않는다 */
+  --panel-frame-width: 2px;
+  --panel-frame:   var(--panel-frame-width) solid var(--color-text-primary);
+  --panel-gutter:  var(--space-3);
+  --panel-padding: var(--space-4);
+
+  /* 나레이션 박스 — 해설 층. 칸 왼쪽 위 모서리에 붙어 테두리를 칸과 나눈다 */
+  --caption-bg:        var(--color-bg-secondary);
+  --caption-rule:      var(--border-width) solid var(--color-text-primary);
+  --caption-font-size: var(--note-font-size);
+
   /* ─── 컴포넌트 토큰 — 두 목소리 ─── */
 
   /* 서비스 층 */
@@ -215,6 +229,7 @@
   --color-bg-secondary: #1f1e1b;
   --color-bg-tertiary:  #2a2925;
   --color-bg-inverse:   #e9e6df;
+  --color-bezel:        #0b0a09;
 
   --color-text-primary:   #e9e6df;
   --color-text-secondary: #b3afa6;
@@ -253,6 +268,7 @@
     --color-bg-secondary: #1f1e1b;
     --color-bg-tertiary:  #2a2925;
     --color-bg-inverse:   #e9e6df;
+    --color-bezel:        #0b0a09;
 
     --color-text-primary:   #e9e6df;
     --color-text-secondary: #b3afa6;
@@ -372,13 +388,63 @@ code {
 
 /* ─── 3. 컴포넌트 ─────────────────────────────────────────────── */
 
-/* 페이지 틀 — 좌우 여백은 --gutter 하나로 */
-.page {
-  max-width: var(--max-width-page);
+/*
+ * 시트와 칸.
+ *
+ * 두 모드다.
+ *   한 줄(기본) — 세로 폰 · 세로 태블릿 · 좁은 창. 칸이 세로로 한 줄. 웹툰처럼 읽는다
+ *   시트        — 768px 이상 **그리고** 가로. 칸을 4:3 판의 12열 격자에 배치한다
+ *
+ * 배치는 grid-column · grid-row 의 **span 만** 쓴다. 칸의 순서를 DOM 과 다르게 옮기지 않는다 —
+ * 탭 순서와 읽는 순서가 보이는 순서와 같아야 한다.
+ */
+
+.stage { margin: 0; }
+
+.sheet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--panel-gutter);
+  max-width: calc(var(--max-width-content) + 2 * var(--panel-gutter));
   margin: 0 auto;
-  padding: var(--space-7) var(--gutter) var(--space-8);
+  padding: var(--panel-gutter);
+  background: var(--color-bg-primary);
 }
-.page--narrow { max-width: calc(var(--max-width-content) + 2 * var(--gutter)); }
+
+.panel {
+  display: block;
+  min-width: 0;             /* 긴 식별자·표가 격자 칸을 밀어내지 않게 */
+  padding: var(--panel-padding);
+  background: var(--color-bg-primary);
+  border: var(--panel-frame);
+  color: inherit;
+}
+.panel > :last-child { margin-bottom: 0; }
+
+/* 누를 수 있는 칸 — 칸 전체가 링크다. 밑줄 대신 이름에 밑줄을 둔다 */
+a.panel { text-decoration: none; }
+a.panel:hover { background: var(--color-bg-secondary); }
+a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(--panel-frame-width) - 2px); }
+
+/* 칸 제목을 아래에 붙이는 칸 — 포스터식. 넓은 칸이 비어 보이지 않게 무게를 아래로 */
+.panel--bottom {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* 나레이션 박스 — 칸 왼쪽 위 모서리. 테두리를 칸과 나눈다 */
+.caption {
+  width: fit-content;
+  max-width: calc(100% + var(--panel-padding));
+  margin: calc(-1 * var(--panel-padding)) 0 var(--space-4) calc(-1 * var(--panel-padding));
+  padding: var(--space-2) var(--space-3);
+  background: var(--caption-bg);
+  border-right: var(--caption-rule);
+  border-bottom: var(--caption-rule);
+  font-size: var(--caption-font-size);
+  line-height: var(--note-line-height);
+}
 
 /* 제목 위 작은 표지 — 화면 번호 · 상태 코드 */
 .eyebrow {
@@ -390,18 +456,40 @@ code {
   color: var(--color-text-secondary);
 }
 
-/* 시연 바 — 해설 층 목소리. 서비스 머리와 섞이지 않게 바탕을 한 단계 내린다 */
+/* 번호 · 이름 · 설명 — 경로 칸(404) 과 안내 칸(홈) 이 같이 쓴다 */
+.step__num {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+.step__name {
+  display: block;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  text-decoration: underline;
+  text-decoration-thickness: var(--border-width);
+  text-underline-offset: 0.2em;
+}
+a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
+.step__desc {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--note-font-size);
+  line-height: var(--note-line-height);
+  color: var(--color-text-secondary);
+}
+
+/* 시연 바 — 첫 시트의 첫 줄. 시트가 화면을 꼭 채우도록 시트 밖에 두지 않는다 */
 .demo-bar {
-  background: var(--demo-bar-bg);
-  border-bottom: var(--note-rule);
+  grid-column: 1 / -1;
   color: var(--demo-bar-color);
   font-size: var(--note-font-size);
   line-height: var(--note-line-height);
 }
 .demo-bar__inner {
-  max-width: var(--max-width-page);
-  margin: 0 auto;
-  padding: 0 var(--gutter);
   display: flex;
   flex-wrap: wrap;          /* 좁으면 줄을 바꾼다 — 가로 스크롤을 만들지 않는다 */
   align-items: center;
@@ -445,54 +533,51 @@ code {
 }
 .demo-bar__source { margin-left: auto; }
 
-@media (min-width: 768px) {
-  .demo-bar a { min-height: 36px; }
-}
-
-/* 경로 목록 — 404 의 세 화면 */
-.route-list {
-  margin: var(--space-6) 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: var(--note-rule);
-}
-.route-list li { border-bottom: var(--note-rule); }
-.route-list a {
-  display: grid;
-  grid-template-columns: 2rem 1fr;
-  column-gap: var(--space-2);
-  padding: var(--space-4) 0;
-  color: inherit;
-  text-decoration: none;
-}
-.route-list__num  { font-weight: var(--font-weight-bold); }
-.route-list__name {
-  font-weight: var(--font-weight-bold);
-  text-decoration: underline;
-  text-decoration-thickness: var(--border-width);
-  text-underline-offset: 0.2em;
-}
-.route-list a:hover .route-list__name { text-decoration-thickness: var(--border-width-strong); }
-.route-list__desc {
-  grid-column: 2;
-  font-size: var(--note-font-size);
-  color: var(--color-text-secondary);
-}
-
-/* 바닥글 — 해설 층 목소리 */
+/* 바닥글 — 해설 층 목소리. 시트 모드에서는 베젤 위에 놓인다 */
 .site-footer {
-  max-width: var(--max-width-page);
+  max-width: calc(var(--max-width-content) + 2 * var(--panel-gutter));
   margin: 0 auto;
-  padding: 0 var(--gutter) var(--space-7);
+  padding: var(--space-2) var(--panel-gutter) var(--space-7);
   font-size: var(--note-font-size);
   line-height: var(--note-line-height);
   color: var(--note-color);
 }
-/* 선은 안쪽에 — 바깥 상자에 걸면 좌우 여백까지 그어져 본문보다 길어진다 */
-.site-footer p {
-  margin: 0;
-  padding-top: var(--space-5);
-  border-top: var(--note-rule);
-}
+.site-footer p { margin: 0; }
 .site-footer a { color: inherit; }
-.page--narrow + .site-footer { max-width: calc(var(--max-width-content) + 2 * var(--gutter)); }
+
+/* ─── 시트 모드 — 넓고 가로인 화면 ──────────────────────────────
+   시트 폭 = min(본문 폭, 화면 높이 × 4/3). 폭은 % 로 잡는다 — 100vw 는 데스크톱 스크롤바를 포함해
+   가로 넘침을 만든다. 글자 크기만 vw 로 근사한다(스크롤바 17px ÷ 64 ≈ 0.3px, 무시할 수 있다). */
+
+@media (min-width: 768px) and (min-aspect-ratio: 1/1) {
+  html {
+    /* 시트 폭 ÷ 64, 16~20px. 1024~1280 판은 같은 판면이다 */
+    font-size: clamp(16px, calc(min(100vw, 133.3333vh) / 64), 20px);
+    font-size: clamp(16px, calc(min(100vw, 133.3333svh) / 64), 20px);
+    scroll-snap-type: y proximity; /* mandatory 는 시트보다 긴 내용을 가둔다 */
+  }
+  body { background: var(--color-bezel); }
+
+  .sheet {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    width: min(100%, 133.3333vh);
+    width: min(100%, 133.3333svh);
+    max-width: none;
+    aspect-ratio: 4 / 3;    /* 높이는 폭의 3/4. 내용이 길면 늘어난다 */
+    scroll-snap-align: start;
+  }
+  .sheet + .sheet { margin-top: var(--space-5); }
+
+  .site-footer {
+    width: min(100%, 133.3333vh);
+    width: min(100%, 133.3333svh);
+    max-width: none;
+    padding-top: var(--space-4);
+  }
+
+  /* 404 — 큰 제목 칸 하나 + 경로 칸 셋 */
+  .layout-404 { grid-template-rows: auto repeat(3, minmax(min-content, 1fr)); }
+  .layout-404 > .panel--title { grid-column: 1 / span 7; grid-row: 2 / span 3; }
+  .layout-404 > .panel--route { grid-column: 8 / span 5; }
+  .layout-404 .panel--title h1 { font-size: var(--font-size-2xl); }
+}
