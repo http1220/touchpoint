@@ -66,7 +66,7 @@ CL=$(curl -s -b "$JAR" -A "$UA" -o /dev/null -D - "https://api.$SHOP/click?w=2&s
 [ -n "$CL" ] && ok "배너 클릭 302 ${CL#*: }" || bad "click"
 
 say "4. 결제 시작 — app./purchase (브라우저 Origin · Referer · 방문 쿠키)"
-USER=$(docker compose run --rm --no-deps -T -e SEED_ALLOWED=true app php public/index.php cli/seed user "demo-$T@example.invalid" 2>/dev/null | sed -n 's/^user_uid=//p' | tr -d '\r')
+USER=$(docker compose run --rm --no-deps -T -e SEED_ALLOWED=true app php public/index.php cli/seed user 2>/dev/null | sed -n 's/^user_uid=//p' | tr -d '\r')
 [ -n "$USER" ] && ok "데모 회원 ${USER:0:12}…" || bad "회원 생성"
 P=$(curl -s -b "$JAR" -A "$UA" "https://app.$SHOP/purchase" -H 'Content-Type: application/json' \
   -H "Origin: https://app.$SHOP" -H "Referer: https://app.$SHOP/coins/checkout?promo=demo" \
