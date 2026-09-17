@@ -133,6 +133,7 @@
   --shadow-md:          none;
   --shadow-lg:          none;
   --shadow-scroll-edge: inset -12px 0 10px -10px rgba(28, 27, 25, 0.18); /* 더 밀어 볼 것이 있다는 표시 */
+  --scroll-shade: rgba(28, 27, 25, 0.22);   /* 표 오른쪽 끝 그림자 색 — 밀어 볼 것이 남았다는 표시 */
   --shadow-focus:       none; /* 포커스는 그림자가 아니라 outline — 아래 focus-ring */
 
   --focus-ring-width:  2px;
@@ -260,6 +261,7 @@
   --color-cover-5: #2e2c24;
 
   --shadow-scroll-edge: inset -12px 0 10px -10px rgba(0, 0, 0, 0.7);
+  --scroll-shade: rgba(0, 0, 0, 0.8);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -299,6 +301,7 @@
     --color-cover-5: #2e2c24;
 
     --shadow-scroll-edge: inset -12px 0 10px -10px rgba(0, 0, 0, 0.7);
+    --scroll-shade: rgba(0, 0, 0, 0.8);
   }
 }
 
@@ -631,9 +634,28 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
 .touch .empty { margin-top: var(--space-2); }
 .events .muted { font-size: var(--note-font-size); font-weight: var(--font-weight-normal); }
 
-/* 표가 칸보다 넓으면 표만 민다 — 페이지는 밀리지 않는다 */
-.table-scroll { overflow-x: auto; }
+/* 표가 칸보다 넓으면 표만 민다 — 페이지는 밀리지 않는다.
+   오른쪽 끝 그림자(JS 없음): 그림자는 보이는 칸의 오른쪽 끝에 고정(scroll)되고,
+   종이색 덮개는 표 내용의 오른쪽 끝에 붙어 함께 움직인다(local).
+   더 밀 것이 남아 있으면 덮개가 화면 밖이라 그림자가 보이고, 끝까지 밀면 덮개가 그림자를 가린다 */
+.table-scroll {
+  overflow-x: auto;
+  background:
+    linear-gradient(to left, var(--color-bg-primary) 60%, transparent) right center / 1.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--scroll-shade), transparent) right center / 0.75rem 100% no-repeat scroll;
+}
 .table-scroll .data { white-space: nowrap; }
+
+/* 첫 열(채널 · 이벤트)은 붙어 있다 — 밀어도 어느 줄의 숫자인지 안다 */
+.table-scroll .data th:first-child,
+.table-scroll .data td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--table-sticky-bg);
+}
+.data tr.sum td { color: var(--color-text-secondary); border-bottom: none; }
+.data td.muted { font-size: var(--note-font-size); }
 
 /* 버튼 — 테두리는 UI 경계 3:1(border-strong). 먹색 강조 없이 바탕만 바뀐다 */
 .buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
@@ -650,6 +672,25 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
 }
 .button:hover  { background: var(--color-bg-secondary); }
 .button:active { background: var(--color-bg-tertiary); }
+
+/* 지표 — 읽는 순서 · 목차 */
+.summary h1 { font-size: var(--font-size-xl); }
+.rules { margin: 0 0 var(--space-4); padding-left: 1.4em; }
+.rules li { margin: var(--space-2) 0; }
+.toc { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-4); }
+.toc a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+.toc a:hover { background: var(--color-bg-secondary); }
+.panel h2 .muted { font-size: var(--note-font-size); font-weight: var(--font-weight-normal); }
+.visits .kv th { width: auto; }
+.meta-line code, .masthead__note code { font-size: 0.85em; }
 
 /* 순위 목록 · 데이터 표 — 시트 3 */
 .rank { margin: 0 0 var(--space-4); padding-left: 1.5em; }
@@ -833,4 +874,22 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-landing-record > .experiment { grid-column: 1 / -1; }
   .layout-landing-record > .touch--first { grid-column: 1 / span 6; }
   .layout-landing-record > .touch--last  { grid-column: 7 / span 6; }
+
+  /* 지표 시트 1 — 읽는 순서(5열, 두 줄 높이) + ① 방문과 접점 · 배너 CTR(7열) */
+  .layout-metrics-1 { grid-template-rows: auto auto minmax(min-content, 1fr) minmax(min-content, 1fr); }
+  .layout-metrics-1 > .summary { grid-column: 1 / span 5; grid-row: 3 / span 2; }
+  .layout-metrics-1 > .visits,
+  .layout-metrics-1 > .ctr     { grid-column: 6 / span 7; }
+
+  /* 지표 시트 2 · 3 · 4 — 칸은 내용 높이만. 남는 판면은 종이 */
+  .layout-metrics-2,
+  .layout-metrics-3,
+  .layout-metrics-4 { align-content: start; align-items: start; }
+  .layout-metrics-2 > .conversions,
+  .layout-metrics-2 > .outbox        { grid-column: 1 / -1; }
+  .layout-metrics-3 > .reach         { grid-column: 1 / -1; }
+  .layout-metrics-3 > .http-status   { grid-column: 1 / span 6; }
+  .layout-metrics-3 > .retry-recovery { grid-column: 7 / span 6; }
+  .layout-metrics-4 > .latency       { grid-column: 1 / -1; }
+  .layout-metrics-4 > .retry-attempts { grid-column: 1 / span 7; }
 }
