@@ -681,6 +681,7 @@ p.buttons { margin-bottom: var(--space-4); }
 .toc a:hover { background: var(--color-bg-secondary); }
 .panel h2 .muted { font-size: var(--note-font-size); font-weight: var(--font-weight-normal); }
 .visits .kv th { width: auto; }
+.diag-table .kv th { width: 11rem; }  /* "억제된 deprecation" 같은 긴 이름이 두 줄로 접히지 않게 */
 .meta-line code, .masthead__note code { font-size: 0.85em; }
 
 /* 순위 목록 · 데이터 표 — 시트 3 */
