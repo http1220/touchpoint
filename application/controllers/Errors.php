@@ -23,6 +23,6 @@ class Errors extends MY_Controller
 		$this->output
 			->set_status_header(404)
 			->set_content_type('text/html', 'utf-8');
-		$this->load->view('errors/not_found');
+		$this->load->view('errors/not_found', array('trace_id' => $this->trace_id));
 	}
 }

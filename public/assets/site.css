@@ -1,0 +1,498 @@
+/*
+ * touchpoint — 공통 스타일
+ *
+ * 한 파일이다. 모든 호스트(루트 · lp. · m. · app.)가 같은 public/ 을 루트로 쓰므로
+ * 각 화면이 자기 호스트의 /assets/site.css 를 읽는다 — 다른 오리진으로 요청이 나가지 않는다.
+ *
+ * 1. 토큰     — 값은 여기서만 정한다. 아래 규칙과 뷰는 var() 로만 쓴다
+ * 2. 기본     — (6단계에서 채운다)
+ * 3. 컴포넌트 — (6단계에서 채운다)
+ *
+ * 방향: 기능주의 + 교정지 여백.
+ *   - 유채색은 **의미가 있을 때만** 쓴다 (성공 · 경고 · 오류). 강조는 먹색의 굵기·밑줄·선으로 한다
+ *   - 그림자를 쓰지 않는다. 예외는 기능이 있는 두 가지 — 표 스크롤 끝 그림자, 포커스 링
+ *   - 글꼴을 내려받지 않는다. 외부 요청이 생기면 개인정보처리방침이 바뀌어야 한다
+ *
+ * 대비는 눈으로 고르지 않았다 — 전 조합을 WCAG 공식으로 계산해 4.5:1(글자) · 3:1(경계)을 넘긴 값이다.
+ */
+
+/* ─── 1. 토큰 · 라이트 ─────────────────────────────────────────── */
+
+:root {
+  color-scheme: light dark;
+
+  /* 바탕 — 따뜻한 종이. 순백이 아니라 긴 한글 해설을 오래 읽는 면 */
+  --color-bg-primary:   #fbfbf9;
+  --color-bg-secondary: #f3f2ee;   /* 시연 바 · 기록 패널 · 오늘 줄 · 코드 칩 */
+  --color-bg-tertiary:  #e9e7e1;   /* 표 머리 · 눌린 상태 */
+  --color-bg-inverse:   #1c1b19;
+
+  /* 글자 — 셋 다 모든 바탕에서 4.5:1 이상 */
+  --color-text-primary:   #1c1b19;
+  --color-text-secondary: #57554f; /* 주석 · 메타 · 표 머리 */
+  --color-text-tertiary:  #65635d; /* 빈 값 "—" · 무응답. 흐려도 읽혀야 한다 */
+  --color-text-inverse:   #fbfbf9;
+  --color-text-link:      var(--color-text-primary); /* 링크는 색이 아니라 밑줄로 구분한다 */
+
+  /* 선 */
+  --color-border-primary:   #dcd9d2; /* 표 행 · 섹션 구분 — 장식선 */
+  --color-border-secondary: #eceae4; /* 더 옅은 구분 */
+  --color-border-strong:    #8c8980; /* 버튼 · 스크롤 영역 등 UI 경계 — 3:1 */
+  --color-border-focus:     var(--color-text-primary);
+
+  /* 강조 — 유채색 없음. 먹색 하나를 굵기 · 밑줄 · 선으로 쓴다 */
+  --color-accent-primary:        var(--color-text-primary);
+  --color-accent-primary-hover:  #000000;
+  --color-accent-primary-active: #000000;
+  --color-accent-secondary:      var(--color-text-secondary);
+
+  /* 의미색 — 글자(fg) · 면(bg). fg 는 bg 와 기본 바탕 양쪽에서 4.5:1 */
+  --color-status-success:    #1d6b43;
+  --color-status-success-bg: #e5f1e9;
+  --color-status-warning:    #855400;
+  --color-status-warning-bg: #f6ecd6;
+  --color-status-error:      #b0261c;
+  --color-status-error-bg:   #fae8e5;
+  --color-status-info:       var(--color-text-secondary); /* 정보는 색으로 말하지 않는다 */
+  --color-status-info-bg:    var(--color-bg-secondary);
+
+  --color-surface-overlay: rgba(28, 27, 25, 0.4); /* 지금 쓰는 곳 없음 — 모달을 만들지 않는다 */
+
+  /* 표지 자리표시 — 이미지가 아닌 것이 보여야 한다. 작품 id mod 6 으로 고른다.
+     채도를 거의 빼서 서비스 층의 어떤 의미색보다도 조용하다. 위의 글자(보조색)는 6개 모두 4.5:1 */
+  --color-cover-0: #e4e1da;
+  --color-cover-1: #dfe3e0;
+  --color-cover-2: #e0e2e8;
+  --color-cover-3: #e8e0dc;
+  --color-cover-4: #e3e0e8;
+  --color-cover-5: #e6e3d6;
+
+  /* ─── 간격 — 4px 격자 (base 16px × 배수) ─── */
+  --space-0:  0;
+  --space-1:  0.25rem;  /*   4 */
+  --space-2:  0.5rem;   /*   8 */
+  --space-3:  0.75rem;  /*  12 */
+  --space-4:  1rem;     /*  16 */
+  --space-5:  1.5rem;   /*  24 */
+  --space-6:  2rem;     /*  32 */
+  --space-7:  3rem;     /*  48 */
+  --space-8:  4rem;     /*  64 */
+  --space-9:  6rem;     /*  96 */
+  --space-10: 8rem;     /* 128 */
+
+  /* ─── 글자 ─── */
+  /* 시스템 글꼴. Windows 는 Segoe UI + 맑은 고딕, macOS 는 SF + Apple SD 산돌고딕 Neo 로 떨어진다 */
+  --font-family-body:    system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                         "Malgun Gothic", "Noto Sans KR", "Segoe UI", sans-serif;
+  --font-family-display: var(--font-family-body); /* 제목 전용 서체를 두지 않는다 — 크기와 굵기로만 위계를 만든다 */
+  --font-family-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, "D2Coding", monospace;
+
+  --font-size-xs:   0.75rem;   /* 12 · 주석 번호 마커 · 표 단위 */
+  --font-size-sm:   0.875rem;  /* 14 · 주석 · 표 · 배지 · 메타 */
+  --font-size-base: 1rem;      /* 16 · 본문. 모바일 최소 */
+  --font-size-md:   1.125rem;  /* 18 · 섹션 제목 */
+  --font-size-lg:   1.25rem;   /* 20 · 화면 제목(모바일) · 작품 제목 */
+  --font-size-xl:   1.5rem;    /* 24 · 화면 제목(데스크톱) */
+  --font-size-2xl:  1.875rem;  /* 30 · 상한 */
+  /* 3xl · 4xl 은 만들지 않는다. 분모 없는 큰 숫자를 만들 자리를 두지 않는다 (브리프 원칙 2) */
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500; /* 맑은 고딕에는 500 · 600 굵기가 없어 400 · 700 으로 떨어진다 */
+  --font-weight-semibold: 600; /* 위계를 이 둘의 차이에 기대지 않는다 */
+  --font-weight-bold:     700;
+
+  --line-height-tight:   1.3;  /* 제목 */
+  --line-height-normal:  1.5;  /* 표 · 주석 · 배지 */
+  --line-height-relaxed: 1.7;  /* 한글 본문 */
+
+  --letter-spacing-tight:  -0.01em; /* 라틴 워드마크만. 한글에 음수 자간을 주지 않는다 */
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide:   0.04em;  /* "시연" · 묶음 라벨 */
+
+  --font-numeric: tabular-nums; /* font-variant-numeric — 표의 숫자 자릿수를 세로로 맞춘다 */
+
+  /* ─── 레이아웃 ─── */
+  --max-width-content: 40rem;  /* 본문 한 줄 — 한글 약 40자 */
+  --max-width-wide:    52rem;  /* 표가 들어가는 본문 열 */
+  --max-width-page:    72rem;  /* 본문 열 + 간격 + 여백 열 */
+  --width-margin:      16rem;  /* 여백 주석 열 (1100px 이상) */
+  --gap-margin:        var(--space-7);
+  --gutter:            var(--space-4); /* 화면 좌우. 768px 이상에서 space-6 */
+
+  --border-radius-sm:   2px;   /* 배지 · 코드 칩 */
+  --border-radius-md:   4px;   /* 카드 · 버튼 · 표지 */
+  --border-radius-full: 999px; /* 쓰는 곳 없음 — 알약 모양을 만들지 않는다 */
+  /* lg 없음. 둥글기는 작게, 두 단계로 끝낸다 */
+
+  --border-width:        1px;
+  --border-width-strong: 2px;  /* 현재 단계 밑줄 · 오늘 줄 · 기록 패널 머리선 */
+
+  --shadow-sm:          none;
+  --shadow-md:          none;
+  --shadow-lg:          none;
+  --shadow-scroll-edge: inset -12px 0 10px -10px rgba(28, 27, 25, 0.18); /* 더 밀어 볼 것이 있다는 표시 */
+  --shadow-focus:       none; /* 포커스는 그림자가 아니라 outline — 아래 focus-ring */
+
+  --focus-ring-width:  2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color:  var(--color-border-focus);
+
+  /* ─── 움직임 — 장식 없음. 상태 변화(밑줄 · 배경)에만 짧게 ─── */
+  --duration-instant: 0ms;
+  --duration-fast:    120ms;
+  --duration-normal:  200ms;
+  --easing-default:   cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-out:       cubic-bezier(0, 0, 0.2, 1);
+  /* slow · slower · bounce 없음. 스크롤 등장 · 떠오르는 카드를 만들지 않는다 */
+
+  /* ─── 중단점 — CSS 변수는 @media 안에서 못 쓴다. 참조용으로 적고 규칙에는 숫자를 쓴다 ───
+     768px   좌우 여백이 넓어지고 카드가 한 줄에 더 들어간다
+     1100px  본문 열 + 여백 주석 열 두 열 그리드
+     1280px  확인 기준 데스크톱 */
+
+  /* ─── 컴포넌트 토큰 — 두 목소리 ─── */
+
+  /* 서비스 층 */
+  --service-font-size:   var(--font-size-base);
+  --service-line-height: var(--line-height-relaxed);
+  --service-color:       var(--color-text-primary);
+
+  /* 해설 층 — 여백 주석 · 기록 패널 · 시연 바. 한 단계 작고, 보조색, 가는 선 */
+  --note-font-size:   var(--font-size-sm);
+  --note-line-height: var(--line-height-normal);
+  --note-color:       var(--color-text-secondary);
+  --note-rule:        var(--border-width) solid var(--color-border-primary);
+  --note-marker-size:   var(--font-size-xs);
+  --note-marker-weight: var(--font-weight-bold);
+  --note-marker-color:  var(--color-text-primary);
+
+  /* 시연 바 */
+  --demo-bar-bg:            var(--color-bg-secondary);
+  --demo-bar-color:         var(--color-text-secondary);
+  --demo-bar-current-color: var(--color-text-primary);
+  --demo-bar-current-rule:  var(--border-width-strong) solid var(--color-text-primary);
+
+  /* 기록 패널 (랜딩) */
+  --record-bg:        var(--color-bg-secondary);
+  --record-head-rule: var(--border-width-strong) solid var(--color-text-primary);
+
+  /* 요일표 */
+  --today-bg:   var(--color-bg-secondary);
+  --today-rule: var(--border-width-strong) solid var(--color-text-primary);
+
+  /* 표 */
+  --table-font-size:   var(--font-size-sm);
+  --table-head-color:  var(--color-text-secondary);
+  --table-head-bg:     transparent;
+  --table-row-rule:    var(--border-width) solid var(--color-border-primary);
+  --table-sticky-bg:   var(--color-bg-primary);  /* 고정 열은 불투명해야 밀리는 칸을 가린다 */
+
+  /* 배지 — 변형 다섯. 모든 배지는 글자를 가진다(색만으로 전하지 않는다) */
+  --badge-font-size: var(--font-size-xs);
+  --badge-neutral-fg: var(--color-text-secondary);
+  --badge-neutral-bg: transparent;
+  --badge-neutral-border: var(--color-border-primary);
+  --badge-strong-fg: var(--color-text-inverse);   /* 새 방문 · created — 사실을 먹으로 채워 구분 */
+  --badge-strong-bg: var(--color-bg-inverse);
+  --badge-success-fg: var(--color-status-success);
+  --badge-success-bg: var(--color-status-success-bg);
+  --badge-warning-fg: var(--color-status-warning);
+  --badge-warning-bg: var(--color-status-warning-bg);
+  --badge-error-fg: var(--color-status-error);
+  --badge-error-bg: var(--color-status-error-bg);
+
+  /* 코드 칩 */
+  --code-bg:    var(--color-bg-secondary);
+  --code-color: var(--color-text-primary);
+}
+
+/* ─── 1. 토큰 · 다크 ──────────────────────────────────────────────
+   반전이 아니다. 종이의 따뜻함을 이어받은 숯색이고, 글자는 순백이 아닌 미색이다.
+   수동 전환 버튼은 없다 — [data-theme] 는 시스템 설정을 덮어쓸 여지만 남긴다 */
+
+:root[data-theme="dark"] {
+  --color-bg-primary:   #161513;
+  --color-bg-secondary: #1f1e1b;
+  --color-bg-tertiary:  #2a2925;
+  --color-bg-inverse:   #e9e6df;
+
+  --color-text-primary:   #e9e6df;
+  --color-text-secondary: #b3afa6;
+  --color-text-tertiary:  #9a968d;
+  --color-text-inverse:   #161513;
+
+  --color-border-primary:   #3a3833;
+  --color-border-secondary: #2a2925;
+  --color-border-strong:    #77736a;
+
+  --color-accent-primary-hover:  #ffffff;
+  --color-accent-primary-active: #ffffff;
+
+  --color-status-success:    #7fd0a0;
+  --color-status-success-bg: #17291f;
+  --color-status-warning:    #e3b95c;
+  --color-status-warning-bg: #2d2414;
+  --color-status-error:      #ff9a8a;
+  --color-status-error-bg:   #331b18;
+
+  --color-surface-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-cover-0: #2b2925;
+  --color-cover-1: #262b28;
+  --color-cover-2: #272a31;
+  --color-cover-3: #2f2826;
+  --color-cover-4: #2b2830;
+  --color-cover-5: #2e2c24;
+
+  --shadow-scroll-edge: inset -12px 0 10px -10px rgba(0, 0, 0, 0.7);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg-primary:   #161513;
+    --color-bg-secondary: #1f1e1b;
+    --color-bg-tertiary:  #2a2925;
+    --color-bg-inverse:   #e9e6df;
+
+    --color-text-primary:   #e9e6df;
+    --color-text-secondary: #b3afa6;
+    --color-text-tertiary:  #9a968d;
+    --color-text-inverse:   #161513;
+
+    --color-border-primary:   #3a3833;
+    --color-border-secondary: #2a2925;
+    --color-border-strong:    #77736a;
+
+    --color-accent-primary-hover:  #ffffff;
+    --color-accent-primary-active: #ffffff;
+
+    --color-status-success:    #7fd0a0;
+    --color-status-success-bg: #17291f;
+    --color-status-warning:    #e3b95c;
+    --color-status-warning-bg: #2d2414;
+    --color-status-error:      #ff9a8a;
+    --color-status-error-bg:   #331b18;
+
+    --color-surface-overlay: rgba(0, 0, 0, 0.6);
+
+    --color-cover-0: #2b2925;
+    --color-cover-1: #262b28;
+    --color-cover-2: #272a31;
+    --color-cover-3: #2f2826;
+    --color-cover-4: #2b2830;
+    --color-cover-5: #2e2c24;
+
+    --shadow-scroll-edge: inset -12px 0 10px -10px rgba(0, 0, 0, 0.7);
+  }
+}
+
+@media (min-width: 768px) {
+  :root { --gutter: var(--space-6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast:   0ms;
+    --duration-normal: 0ms;
+  }
+}
+
+/* ─── 2. 기본 ─────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-primary);
+  color: var(--service-color);
+  font-family: var(--font-family-body);
+  font-size: var(--service-font-size);
+  line-height: var(--service-line-height);
+  /* 한글은 어절 단위로 줄을 바꾼다. 긴 식별자는 code 에서 따로 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  text-wrap: balance;
+}
+h1 { font-size: var(--font-size-lg); margin: 0 0 var(--space-3); }
+h2 { font-size: var(--font-size-md); margin: var(--space-7) 0 var(--space-3); }
+h3 { font-size: var(--font-size-base); margin: var(--space-5) 0 var(--space-2); }
+
+@media (min-width: 768px) {
+  h1 { font-size: var(--font-size-xl); }
+}
+
+p { margin: 0 0 var(--space-4); }
+
+/* 링크는 색이 아니라 밑줄로 구분한다 — 강조색이 먹색 하나라서 */
+a {
+  color: var(--color-text-link);
+  text-decoration: underline;
+  text-decoration-thickness: var(--border-width);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-thickness var(--duration-fast) var(--easing-default);
+}
+a:hover { text-decoration-thickness: var(--border-width-strong); }
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--border-radius-sm);
+}
+
+code {
+  font-family: var(--font-family-mono);
+  font-size: 0.875em;
+  background: var(--code-bg);
+  color: var(--code-color);
+  padding: 0.1em 0.3em;
+  border-radius: var(--border-radius-sm);
+  overflow-wrap: anywhere; /* 방문 ID · 상관 ID 같은 32자 hex 가 화면을 밀지 않게 */
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── 3. 컴포넌트 ─────────────────────────────────────────────── */
+
+/* 페이지 틀 — 좌우 여백은 --gutter 하나로 */
+.page {
+  max-width: var(--max-width-page);
+  margin: 0 auto;
+  padding: var(--space-7) var(--gutter) var(--space-8);
+}
+.page--narrow { max-width: calc(var(--max-width-content) + 2 * var(--gutter)); }
+
+/* 제목 위 작은 표지 — 화면 번호 · 상태 코드 */
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-family-mono);
+  font-size: var(--note-font-size);
+  font-variant-numeric: var(--font-numeric);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-text-secondary);
+}
+
+/* 시연 바 — 해설 층 목소리. 서비스 머리와 섞이지 않게 바탕을 한 단계 내린다 */
+.demo-bar {
+  background: var(--demo-bar-bg);
+  border-bottom: var(--note-rule);
+  color: var(--demo-bar-color);
+  font-size: var(--note-font-size);
+  line-height: var(--note-line-height);
+}
+.demo-bar__inner {
+  max-width: var(--max-width-page);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: flex;
+  flex-wrap: wrap;          /* 좁으면 줄을 바꾼다 — 가로 스크롤을 만들지 않는다 */
+  align-items: center;
+  column-gap: var(--space-4);
+}
+.demo-bar__label {
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-text-primary);
+}
+.demo-bar__steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.demo-bar__steps li + li::before {
+  content: "›";
+  content: "›" / "";       /* 읽지 않게. 지원하지 않는 브라우저는 윗줄을 쓴다 */
+  padding: 0 var(--space-1);
+  color: var(--color-text-tertiary);
+}
+.demo-bar a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;              /* flex 안에서는 번호와 이름 사이 공백이 사라진다 */
+  min-height: 44px;         /* 터치 대상 */
+  padding: 0 var(--space-1);
+  color: inherit;
+  text-decoration: none;
+}
+.demo-bar a:hover { color: var(--color-text-primary); text-decoration: underline; }
+.demo-bar a[aria-current="page"] {
+  color: var(--demo-bar-current-color);
+  font-weight: var(--font-weight-bold);
+  text-decoration: underline;
+  text-decoration-thickness: var(--border-width-strong);
+  text-underline-offset: 0.35em;
+}
+.demo-bar__source { margin-left: auto; }
+
+@media (min-width: 768px) {
+  .demo-bar a { min-height: 36px; }
+}
+
+/* 경로 목록 — 404 의 세 화면 */
+.route-list {
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--note-rule);
+}
+.route-list li { border-bottom: var(--note-rule); }
+.route-list a {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  column-gap: var(--space-2);
+  padding: var(--space-4) 0;
+  color: inherit;
+  text-decoration: none;
+}
+.route-list__num  { font-weight: var(--font-weight-bold); }
+.route-list__name {
+  font-weight: var(--font-weight-bold);
+  text-decoration: underline;
+  text-decoration-thickness: var(--border-width);
+  text-underline-offset: 0.2em;
+}
+.route-list a:hover .route-list__name { text-decoration-thickness: var(--border-width-strong); }
+.route-list__desc {
+  grid-column: 2;
+  font-size: var(--note-font-size);
+  color: var(--color-text-secondary);
+}
+
+/* 바닥글 — 해설 층 목소리 */
+.site-footer {
+  max-width: var(--max-width-page);
+  margin: 0 auto;
+  padding: 0 var(--gutter) var(--space-7);
+  font-size: var(--note-font-size);
+  line-height: var(--note-line-height);
+  color: var(--note-color);
+}
+/* 선은 안쪽에 — 바깥 상자에 걸면 좌우 여백까지 그어져 본문보다 길어진다 */
+.site-footer p {
+  margin: 0;
+  padding-top: var(--space-5);
+  border-top: var(--note-rule);
+}
+.site-footer a { color: inherit; }
+.page--narrow + .site-footer { max-width: calc(var(--max-width-content) + 2 * var(--gutter)); }
