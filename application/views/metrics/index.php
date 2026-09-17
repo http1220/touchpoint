@@ -154,7 +154,7 @@ $thin_badge = function ($d) use ($small_sample)
       <?php else: ?>
         <div class="table-scroll" tabindex="0" role="region" aria-label="배너 노출·클릭 표 — 가로로 스크롤">
           <table class="data data--tight">
-            <thead><tr><th scope="col">노출일</th><th scope="col">자리</th><th scope="col" class="n">노출</th><th scope="col" class="n">클릭</th><th scope="col" class="n">CTR</th></tr></thead>
+            <thead><tr><th scope="col">노출일</th><th scope="col">자리</th><th scope="col" class="n">노출</th><th scope="col" class="n">클릭</th><th scope="col">CTR (클릭 / 노출)</th></tr></thead>
             <tbody>
             <?php foreach ($ctr as $r): ?>
               <tr>
@@ -162,7 +162,9 @@ $thin_badge = function ($d) use ($small_sample)
                 <td><code><?= html_escape($r['slot']) ?></code></td>
                 <td class="n"><?= html_escape(m_int($r['impressions'])) ?></td>
                 <td class="n"><?= html_escape(m_int($r['clicks'])) ?></td>
-                <td class="n"><?= $r['ctr_pct'] === NULL ? '<span class="muted">노출 없음</span>' : html_escape($r['ctr_pct']).'%' ?><?= $thin_badge($r['impressions']) ?></td>
+                <?php /* 이 열만 퍼센트 하나였다. 화면의 규칙 ③(비율은 분모와 함께)을 여기도 지킨다 —
+                         모델의 ctr_pct 대신 m_rate 로 같은 모양을 만든다. 노출 0 이면 비율을 만들지 않는다 */ ?>
+                <td><?= m_rate($r['clicks'], $r['impressions']) ?><?= (int) $r['impressions'] === 0 ? ' <span class="muted">노출 없음</span>' : '' ?><?= $thin_badge($r['impressions']) ?></td>
               </tr>
             <?php endforeach; ?>
             </tbody>
