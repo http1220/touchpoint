@@ -268,8 +268,8 @@ endif;
   <p class="sub">
     단위 ms. 구간을 나눠 적는 이유는 <strong>합이 맞아야 어디가 느린지 알기 때문</strong>이다 —
     <code>parse</code> + <code>db</code> + <code>send</code> 가 <code>total</code> 근처에 와야 한다.
-    p50·p95 는 <strong>같은 표본을 정렬해 순위로 고른 값</strong>이다(<code>PERCENT_RANK()</code>, nearest-rank).
-    표본이 얇으면 p95 가 최댓값과 같아진다 — 그래서 표본 수를 옆에 낸다.
+    p50·p95 는 <strong>같은 표본을 정렬해 순위로 고른 값</strong>이다(<code>PERCENT_RANK()</code>).
+    표본이 얇으면 p95 는 <strong>가장 느린 값을 빼고</strong> 고른다 — 그래서 최대와 표본 수를 옆에 낸다(<code>docs/benchmarks.md</code> 3-2).
   </p>
 
   <?php $segments = array('parse' => 'parse_ms', 'db' => 'db_ms', 'send' => 'send_ms', 'total' => 'total_ms'); ?>
