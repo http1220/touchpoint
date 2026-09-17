@@ -91,7 +91,7 @@ footer{margin-top:2rem;color:#5b6270;font-size:.8rem}
 <?php else: ?>
   <div class="grid">
   <?php foreach ($byDay[$today] as $w): ?>
-    <a class="card" href="/l/<?= (int) $w['id'] ?>">
+    <a class="card" href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>">
       <div class="thumb">작품 <?= (int) $w['id'] ?></div>
       <div class="t"><?= html_escape($w['title']) ?></div>
       <div class="meta">
@@ -113,7 +113,7 @@ footer{margin-top:2rem;color:#5b6270;font-size:.8rem}
 <ol>
 <?php foreach ($top as $w): ?>
   <li>
-    <a href="/l/<?= (int) $w['id'] ?>"><?= html_escape($w['title']) ?></a>
+    <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"><?= html_escape($w['title']) ?></a>
     <span class="meta"><?= (int) $w['ep_count'] ?>화 ·
       <?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
   </li>
@@ -130,7 +130,7 @@ footer{margin-top:2rem;color:#5b6270;font-size:.8rem}
   <tr><th>작품</th><th>회차</th><th>공개</th><th></th></tr>
 <?php foreach ($recent as $e): ?>
   <tr>
-    <td><a href="/l/<?= (int) $e['work_id'] ?>"><?= html_escape($e['title']) ?></a></td>
+    <td><a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $e['work_id'])) ?>"><?= html_escape($e['title']) ?></a></td>
     <td><?= (int) $e['seq'] ?>화</td>
     <td class="meta"><?= html_escape(substr((string) $e['published_at'], 0, 10)) ?></td>
     <td><span class="b <?= $e['is_charged'] ? 'paid' : 'free' ?>"><?= $e['is_charged'] ? '유료' : '무료' ?></span></td>
@@ -155,7 +155,7 @@ footer{margin-top:2rem;color:#5b6270;font-size:.8rem}
   <p style="margin:.6rem 0 0">
     작품을 누르면 <strong>광고 랜딩</strong>으로 갑니다 —
     거기서부터가 이 프로젝트의 본론입니다.
-    <a href="https://lp.<?= html_escape($shop) ?>/go?work=1&amp;pid=home&amp;utm_source=home&amp;utm_medium=internal"
+    <a href="<?= html_escape(tp_host_url('lp', '/go?work=1&pid=home&utm_source=home&utm_medium=internal')) ?>"
        style="color:#7fb3ff">광고 클릭을 흉내 내 보기 →</a>
   </p>
 </div>

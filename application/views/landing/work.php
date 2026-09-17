@@ -109,7 +109,7 @@ $fields = array(
            링크는 api./click 을 거쳐 랜딩으로 간다. sd 는 이 화면을 그린 날 → ClickRequest */ ?>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(9rem,1fr));gap:.6rem">
     <?php foreach ($related as $w): ?>
-      <?php $dest = 'https://lp.'.$shop.'/l/'.(int) $w['id']; ?>
+      <?php $dest = tp_host_url('lp', '/l/'.(int) $w['id']); ?>
       <a data-imp-work="<?= (int) $w['id'] ?>" data-imp-slot="lp_related"
          href="https://<?= html_escape($api_host) ?>/click?<?= html_escape(http_build_query(array('w' => (int) $w['id'], 's' => 'lp_related', 'sd' => $stat_date, 'u' => $dest))) ?>"
          style="display:block;padding:.7rem;border:1px solid #232733;border-radius:5px;color:#e6e8ec;text-decoration:none;background:#171b23">
@@ -133,6 +133,6 @@ $fields = array(
   <?php if ($api_host !== ''): ?>
     <script src="https://<?= html_escape($api_host) ?>/track.js" data-work="<?= html_escape($work) ?>"></script>
   <?php endif; ?>
-  <p style="margin-top:2rem;font-size:.8rem"><a href="/privacy" style="color:#5b6270">개인정보처리방침 · 맞춤형 광고 거부</a></p>
+  <p style="margin-top:2rem;font-size:.8rem"><a href="<?= html_escape(tp_host_url('root', '/privacy')) ?>" style="color:#5b6270">개인정보처리방침 · 맞춤형 광고 거부</a></p>
 </main>
 </html>

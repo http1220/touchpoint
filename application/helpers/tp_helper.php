@@ -104,6 +104,43 @@ if ( ! function_exists('tp_hash'))
 	}
 }
 
+if ( ! function_exists('tp_host_url'))
+{
+	/**
+	 * 호스트를 건너는 링크의 절대 URL.
+	 *
+	 * 컨트롤러가 requireHost() 로 화면을 호스트에 묶는다 — 홈은 루트, 랜딩은 lp.·m.,
+	 * 지표는 app. 그래서 상대경로 링크는 호스트를 건너지 못하고 404 가 된다.
+	 * 루트 홈의 작품 카드(`/l/1`)와 m. 랜딩의 방침 링크가 그랬다.
+	 *
+	 * SHOP_DOMAIN 이 비어 있는 로컬에서는 requireHost() 도 검사하지 않으므로
+	 * 경로만 돌려준다 — 한 호스트에서 전부 열린다.
+	 *
+	 * 쿼리에 & 가 들어가므로 뷰에서는 html_escape() 를 거쳐 낸다.
+	 *
+	 * @param string $role root · lp · m · app · api
+	 * @param string $path '/' 로 시작하는 경로와 쿼리
+	 */
+	function tp_host_url($role, $path = '/')
+	{
+		static $prefix = array('root' => '', 'lp' => 'lp.', 'm' => 'm.', 'app' => 'app.', 'api' => 'api.');
+
+		if ( ! isset($prefix[$role]))
+		{
+			throw new InvalidArgumentException('모르는 호스트 역할: '.$role);
+		}
+
+		$shop = (string) (getenv('SHOP_DOMAIN') ?: '');
+
+		if ($shop === '')
+		{
+			return $path;
+		}
+
+		return 'https://'.$prefix[$role].$shop.$path;
+	}
+}
+
 if ( ! function_exists('tp_env_bool'))
 {
 	/**
