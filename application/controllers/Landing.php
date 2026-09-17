@@ -77,6 +77,9 @@ class Landing extends MY_Controller
 		$this->load->view('landing/work', array(
 			'work'        => (string) $id,
 			'work_row'    => $work_row,
+			// 브리지(VID 방식)는 광고 유입을 먼저 기록하고 vid 만 넘긴다. 그래서 이 요청 자체는 "직접 유입"이다.
+			// 화면이 그 차이를 말하지 않으면 광고로 들어온 사람에게 "직접 유입"만 보인다 → BridgeDestination
+			'via_bridge'  => is_string($this->input->get('vid')),
 			'visit_uid'   => $visit['uid_hex'],
 			'is_new'      => $visit['is_new'],
 			'result'      => $result,

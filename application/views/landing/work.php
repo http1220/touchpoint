@@ -82,13 +82,25 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
     </section>
 
     <section class="panel visit-now" aria-labelledby="visit-now-title">
-      <p class="caption caption--corner">방금 이 요청이 기록한 것입니다. 전체는 아래 기록 시트에.</p>
+      <p class="caption caption--corner">
+        <?php if ($via_bridge): ?>
+          광고 유입은 <strong>브리지(<code>/go</code>)가 먼저 기록</strong>하고, 랜딩에는 방문 번호(<code>vid</code>)만 넘깁니다 — 공유된 주소가 광고 클릭으로 다시 세어지지 않게.
+          <a href="<?= $repo ?>docs/failure-scenarios.md">C-2<span aria-hidden="true">↗</span></a>
+        <?php else: ?>
+          방금 이 요청이 기록한 것입니다. 전체는 아래 기록 시트에.
+        <?php endif; ?>
+      </p>
       <h2 id="visit-now-title" class="visit-now__title">이번 요청</h2>
       <dl class="facts">
         <dt>방문</dt>
         <dd><span class="badge<?= $is_new ? ' badge--strong' : '' ?>"><?= $is_new ? '새 방문' : '기존 방문' ?></span></dd>
         <dt>유입</dt>
-        <dd><?= $result['is_direct'] ? '파라미터 없음 — 직접 유입' : '유입 파라미터 있음' ?></dd>
+        <dd>
+          <?php if ( ! $result['is_direct']): ?>유입 파라미터 있음
+          <?php elseif ($via_bridge): ?>브리지에서 넘어옴 — 이 요청엔 <code>vid</code> 만
+          <?php else: ?>파라미터 없음 — 직접 유입
+          <?php endif; ?>
+        </dd>
         <dt>최초 유입</dt>
         <dd><span class="badge<?= $result['first'] === 'created' ? ' badge--strong' : '' ?>"><code><?= html_escape($result['first']) ?></code></span></dd>
         <dt>마지막 유입</dt>
