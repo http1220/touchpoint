@@ -190,7 +190,7 @@ $sections = array(
       <?php if ($done === 'on'): ?><p class="caption">거부를 해제했습니다.</p><?php endif; ?>
       <p>이 설정은 쿠키로 기억하므로, 브라우저나 기기를 바꾸면 다시 선택해야 합니다. 다른 방법도 있습니다.</p>
       <ul>
-        <li>Meta: <a href="https://www.facebook.com/adpreferences">광고 기본 설정</a></li>
+        <li>Meta: <a href="https://www.facebook.com/adpreferences">광고 기본 설정</a> — Meta 계정 로그인이 필요합니다</li>
         <li>Google Analytics: <a href="https://tools.google.com/dlpage/gaoptout">차단 브라우저 부가기능</a></li>
       </ul>
     </section>

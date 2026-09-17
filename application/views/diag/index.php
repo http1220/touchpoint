@@ -3,9 +3,12 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
  * 인프라 진단. 라우트 주석은 "개발 환경 전용" 이지만 운영에서도 열린다(어디서도 링크하지 않는다).
- * 사이트에 하나 남은 옛 화면이라 틀만 다른 화면과 맞췄다 — **보여 주는 항목과 문구는 그대로**다.
  *
- * GA4·Meta 픽셀 로딩도 그대로 둔다. 화면 작업에서 수집 동작을 바꾸지 않는다.
+ * **GA4 태그는 남기고 Meta 픽셀은 뺐다.** 이 화면이 보여 주는 것은 `_ga 쿠키`와 `client_id` 뿐이라
+ * gtag 는 그 두 줄을 위해 필요하지만, `_fbp`·`_fbc` 는 어느 줄에도 쓰이지 않는다 —
+ * 진단을 열 때마다 Meta 에 조회가 갈 이유가 없다. 남은 GA4 집계는 화면에 적는다.
+ *
+ * 검색엔진에 올릴 화면이 아니다 → noindex.
  *
  * @var array  $rows
  * @var string $trace_id
@@ -14,8 +17,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 <html lang="ko">
 <head>
 <?php $this->load->view('partials/head', array('title' => '인프라 진단 · touchpoint')); ?>
+<meta name="robots" content="noindex, nofollow">
 <?php $this->load->view('partials/gtag'); ?>
-<?php $this->load->view('partials/meta_pixel'); ?>
 </head>
 <body>
 <main class="stage">
@@ -46,6 +49,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
     <section class="panel diag-check" aria-labelledby="check-title">
       <h2 id="check-title">확인할 것</h2>
+      <p class="caption">이 화면은 <code>_ga</code> 쿠키를 읽어야 해서 <strong>GA4 태그를 싣는다</strong> — 열면 GA4 에 조회가 한 번 잡힌다.
+        Meta 픽셀은 이 화면에 필요 없어 싣지 않는다.</p>
       <p class="caption">
         호스트 4개(<code>lp.</code> <code>m.</code> <code>app.</code> <code>api.</code>)가 모두 자물쇠 표시로 열리는지 ·
         역할이 올바르게 판별되는지 · <code>읽기 대상</code>이 요청마다 rdb1/rdb2 로 갈리는지 ·
