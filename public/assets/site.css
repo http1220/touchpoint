@@ -9,6 +9,7 @@
  * 3. 컴포넌트 — 시트 · 칸 · 나레이션 박스 · 시연 바 · 바닥글 (한 줄 모드 기본, 가로로 넓으면 시트 모드)
  *
  * 방향: 기능주의 + 칸 그리드. 만화의 칸·거터를 빌리되 정렬 장치로만 쓴다.
+ *   - 칸 테두리는 **1px, 배경보다 한 단계 어두운 선**이다. 2px 먹선은 칸을 너무 세게 갈랐다
  *   - 기준 화면은 가로 4:3 (펼친 폴더블 · 태블릿). 16:9 는 좌우 베젤, 세로 폰은 칸 한 줄
  *   - 유채색은 **의미가 있을 때만** 쓴다 (성공 · 경고 · 오류). 강조는 먹색의 굵기·밑줄·선으로 한다
  *   - 그림자를 쓰지 않는다. 예외는 기능이 있는 두 가지 — 표 스크롤 끝 그림자, 포커스 링
@@ -147,15 +148,16 @@
      기준 화면      1024×768 · 1104×884(가로 폴더블) · 1920×1080(좌우 베젤) · 375×812(한 줄) */
 
   /* ─── 칸 그리드 — 만화의 칸·거터를 정렬 장치로만 쓴다 (2026-09-18) ───
-     직사각형 칸 · 먹색 테두리 · 종이색 거터. 기울어진 칸 · 스크린톤 · 효과선은 쓰지 않는다 */
-  --panel-frame-width: 2px;
-  --panel-frame:   var(--panel-frame-width) solid var(--color-text-primary);
+     직사각형 칸 · 희미한 테두리 · 종이색 거터. 기울어진 칸 · 스크린톤 · 효과선은 쓰지 않는다 */
+  --panel-frame-width: 1px;
+  --panel-frame-color: #cfcabe;   /* 배경보다 한 단계 어두운 정도. 먹선은 칸을 너무 세게 갈랐다 (2026-09-18) */
+  --panel-frame:   var(--panel-frame-width) solid var(--panel-frame-color);
   --panel-gutter:  var(--space-3);
   --panel-padding: var(--space-4);
 
   /* 나레이션 박스 — 해설 층. 칸 왼쪽 위 모서리에 붙어 테두리를 칸과 나눈다 */
   --caption-bg:        var(--color-bg-secondary);
-  --caption-rule:      var(--border-width) solid var(--color-text-primary);
+  --caption-rule:      var(--border-width) solid var(--panel-frame-color);
   --caption-font-size: var(--note-font-size);
 
   /* ─── 컴포넌트 토큰 — 두 목소리 ─── */
@@ -206,6 +208,7 @@
 
 :root[data-theme="dark"] {
   --color-bg-primary:   #161513;
+  --panel-frame-color: #38352f;
   --color-bg-secondary: #1f1e1b;
   --color-bg-tertiary:  #2a2925;
   --color-bg-inverse:   #e9e6df;
@@ -245,6 +248,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --color-bg-primary:   #161513;
+    --panel-frame-color: #38352f;
     --color-bg-secondary: #1f1e1b;
     --color-bg-tertiary:  #2a2925;
     --color-bg-inverse:   #e9e6df;
@@ -565,8 +569,7 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
 .lang a:hover { background: var(--color-bg-secondary); }
 .lang a[aria-current="true"] { color: var(--badge-strong-fg); background: var(--badge-strong-bg); border-color: var(--badge-strong-bg); }
 
-/* 시연 안내 · 오늘 · 요일 줄 */
-.intro h1 { font-size: var(--font-size-lg); }
+/* 오늘 · 요일 줄 */
 .today__title, .day__name {
   display: flex;
   align-items: center;
@@ -664,6 +667,58 @@ p.buttons { margin-bottom: var(--space-4); }
 .panel ul { margin: 0 0 var(--space-4); padding-left: 1.3em; }
 .panel li { margin: var(--space-1) 0; }
 
+/* 흐름도 — 시연 안내. SVG 가 아니라 글자와 선으로 그린다.
+   좁으면 세로(↓), 넓으면 가로(→)로 화살표가 바뀌고 글자는 줄어들지 않는다 */
+.flow {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: flow;
+}
+.flow__step { position: relative; }
+.flow__step + .flow__step::before {
+  content: "↓";
+  content: "↓" / "";          /* 읽지 않게 — 순서는 ol 이 말한다 */
+  display: block;
+  margin-bottom: var(--space-2);
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+.flow__box {
+  display: block;
+  height: 100%;
+  padding: var(--space-3);
+  background: var(--color-bg-primary);
+  border: var(--panel-frame);
+  border-radius: var(--border-radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+a.flow__box:hover { background: var(--color-bg-secondary); }
+.flow__lane {
+  display: block;
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-text-secondary);
+}
+.flow__name {
+  display: block;
+  margin: var(--space-1) 0;
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+a.flow__box .flow__name { text-decoration: underline; text-decoration-thickness: var(--border-width); text-underline-offset: 0.2em; }
+a.flow__box:hover .flow__name { text-decoration-thickness: var(--border-width-strong); }
+.flow__sub {
+  display: block;
+  font-size: var(--note-font-size);
+  line-height: var(--note-line-height);
+  color: var(--color-text-secondary);
+}
+.flow__sub code { font-size: 0.9em; }
+
 /* 지표 — 읽는 순서 · 목차 */
 .summary h1 { font-size: var(--font-size-xl); }
 .rules { margin: 0 0 var(--space-4); padding-left: 1.4em; }
@@ -685,8 +740,8 @@ p.buttons { margin-bottom: var(--space-4); }
 .meta-line code, .masthead__note code { font-size: 0.85em; }
 
 /* 순위 목록 · 데이터 표 — 시트 3 */
-.rank { margin: 0 0 var(--space-4); padding-left: 1.5em; }
-.rank li { margin: var(--space-1) 0; }
+.rank-list { margin: 0 0 var(--space-4); padding-left: 1.5em; }
+.rank-list li { margin: var(--space-1) 0; }
 .rank__meta { margin-left: var(--space-2); font-size: var(--note-font-size); color: var(--color-text-secondary); font-variant-numeric: var(--font-numeric); }
 
 .data { width: 100%; border-collapse: collapse; font-size: var(--table-font-size); font-variant-numeric: var(--font-numeric); }
@@ -831,26 +886,45 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-404 > .panel--route { grid-column: 8 / span 5; }
   .layout-404 .panel--title h1 { font-size: var(--font-size-2xl); }
 
-  /* 홈 시트 1 — 안내 칸(6열, 세 줄 높이) + ①②③ 칸(6열씩) + 오늘(12열) */
-  .layout-home-1 { grid-template-rows: auto auto repeat(3, minmax(min-content, 1fr)) auto; }
-  .layout-home-1 > .intro { grid-column: 1 / span 6; grid-row: 3 / span 3; }
-  .layout-home-1 > .step  { grid-column: 7 / span 6; }
-  .layout-home-1 > .today { grid-column: 1 / -1; }
-  .layout-home-1 .intro h1 { font-size: var(--font-size-xl); }
-  .layout-home-1 .step__num { display: inline; margin-right: var(--space-2); font-size: var(--font-size-md); }
-  .layout-home-1 .step__name { display: inline; }
+  /* 홈 시트 1 — 서비스만. 오늘(12열) + 회차 많은 작품(5열) · 최근 회차(7열) */
+  .layout-home-1 { grid-template-rows: auto auto auto minmax(min-content, 1fr); }
+  .layout-home-1 > .today  { grid-column: 1 / -1; }
+  .layout-home-1 > .rank   { grid-column: 1 / span 5; }
+  .layout-home-1 > .recent { grid-column: 6 / span 7; }
+
+  /* 시연 안내 — 흐름도는 가로로 편다. 화살표도 → 로 */
+  .layout-tour { align-content: start; align-items: start; }
+  .layout-tour > .tour-intro { grid-column: 1 / -1; }
+  .layout-tour > .tour-model { grid-column: 1 / -1; }
+  /* 해설 넉 줄을 두 단으로 — 한 단으로 쌓으면 시트 한 장을 넘긴다 */
+  .layout-tour .captions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+  .layout-tour .captions > .caption { margin: 0; }
+  /* 한 장에 담는다 — 여백을 줄여 시트가 4:3 을 넘지 않게 */
+  .layout-tour .flow { margin: var(--space-4) 0 var(--space-3); }
+  .layout-tour .tour-intro .meta-line { margin-bottom: 0; }
+  .layout-tour .flow {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    column-gap: var(--space-5);
+  }
+  .layout-tour .flow__step + .flow__step::before {
+    content: "→";
+    content: "→" / "";
+    position: absolute;
+    top: var(--space-4);
+    left: calc(-1 * var(--space-5) / 2);
+    margin: 0;
+    transform: translateX(-50%);
+  }
 
   /* 홈 시트 2 — 제목 칸(3열, 일곱 줄 높이) + 요일 칸(9열 × 7) */
   .layout-home-week { grid-template-rows: repeat(7, minmax(min-content, 1fr)); }
   .layout-home-week > .week-intro { grid-column: 1 / span 3; grid-row: 1 / span 7; }
   .layout-home-week > .day { grid-column: 4 / span 9; display: grid; grid-template-columns: 3rem minmax(0, 1fr); align-items: center; padding-top: var(--space-2); padding-bottom: var(--space-2); }
   .layout-home-week .day__name { flex-direction: column; align-items: flex-start; margin: 0; }
-
-  /* 홈 시트 3 — 순위(5열) + 최근 회차(7열) */
-  /* 칸은 내용 높이만. 남는 판면은 빈 테두리가 아니라 종이로 둔다 */
-  .layout-home-lists { grid-template-rows: auto; align-content: start; align-items: start; }
-  .layout-home-lists > :first-child { grid-column: 1 / span 5; }
-  .layout-home-lists > :last-child  { grid-column: 6 / span 7; }
 
   /* 랜딩 시트 1 — 표지(4열, 두 줄 높이) + 작품 머리 · 이번 요청(8열) + 다른 작품(12열) */
   .layout-landing-1 { grid-template-rows: auto auto minmax(min-content, 1fr) auto auto; }

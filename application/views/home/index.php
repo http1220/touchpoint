@@ -6,10 +6,11 @@ use App\Support\PublishDay;
 /**
  * 홈. 서버 렌더 · JS 없음 (ADR-009).
  *
- * 시트 세 장이다 — 넓은 가로 화면에서는 4:3 판, 세로 폰에서는 칸이 한 줄.
- *   1  시연 바 · 서비스 머리 · 시연 안내(한 문장 + ①②③) · 오늘
+ * 시트 두 장이다 — 넓은 가로 화면에서는 4:3 판, 세로 폰에서는 칸이 한 줄.
+ *   1  서비스 머리 · 오늘 · 회차가 많은 작품 · 최근 올라온 회차
  *   2  연재 요일 7줄
- *   3  회차가 많은 작품 · 최근 올라온 회차
+ *
+ * **이 화면은 서비스다.** 시연 설명(한 문장 · ①②③ · 스키마 해설)은 /tour 로 옮겼다 — 2026-09-18.
  *
  * 칸의 순서는 DOM 순서 그대로다. 배치는 site.css 의 span 만 바꾼다.
  *
@@ -78,7 +79,7 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
 <body>
 <main class="stage">
 
-  <!-- ── 시트 1 ─────────────────────────────── -->
+  <!-- ── 시트 1 · 서비스 ───────────────────────── -->
   <div class="sheet layout-home-1">
     <?php $this->load->view('partials/demo_bar', array('demo_step' => 1)); ?>
 
@@ -92,31 +93,6 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
         </ul>
       </nav>
     </header>
-
-    <section class="panel panel--bottom intro" aria-labelledby="intro-title">
-      <p class="caption caption--corner">
-        이 홈은 <strong>측정할 대상</strong>으로 만든 웹툰 서비스 모형입니다.
-        작품·회차는 실제 DB 이고, 표지는 자리표시입니다.
-      </p>
-      <p class="eyebrow">시연 안내</p>
-      <h1 id="intro-title">광고 클릭에서 GA4 보고서까지 실제로 돌려 봤고, 숫자는 <span class="nowrap">분모·표본·측정 시각과</span> 함께만 보여 줍니다.</h1>
-    </section>
-
-    <a class="panel step" href="<?= html_escape(tp_host_url('lp', '/go?work=1&pid=home&utm_source=home&utm_medium=internal')) ?>">
-      <span class="step__num" aria-hidden="true">①</span>
-      <span class="step__name">광고 클릭을 흉내 낸다</span>
-      <span class="step__desc">유입 파라미터를 달고 브리지(302)를 거쳐 랜딩으로 — 최초 유입이 기록된다</span>
-    </a>
-    <a class="panel step" href="<?= html_escape(tp_host_url('lp', '/l/1')) ?>">
-      <span class="step__num" aria-hidden="true">②</span>
-      <span class="step__name">랜딩에서 유입 기록을 본다</span>
-      <span class="step__desc">파라미터 없이 다시 열어도 최초·마지막 유입은 덮어쓰이지 않는다</span>
-    </a>
-    <a class="panel step" href="<?= html_escape(tp_host_url('app', '/metrics')) ?>">
-      <span class="step__num" aria-hidden="true">③</span>
-      <span class="step__name">지표에서 숫자를 본다</span>
-      <span class="step__desc">도달률은 분모와 함께, 반영률은 매체를 되읽어서만</span>
-    </a>
 
     <section class="panel today" aria-labelledby="today-title">
       <?php if ( ! $is_default): ?>
@@ -146,40 +122,10 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
         </ul>
       <?php endif; ?>
     </section>
-  </div>
 
-  <!-- ── 시트 2 ─────────────────────────────── -->
-  <div class="sheet layout-home-week">
-    <section class="panel panel--bottom week-intro" aria-labelledby="week-title">
-      <p class="eyebrow">요일은 KST 기준</p>
-      <h2 id="week-title">연재 요일</h2>
-      <div class="captions">
-        <p class="caption">작품 하나가 <strong>여러 요일</strong>에 연재됩니다 — 그래서 연재 요일은 별도 테이블입니다.
-          <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a></p>
-        <p class="caption"><strong>N시간 후 무료</strong>는 작품의 속성이고, 무료·유료는 회차의 속성입니다. 연령은 참/거짓이 아니라 코드입니다.</p>
-        <p class="caption">언어·문자·지역은 <strong>다른 축</strong>입니다 — 간체와 번체는 둘 다 <code>zh</code> 이고 문자로 갈립니다. 언어를 바꾸면 작품 데이터만 바뀝니다.</p>
-      </div>
-    </section>
-
-    <?php foreach (PublishDay::LABELS as $n => $label): ?>
-      <section class="panel day<?= $n === $today ? ' day--today' : '' ?>" aria-labelledby="day-<?= $n ?>">
-        <h3 class="day__name" id="day-<?= $n ?>"><?= html_escape($label) ?><?php if ($n === $today): ?> <span class="badge badge--strong">오늘</span><?php endif; ?></h3>
-        <?php if ($byDay[$n] === array()): ?>
-          <p class="empty">연재 없음</p>
-        <?php else: ?>
-          <ul class="works">
-            <?php foreach ($byDay[$n] as $w) { $card($w, 'small'); } ?>
-          </ul>
-        <?php endif; ?>
-      </section>
-    <?php endforeach; ?>
-  </div>
-
-  <!-- ── 시트 3 ─────────────────────────────── -->
-  <div class="sheet layout-home-lists">
-    <section class="panel" aria-labelledby="top-title">
+    <section class="panel rank" aria-labelledby="top-title">
       <h2 id="top-title">회차가 많은 작품</h2>
-      <ol class="rank">
+      <ol class="rank-list">
       <?php foreach ($top as $w): ?>
         <li>
           <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"<?= $title_lang ?>><?= html_escape($w['title']) ?></a>
@@ -187,10 +133,9 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
         </li>
       <?php endforeach; ?>
       </ol>
-      <p class="caption">조회수나 평점이 아니라 <strong>회차 수</strong>로 줄을 세웁니다 — 조사한 플랫폼 모두 조회수를 공개하지 않았고, 없는 지표를 지어내지 않습니다.</p>
     </section>
 
-    <section class="panel" aria-labelledby="recent-title">
+    <section class="panel recent" aria-labelledby="recent-title">
       <h2 id="recent-title">최근 올라온 회차</h2>
       <table class="data">
         <thead><tr><th scope="col">작품</th><th scope="col" class="n">회차</th><th scope="col">공개</th><th scope="col">구분</th></tr></thead>
@@ -206,6 +151,28 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
         </tbody>
       </table>
     </section>
+  </div>
+
+  <!-- ── 시트 2 · 연재 요일 ─────────────────────── -->
+  <div class="sheet layout-home-week">
+    <section class="panel panel--bottom week-intro" aria-labelledby="week-title">
+      <p class="eyebrow">요일은 KST 기준</p>
+      <h2 id="week-title">연재 요일</h2>
+      <p class="meta-line">작품을 누르면 그 작품의 랜딩으로 갑니다.</p>
+    </section>
+
+    <?php foreach (PublishDay::LABELS as $n => $label): ?>
+      <section class="panel day<?= $n === $today ? ' day--today' : '' ?>" aria-labelledby="day-<?= $n ?>">
+        <h3 class="day__name" id="day-<?= $n ?>"><?= html_escape($label) ?><?php if ($n === $today): ?> <span class="badge badge--strong">오늘</span><?php endif; ?></h3>
+        <?php if ($byDay[$n] === array()): ?>
+          <p class="empty">연재 없음</p>
+        <?php else: ?>
+          <ul class="works">
+            <?php foreach ($byDay[$n] as $w) { $card($w, 'small'); } ?>
+          </ul>
+        <?php endif; ?>
+      </section>
+    <?php endforeach; ?>
   </div>
 
 </main>

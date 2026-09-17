@@ -10,11 +10,14 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | ② 는 파라미터 없는 직접 유입이다. 광고 클릭 흉내는 홈 안내 띠에서만 한다 —
 | 경로를 옮겨 다닐 때마다 광고 유입이 쌓이면 지표의 분모가 부푼다.
 |
-| @var int|null $demo_step 1 홈 · 2 랜딩 · 3 지표 · NULL 표시 없음(방침·404)
+| 안내(0)는 시연 설명이 사는 화면이다. 홈은 서비스로 두고 설명을 옮겼다(2026-09-18).
+|
+| @var int|null $demo_step 0 안내 · 1 홈 · 2 랜딩 · 3 지표 · NULL 표시 없음(방침·404·진단)
 */
-$demo_step = isset($demo_step) ? (int) $demo_step : 0;
+$demo_step = isset($demo_step) ? (int) $demo_step : -1;
 
 $steps = array(
+	0 => array('', '안내', tp_host_url('root', '/tour')),
 	1 => array('①', '홈',   tp_host_url('root', '/')),
 	2 => array('②', '랜딩', tp_host_url('lp', '/l/1')),
 	3 => array('③', '지표', tp_host_url('app', '/metrics')),
@@ -25,7 +28,7 @@ $steps = array(
     <span class="demo-bar__label">시연</span>
     <ol class="demo-bar__steps">
       <?php foreach ($steps as $n => $s): ?>
-        <li><a href="<?= html_escape($s[2]) ?>"<?= $n === $demo_step ? ' aria-current="page"' : '' ?>><span aria-hidden="true"><?= $s[0] ?></span> <?= $s[1] ?></a></li>
+        <li><a href="<?= html_escape($s[2]) ?>"<?= $n === $demo_step ? ' aria-current="page"' : '' ?>><?php if ($s[0] !== ''): ?><span aria-hidden="true"><?= $s[0] ?></span> <?php endif; ?><?= $s[1] ?></a></li>
       <?php endforeach; ?>
     </ol>
     <a class="demo-bar__source" href="https://github.com/http1220/touchpoint">소스<span aria-hidden="true">↗</span></a>

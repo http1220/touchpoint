@@ -13,6 +13,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 */
 
 $route['default_controller'] = 'home';   // 루트 도메인의 웹툰 홈. lp. 는 /l/{work} 로 들어온다
+$route['tour']        = 'tour/index';    // 시연 안내. 홈은 서비스로 두고 설명은 여기 — 루트 도메인
 $route['404_override']       = 'errors/not_found';
 
 // URL 끝의 슬래시를 컨트롤러 이름으로 오해하지 않게 한다.
