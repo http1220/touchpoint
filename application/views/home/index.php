@@ -71,6 +71,9 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
 <link rel="alternate" hreflang="<?= html_escape($l['bcp47']) ?>" href="<?= html_escape($locale_url($l['slug'])) ?>">
 <?php endforeach; ?>
 <link rel="alternate" hreflang="x-default" href="<?= html_escape($locale_url($default_locale)) ?>">
+<?php /* 정본을 밝힌다. 302 가 못 잡는 주소가 있다 — CI3 Input 이 $_GET 의 제어 문자를 컨트롤러보다 먼저
+         지워서(remove_invisible_characters) /?lang=ja%00 은 LocaleChoice 에 "ja" 로 도착해 그대로 그려진다 */ ?>
+<link rel="canonical" href="<?= html_escape($locale_url($locale['slug'])) ?>">
 </head>
 <body>
 <main class="stage">
