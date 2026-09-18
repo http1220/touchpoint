@@ -768,7 +768,16 @@ a.flow__box:hover .flow__name { text-decoration-thickness: var(--border-width-st
 .toc a:hover { background: var(--color-bg-secondary); }
 .panel h2 .muted { font-size: var(--note-font-size); font-weight: var(--font-weight-normal); }
 .visits .kv th,
-.ad-attr .kv th { width: auto; }   /* 긴 이름("광고 접점까지 붙은 전환")이 7rem 안에서 두 줄로 접히지 않게 */
+.ad-attr .kv th,
+.headline th { width: auto; }   /* 긴 이름("광고 접점까지 붙은 전환")이 7rem 안에서 두 줄로 접히지 않게 */
+
+/* 결론 세 줄 — 첫 화면에서 먼저 읽히되 표처럼 보이지는 않게. 값만 한 단계 크다.
+   줄당 74px 이면 세 줄이 요약 칸의 3분의 1을 먹는다. 여백을 조여 줄당 40px 대로 */
+.headline { margin-bottom: var(--space-3); }
+.headline th, .headline td { padding: var(--space-1) var(--space-3) var(--space-1) 0; vertical-align: baseline; }
+.headline td { font-size: var(--font-size-md); }
+.headline th .muted, .headline td .muted { font-size: var(--note-font-size); }
+.headline th { line-height: var(--line-height-tight); }
 .diag-table .kv th { width: 11rem; }  /* "억제된 deprecation" 같은 긴 이름이 두 줄로 접히지 않게 */
 .meta-line code, .masthead__note code { font-size: 0.85em; }
 
@@ -1012,9 +1021,11 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
 
   /* 지표 시트 1 — 읽는 순서(5열, 두 줄 높이) + ① 방문과 접점 · 배너 CTR(7열) */
   .layout-metrics-1 { grid-template-rows: auto auto minmax(min-content, 1fr) minmax(min-content, 1fr); }
-  .layout-metrics-1 > .summary { grid-column: 1 / span 5; grid-row: 3 / span 2; }
+  /* 요약이 7열이다 — 결론 세 줄이 들어오면서 5열에서는 "매체 도달률 / 가짜 채널 뺀 값" 이
+     두 줄로 접혀 시트가 1.05 까지 늘어났다(잰 값) */
+  .layout-metrics-1 > .summary { grid-column: 1 / span 7; grid-row: 3 / span 2; }
   .layout-metrics-1 > .visits,
-  .layout-metrics-1 > .ctr     { grid-column: 6 / span 7; }
+  .layout-metrics-1 > .ctr     { grid-column: 8 / span 5; }
 
   /* 지표 시트 2 · 3 · 4 — 칸은 내용 높이만. 남는 판면은 종이 */
   /* 광고가 만든 것 · 반영률 — 둘 다 표라서 폭을 다 쓴다.
@@ -1022,6 +1033,11 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
      칸을 더할 때마다 잊지 않도록 개별 이름이 아니라 > .panel 로 건다 */
   .layout-metrics-ad { align-content: start; align-items: start; }
   .layout-metrics-ad > .panel { grid-column: 1 / -1; }
+  /* 광고 시트는 둘이 나란히 — 매체별 표(7) 옆에 배너 노출·클릭(5).
+     CTR 은 원래 ① 유입 시트에 있었는데, 결론 세 줄이 들어오면서 그 시트가 4:3 을 넘었고
+     "광고 소재가 클릭을 얼마나 만들었나" 는 이쪽 이야기라 함께 옮겼다 (2026-09-18) */
+  .layout-metrics-ad > .ad-attr { grid-column: 1 / span 7; }
+  .layout-metrics-ad > .ctr     { grid-column: 8 / span 5; }
 
   .layout-metrics-2,
   .layout-metrics-3,

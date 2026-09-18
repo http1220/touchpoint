@@ -5,8 +5,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | 지표 화면.
 |
 | 시트 여섯 장 — 파이프라인 순서로 읽는다.
-|   1  읽는 순서 · ① 유입 (방문과 접점 · 배너 CTR)
-|   2  광고가 만든 것 (매체별 전환 · 귀속 기준 둘) ← 이 시스템이 답하려는 질문
+|   1  읽는 순서 + **결론 세 줄** · ① 유입 (방문과 접점)
+|   2  광고가 만든 것 (매체별 전환 · 귀속 기준 둘 · 배너 노출·클릭) ← 이 시스템이 답하려는 질문
 |   3  반영률 (매체를 되읽은 실측 기록)
 |   4  ② 전환 → 적재 (전환 · 아웃박스)
 |   5  ③ 매체 전송 (도달률 · HTTP 상태 · 재시도 회복)
@@ -117,9 +117,54 @@ $thin_badge = function ($d) use ($small_sample)
       </p>
     </header>
 
-    <section class="panel panel--bottom summary" aria-labelledby="page-title">
-      <p class="eyebrow">이 화면을 읽는 순서</p>
+    <?php
+      /*
+       * 결론 세 줄 — 첫 화면에서 "그래서 뭐가 됐나" 에 먼저 답한다.
+       * 새 질의를 쓰지 않는다. 아래 표들이 쓰는 값을 여기서 한 번 더 합칠 뿐이다.
+       *
+       * 도달률은 **가짜 채널을 뺀 값**이다. 이 화면의 규칙 ① 을 첫 줄이 어기면
+       * 아래에서 그 규칙을 적어 봐야 소용이 없다 — noop 을 합치면 100% 가 된다.
+       */
+      $real_ok = 0;
+      $real_try = 0;
+
+      foreach ($dispatch as $d)
+      {
+          if (m_fake($d['channel'], $fake_channels)) { continue; }
+
+          $real_ok  += (int) $d['ok_n'];
+          $real_try += (int) $d['attempts'];
+      }
+    ?>
+    <?php /* 결론 세 줄이 들어오면서 칸이 길어졌다 — 아래로 밀어 두던 panel--bottom 을 뗀다.
+             짧은 칸일 때는 아래 정렬이 옆 칸과 바닥선을 맞춰 줬지만, 지금은 위쪽에 빈 띠만 남는다 */ ?>
+    <section class="panel summary" aria-labelledby="page-title">
       <h1 id="page-title">숫자는 분모 · 표본 · 측정 시각과 함께만</h1>
+
+      <table class="data kv headline">
+        <caption class="sr-only">이 화면의 결론 세 줄</caption>
+        <tbody>
+          <tr>
+            <th scope="row">매체 도달률 <span class="muted">가짜 채널 뺀 값</span></th>
+            <td><?= m_rate($real_ok, $real_try) ?><?= $thin_badge($real_try) ?></td>
+          </tr>
+          <tr>
+            <th scope="row">매체 반영률 <span class="muted">되읽은 기록</span></th>
+            <td><?= m_rate(543, 543) ?> <span class="muted">+40h 에 대조</span></td>
+          </tr>
+          <tr>
+            <th scope="row">광고가 만든 결제</th>
+            <td>
+              <?= m_rate($ad['with_ad'], $ad['total']) ?><?= $thin_badge($ad['with_ad']) ?>
+              <?php if ($ad['table']['value_total'] > 0): ?>
+                · <?= html_escape(m_int($ad['table']['value_total'])) ?> <span class="muted"><?= html_escape(implode(' · ', $ad['table']['currencies'])) ?></span>
+              <?php endif; ?>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="meta-line">자세히 — <a href="#attribution">매체별 표</a> · <a href="#reflected">반영률을 어떻게 알았나</a></p>
+      <p class="caption">첫 줄만 지금 센 값이다. 반영률은 매체를 되읽어야 알 수 있어 <strong>측정 시각이 붙고</strong>, 셋째 줄 분모는 전환 전체다.</p>
       <nav class="toc" aria-label="지표 묶음">
         <a href="#inflow">① 유입</a>
         <a href="#attribution">광고가 만든 것</a>
@@ -127,7 +172,7 @@ $thin_badge = function ($d) use ($small_sample)
         <a href="#dispatch">③ 매체 전송</a>
       </nav>
       <ol class="rules">
-        <li><strong><span class="badge badge--error">가짜 채널</span> 줄을 먼저 지운다.</strong> <code>noop</code> 을 합치면 분모가 가짜로 찬다 — 9,303건 중 9,300건이 <code>noop</code>, 합친 값은 100% 였다.</li>
+        <li><strong><span class="badge badge--error">가짜 채널</span> 줄을 먼저 지운다.</strong> 합치면 분모가 가짜로 찬다 — 9,303건 중 9,300건이 <code>noop</code> 이었다.</li>
         <li><strong>비율보다 분모.</strong> <span class="badge badge--warning">표본 N</span>(<?= html_escape((string) $small_sample) ?>건 미만)이면 아직 판정이 아니다.</li>
         <li><strong>도달률 ≠ 반영률.</strong> 이 화면은 매체가 <code>2xx</code> 를 돌려줬다는 것까지만 안다.</li>
         <li><strong>방금 한 일과 다르면</strong> 복제 지연부터 — 복제본 <code><?= html_escape($read_target) ?></code> 에서 읽었다.</li>
@@ -149,35 +194,6 @@ $thin_badge = function ($d) use ($small_sample)
           <tr><th scope="row">광고 유입 방문</th><td class="n"><b><?= html_escape(m_int($funnel['with_ad'])) ?></b></td><td><?= m_rate($funnel['with_ad'], $funnel['visits']) ?><?= $thin_badge($funnel['with_ad']) ?></td></tr>
         </tbody>
       </table>
-    </section>
-
-    <section class="panel ctr" aria-labelledby="ctr">
-      <p class="eyebrow">① 유입</p>
-      <h2 id="ctr">배너 노출 · 클릭 <span class="muted">최근 7일 · 노출일 기준</span></h2>
-      <p class="caption">화면에 절반 이상 보이면 노출, 누르면 클릭. <strong>클릭은 누른 날이 아니라 노출된 날</strong>로 센다.
-        <a href="<?= $repo ?>docs/api-spec.md">api-spec.md<span aria-hidden="true">↗</span></a></p>
-      <?php if (empty($ctr)): ?>
-        <p class="empty">아직 없습니다. 작품 랜딩의 "다른 작품"을 스크롤하고 눌러 보세요.</p>
-      <?php else: ?>
-        <div class="table-scroll" tabindex="0" role="region" aria-label="배너 노출·클릭 표 — 가로로 스크롤">
-          <table class="data data--tight">
-            <thead><tr><th scope="col">노출일</th><th scope="col">자리</th><th scope="col" class="n">노출</th><th scope="col" class="n">클릭</th><th scope="col">CTR (클릭 / 노출)</th></tr></thead>
-            <tbody>
-            <?php foreach ($ctr as $r): ?>
-              <tr>
-                <td><code><?= html_escape($r['stat_date']) ?></code></td>
-                <td><code><?= html_escape($r['slot']) ?></code></td>
-                <td class="n"><?= html_escape(m_int($r['impressions'])) ?></td>
-                <td class="n"><?= html_escape(m_int($r['clicks'])) ?></td>
-                <?php /* 이 열만 퍼센트 하나였다. 화면의 규칙 ③(비율은 분모와 함께)을 여기도 지킨다 —
-                         모델의 ctr_pct 대신 m_rate 로 같은 모양을 만든다. 노출 0 이면 비율을 만들지 않는다 */ ?>
-                <td><?= m_rate($r['clicks'], $r['impressions']) ?><?= (int) $r['impressions'] === 0 ? ' <span class="muted">노출 없음</span>' : '' ?><?= $thin_badge($r['impressions']) ?></td>
-              </tr>
-            <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php endif; ?>
     </section>
   </div>
 
@@ -262,6 +278,35 @@ $thin_badge = function ($d) use ($small_sample)
           이 줄들은 시연·시험에서 만든 유입이고, <code>utm_source</code> 자리에 그 이름이 그대로 들어온다.
           실제 집행에서는 매체가 붙인 값이 같은 자리에 들어온다 — 화면과 질의는 그대로다.
           대부분의 전환에 방문이 없는 것도 같은 이유다: 부하 시험으로 서버에서 직접 만든 전환에는 쿠키가 없다.</p>
+      <?php endif; ?>
+    </section>
+
+    <section class="panel ctr" aria-labelledby="ctr">
+      <p class="eyebrow">광고 → 클릭</p>
+      <h2 id="ctr">배너 노출 · 클릭 <span class="muted">최근 7일 · 노출일 기준</span></h2>
+      <p class="caption">화면에 절반 이상 보이면 노출, 누르면 클릭. <strong>클릭은 누른 날이 아니라 노출된 날</strong>로 센다.
+        <a href="<?= $repo ?>docs/api-spec.md">api-spec.md<span aria-hidden="true">↗</span></a></p>
+      <?php if (empty($ctr)): ?>
+        <p class="empty">아직 없습니다. 작품 랜딩의 "다른 작품"을 스크롤하고 눌러 보세요.</p>
+      <?php else: ?>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="배너 노출·클릭 표 — 가로로 스크롤">
+          <table class="data data--tight">
+            <thead><tr><th scope="col">노출일</th><th scope="col">자리</th><th scope="col" class="n">노출</th><th scope="col" class="n">클릭</th><th scope="col">CTR (클릭 / 노출)</th></tr></thead>
+            <tbody>
+            <?php foreach ($ctr as $r): ?>
+              <tr>
+                <td><code><?= html_escape($r['stat_date']) ?></code></td>
+                <td><code><?= html_escape($r['slot']) ?></code></td>
+                <td class="n"><?= html_escape(m_int($r['impressions'])) ?></td>
+                <td class="n"><?= html_escape(m_int($r['clicks'])) ?></td>
+                <?php /* 이 열만 퍼센트 하나였다. 화면의 규칙 ③(비율은 분모와 함께)을 여기도 지킨다 —
+                         모델의 ctr_pct 대신 m_rate 로 같은 모양을 만든다. 노출 0 이면 비율을 만들지 않는다 */ ?>
+                <td><?= m_rate($r['clicks'], $r['impressions']) ?><?= (int) $r['impressions'] === 0 ? ' <span class="muted">노출 없음</span>' : '' ?><?= $thin_badge($r['impressions']) ?></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
       <?php endif; ?>
     </section>
 
