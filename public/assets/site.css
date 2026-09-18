@@ -949,7 +949,11 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   /* 시연 안내 — 흐름도는 가로로 편다. 화살표도 → 로 */
   .layout-tour { align-content: start; align-items: start; }
   .layout-tour > .tour-intro { grid-column: 1 / -1; }
-  .layout-tour > .tour-model { grid-column: 1 / -1; }
+  .layout-tour > .tour-hard  { grid-column: 1 / span 6; }
+  .layout-tour > .tour-model { grid-column: 7 / span 6; }
+  /* 두 칸이 나란히 설 때는 해설을 한 단으로 — 6열 안에서 두 단이면 줄이 너무 짧다 */
+  .layout-tour .tour-hard .captions,
+  .layout-tour .tour-model .captions { grid-template-columns: 1fr; }
   /* 해설 넉 줄을 두 단으로 — 한 단으로 쌓으면 시트 한 장을 넘긴다 */
   .layout-tour .captions {
     display: grid;
@@ -960,9 +964,11 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   /* 한 장에 담는다 — 여백을 줄여 시트가 4:3 을 넘지 않게 */
   .layout-tour .flow { margin: var(--space-4) 0 var(--space-3); }
   .layout-tour .tour-intro .meta-line { margin-bottom: 0; }
+  /* 일곱 걸음을 한 줄로 펴면 칸이 115px 이 되어 글자가 세로로 선다. 네 칸씩 두 줄 */
   .layout-tour .flow {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     column-gap: var(--space-5);
+    row-gap: var(--space-5);
   }
   .layout-tour .flow__step + .flow__step::before {
     content: "→";
@@ -972,6 +978,13 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
     left: calc(-1 * var(--space-5) / 2);
     margin: 0;
     transform: translateX(-50%);
+  }
+  /* 줄이 바뀌는 자리(다섯째 칸)는 왼쪽에 앞 칸이 없다 — 화살표를 위로 올려 "윗줄에서 이어진다"로 */
+  .layout-tour .flow__step:nth-child(5)::before {
+    content: "↓";
+    content: "↓" / "";
+    top: calc(-1 * var(--space-5));
+    left: 50%;
   }
 
   /* 홈 시트 2 — 제목 칸(3열, 일곱 줄 높이) + 요일 칸(9열 × 7) */

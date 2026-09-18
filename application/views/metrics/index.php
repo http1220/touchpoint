@@ -258,6 +258,10 @@ $thin_badge = function ($d) use ($small_sample)
           금액은 <strong>마지막 유입 기준으로만 한 번</strong> 더한다 — 두 기준에 다 더하면 매출이 두 배가 된다.
           KRW 의 minor unit 은 원이다(9,900원 = <code>9900</code>).
         </p>
+        <p class="caption"><strong>매체 이름이 <code>home</code>·<code>demo</code> 같은 것은 광고를 실제로 집행하지 않기 때문이다.</strong>
+          이 줄들은 시연·시험에서 만든 유입이고, <code>utm_source</code> 자리에 그 이름이 그대로 들어온다.
+          실제 집행에서는 매체가 붙인 값이 같은 자리에 들어온다 — 화면과 질의는 그대로다.
+          대부분의 전환에 방문이 없는 것도 같은 이유다: 부하 시험으로 서버에서 직접 만든 전환에는 쿠키가 없다.</p>
       <?php endif; ?>
     </section>
 
