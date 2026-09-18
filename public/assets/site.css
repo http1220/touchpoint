@@ -1028,8 +1028,7 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   /* 요약이 7열이다 — 결론 세 줄이 들어오면서 5열에서는 "매체 도달률 / 가짜 채널 뺀 값" 이
      두 줄로 접혀 시트가 1.05 까지 늘어났다(잰 값) */
   .layout-metrics-1 > .summary { grid-column: 1 / span 7; grid-row: 3 / span 2; }
-  .layout-metrics-1 > .visits,
-  .layout-metrics-1 > .ctr     { grid-column: 8 / span 5; }
+  .layout-metrics-1 > .visits { grid-column: 8 / span 5; }
 
   /* 지표 시트 2 · 3 · 4 — 칸은 내용 높이만. 남는 판면은 종이 */
   /* 광고가 만든 것 · 반영률 — 둘 다 표라서 폭을 다 쓴다.

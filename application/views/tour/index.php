@@ -31,16 +31,16 @@ $go = tp_host_url('lp', '/go?work=1&pid=tour&utm_source=tour&utm_medium=internal
 $flow = array(
 	array('lane' => '브라우저', 'name' => '광고 클릭', 'href' => $go,
 	      'sub'  => '유입 파라미터를 달고 <code>/go</code> 로. 눌러 보세요'),
-	array('lane' => '서버', 'name' => '브리지 302', 'href' => NULL,
-	      'sub'  => '여기서 최초·마지막 <strong>접점</strong>이 남는다. 랜딩에는 방문 번호(<code>vid</code>)만 넘긴다'),
+	array('lane' => '서버', 'name' => '브리지', 'href' => NULL,
+	      'sub'  => '광고 링크가 <strong>먼저 들르는 서버</strong>. 유입을 적고 <code>302</code> 로 랜딩에 넘긴다 — 바로 들여보내면 기록할 기회가 없다'),
 	array('lane' => '브라우저', 'name' => '작품 랜딩', 'href' => tp_host_url('lp', '/l/1'),
 	      'sub'  => '무엇이 기록됐는지 화면이 보여 준다. <code>track.js</code> 가 노출·클릭을 모은다'),
 	array('lane' => '브라우저', 'name' => '결제', 'href' => NULL,
 	      'sub'  => '<code>/purchase</code> — 금액의 진실은 서버 상품표에 있다. 브라우저가 부른 값을 믿지 않는다'),
 	array('lane' => '서버', 'name' => 'PG 웹훅', 'href' => NULL,
 	      'sub'  => '결제 확정은 <strong>웹훅으로</strong> 온다. 같은 알림이 두 번 와도 한 번만 센다'),
-	array('lane' => '서버', 'name' => '전환 → 아웃박스', 'href' => NULL,
-	      'sub'  => '전환과 보낼 것을 <strong>같은 트랜잭션</strong>에 적는다. 어느 광고에서 왔는지가 여기서 붙는다'),
+	array('lane' => '서버', 'name' => '전환 기록 · 발송 적재', 'href' => NULL,
+	      'sub'  => '결제 같은 <strong>값어치 있는 사건</strong>(전환)과 매체로 보낼 것을 <strong>같은 트랜잭션</strong>에 적는다. 어느 광고에서 왔는지가 여기서 붙는다'),
 	array('lane' => '매체', 'name' => '워커 → GA4·Meta', 'href' => tp_host_url('app', '/metrics'),
 	      'sub'  => '보낸 뒤 <strong>매체를 되읽어</strong> 보고서에 남았는지 맞댄다 — 543/543, +40h'),
 );
@@ -60,7 +60,8 @@ $flow = array(
     </header>
 
     <section class="panel tour-intro" aria-labelledby="page-title">
-      <h1 id="page-title">광고 클릭에서 GA4 보고서까지 실제로 돌려 봤고, 숫자는 <span class="nowrap">분모·표본·측정 시각과</span> 함께만 보여 줍니다.</h1>
+      <h1 id="page-title">광고 클릭에서 GA4 보고서까지, <span class="nowrap">실제로 한 바퀴 돌려 봤습니다.</span></h1>
+      <p class="meta-line">그리고 숫자는 이렇게만 보여 줍니다 — 비율은 <strong>몇 / 몇 (몇 %)</strong> 으로, 건수가 적으면 <strong>얇은 표본</strong>이라고, 매체를 되읽어 안 값에는 <strong>언제 쟀는지</strong>를 붙여서.</p>
       <p class="caption caption--corner">
         홈은 <strong>측정할 대상</strong>으로 만든 웹툰 서비스 모형입니다. 작품·회차는 실제 DB 이고, 표지는 자리표시입니다.
       </p>

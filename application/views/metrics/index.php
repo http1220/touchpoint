@@ -112,9 +112,8 @@ $thin_badge = function ($d) use ($small_sample)
     <header class="masthead">
       <p class="masthead__mark">touchpoint <span class="masthead__sub">지표</span></p>
       <p class="meta-line masthead__note">
-        읽기 대상 <code><?= html_escape($read_target) ?></code> (복제본) ·
-        서버 시각 <code><?= html_escape($now) ?></code> UTC ·
-        <strong>방금 한 일과 숫자가 다르면</strong> 복제 지연부터
+        <strong>복제본 DB</strong>(<code><?= html_escape($read_target) ?></code>)에서 읽습니다 — 방금 한 일이 안 보이면 복제 지연입니다 ·
+        서버 시각 <code><?= html_escape($now) ?></code> UTC
       </p>
     </header>
 
@@ -148,7 +147,7 @@ $thin_badge = function ($d) use ($small_sample)
          ("매체가 받았다" 는 언제 받은 것인지, 무엇을 받은 것인지 말하지 못한다).
          대신 용어 바로 아래 한 줄로 **무엇을 세는지**를 붙인다 — 모르는 사람은 그 줄에서 배운다.
       */ ?>
-      <h1 id="page-title">무엇이 들어왔고, 무엇이 매체로 돌아갔나</h1>
+      <h1 id="page-title">광고가 만든 전환, 매체로 되돌려 보낸 결과</h1>
 
       <table class="data kv headline">
         <caption class="sr-only">이 화면의 결론 세 줄</caption>
@@ -177,7 +176,7 @@ $thin_badge = function ($d) use ($small_sample)
       <p class="caption"><strong>도달률과 반영률은 다른 숫자다.</strong> 같은 전송이 <code>+0h</code> 에 도달률 100% · 반영률 1.2% 였다. 반영률만 이 화면 밖(매체 되읽기)에서 온다.</p>
       <nav class="toc" aria-label="지표 묶음">
         <a href="#inflow">① 유입</a>
-        <a href="#attribution">광고가 만든 것</a>
+        <a href="#attribution">매체별 귀속</a>
         <a href="#convert">② 전환 → 적재</a>
         <a href="#dispatch">③ 매체 전송</a>
       </nav>
@@ -193,7 +192,8 @@ $thin_badge = function ($d) use ($small_sample)
     <section class="panel visits" aria-labelledby="visits">
       <p class="eyebrow" id="inflow">① 유입</p>
       <h2 id="visits">방문과 접점</h2>
-      <p class="caption"><strong>"접점이 붙은 방문 ÷ 방문"은 보존율이 아니다</strong> — 직접 유입도 마지막 접점을 받아 처음부터 99%대로 뜬다(실측 529 / 530). 분모는 맨 아래 줄, 광고 유입 방문이다.
+      <p class="meta-line"><strong>접점</strong> = 방문에 붙는 <strong>유입 기록 한 건</strong>. 방문 하나에 최초·마지막 둘까지.</p>
+      <p class="caption"><strong>"접점이 붙은 방문 ÷ 방문"은 보존율이 아니다</strong> — 직접 유입도 마지막 접점을 받아 99%대로 뜬다(실측 529 / 530). 분모는 맨 아래 줄이다.
         <a href="<?= $repo ?>docs/benchmarks.md">benchmarks.md 5장<span aria-hidden="true">↗</span></a></p>
       <table class="data kv">
         <tbody>
@@ -219,7 +219,8 @@ $thin_badge = function ($d) use ($small_sample)
   <div class="sheet layout-metrics-ad">
     <section class="panel ad-attr" aria-labelledby="ad-attr">
       <p class="eyebrow" id="attribution">광고 → 결제</p>
-      <h2 id="ad-attr">광고가 만든 것 <span class="muted">매체별 귀속 · first-touch 와 last-touch</span></h2>
+      <h2 id="ad-attr">매체별 귀속 <span class="muted">first-touch 기준 · last-touch 기준</span></h2>
+      <p class="meta-line"><strong>귀속</strong> = 전환을 <strong>어느 매체에 붙일지</strong> 정하는 일. 광고비 정산이 이 숫자를 따라간다.</p>
 
       <p class="caption"><strong>같은 결제도 어느 접점에 붙이냐에 따라 매체가 달라진다.</strong>
         <strong>first-touch</strong>(처음 데려온 매체)로 세느냐 <strong>last-touch</strong>(마지막에 밀어 준 매체)로 세느냐에 따라 공이 옮겨 간다.
@@ -419,6 +420,7 @@ $thin_badge = function ($d) use ($small_sample)
     <section class="panel outbox" aria-labelledby="outbox">
       <p class="eyebrow">② 전환 → 적재</p>
       <h2 id="outbox">아웃박스 적재 <span class="muted">채널 × 상태 · 전체 <?= html_escape(m_int($outbox['grand'])) ?>건</span></h2>
+      <p class="meta-line"><strong>아웃박스</strong> = 매체로 <strong>보낼 것을 쌓아 두는 표</strong>. 전환과 같은 트랜잭션에 적는 것이 <strong>적재</strong>이고, 워커가 비우며 보낸다.</p>
       <p class="caption"><strong><code>failed</code> 0 은 정상</strong> — 재시도는 <code>pending</code> 으로, 포기는 <code>dead</code> 로 가고 <code>failed</code> 를 쓰는 경로가 없다. <code>sending</code> 이 쌓이면 워커가 전송 중에 죽은 것이다.
         <a href="<?= $repo ?>docs/outbox-and-channels.md">outbox-and-channels.md<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="아웃박스 적재 표 — 가로로 스크롤">
@@ -535,7 +537,8 @@ $thin_badge = function ($d) use ($small_sample)
     <section class="panel retry-recovery" aria-labelledby="retry-recovery">
       <p class="eyebrow">③ 매체 전송</p>
       <h2 id="retry-recovery">재시도 회복</h2>
-      <p class="caption">분모는 <strong>재시도를 겪은 적재</strong>다. 0/0 을 100% 로 적지 않는다 — 실패가 없던 것과 전부 회복한 것은 다른 사실이다.
+      <p class="meta-line">첫 시도에 실패해 <strong>다시 보낸 것</strong> 중 결국 성공한 비율.</p>
+      <p class="caption">분모는 한 번에 간 것을 뺀 <strong>재시도를 겪은 적재</strong>다 — 전체로 나누면 "백오프가 잘 듣는다" 가 항상 참이 된다. 0/0 을 100% 로 적지 않는다 — 실패가 없던 것과 전부 회복한 것은 다른 사실이다.
         <a href="<?= $repo ?>docs/failure-scenarios.md">failure-scenarios.md D-2<span aria-hidden="true">↗</span></a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="재시도 회복 표 — 가로로 스크롤">
         <table class="data data--tight">
