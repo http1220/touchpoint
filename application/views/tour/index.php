@@ -103,15 +103,35 @@ $flow = array(
       </div>
     </section>
 
-    <section class="panel tour-model" aria-labelledby="model-title">
-      <h2 id="model-title">홈이 말하지 않는 것 — 데이터 모델</h2>
-      <p class="meta-line">홈은 서비스처럼 보이게 두었습니다. 그 화면이 선 사실은 여기 적습니다.</p>
+    <?php /* 이 화면의 마지막 자리는 시스템 이야기여야 한다. 웹툰 스키마 해설 넉 줄이 여기 있었는데,
+             그건 측정 대상(홈)의 사실이지 이 시스템의 설명이 아니었다 — docs 로 보내고 귀속으로 바꿨다 (2026-09-18) */ ?>
+    <section class="panel tour-attr" aria-labelledby="attr-title">
+      <h2 id="attr-title">귀속은 이렇게 정해진다</h2>
+      <p class="meta-line">광고 성과가 조용히 사라지는 자리가 여기다. 규칙을 코드에 적어 두고 화면이 그대로 말한다.</p>
+
+      <table class="data data--tight">
+        <caption class="sr-only">들어온 접점에 따른 최초·마지막 유입 갱신 규칙 네 가지</caption>
+        <thead><tr><th scope="col">들어온 접점</th><th scope="col">지금 상태</th><th scope="col">하는 일</th></tr></thead>
+        <tbody>
+          <tr><td>유입 파라미터 있음</td><td>최초 없음</td><td>최초를 만들고 마지막도 갱신</td></tr>
+          <tr><td>유입 파라미터 있음</td><td>최초 있음</td><td><strong>최초는 보존</strong>, 마지막만 갱신</td></tr>
+          <tr><td>직접 유입</td><td>마지막 있음</td><td><strong>아무것도 바꾸지 않는다</strong></td></tr>
+          <tr><td>직접 유입</td><td>마지막 없음</td><td>마지막만 기록 <span class="muted">(최초로는 삼지 않는다)</span></td></tr>
+        </tbody>
+      </table>
+
       <div class="captions">
-        <p class="caption">작품 하나가 <strong>여러 요일</strong>에 연재됩니다 — 그래서 연재 요일은 별도 테이블입니다.
-          <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a></p>
-        <p class="caption"><strong>N시간 후 무료</strong>는 작품의 속성이고, 무료·유료는 회차의 속성입니다. 연령은 참/거짓이 아니라 코드입니다.</p>
-        <p class="caption">언어·문자·지역은 <strong>다른 축</strong>입니다 — 간체와 번체는 둘 다 <code>zh</code> 이고 문자로 갈립니다. 언어를 바꾸면 작품 데이터만 바뀝니다.</p>
-        <p class="caption">순위는 조회수나 평점이 아니라 <strong>회차 수</strong>로 세웁니다 — 조사한 플랫폼 모두 조회수를 공개하지 않았고, 없는 지표를 지어내지 않습니다.
+        <p class="caption"><strong>셋째 줄이 핵심입니다.</strong> 광고를 타고 온 사람이 나중에 북마크로 다시 오면 직접 유입입니다.
+          이때 마지막 유입을 덮으면 그 사람의 결제는 <strong>어느 매체에도 붙지 않습니다</strong> — 매체 대시보드와 자체 집계가 어긋나는 흔한 원인입니다.
+          <a href="<?= $repo ?>src/Attribution/TouchpointResolver.php">TouchpointResolver<span aria-hidden="true">↗</span></a></p>
+        <p class="caption"><strong>결제에는 한 층이 더 있습니다.</strong> 결제 시점의 방문이 있으면 그쪽, 없으면 가입 접점으로 떨어집니다 —
+          가입은 A 광고로 하고 석 달 뒤 B 광고를 보고 돌아와 결제할 수 있으니까요.
+          전에는 <strong>고를 수 없었습니다</strong> — 결제에 방문을 적을 칸이 없어 무조건 가입 접점이었습니다.
+          <a href="<?= $repo ?>application/migrations/20260914000100_add_payment_visit.php">방문 칸을 더한 마이그레이션<span aria-hidden="true">↗</span></a></p>
+        <p class="caption">그래서 지표 화면은 <strong>한 기준을 고르지 않고 둘을 나란히</strong> 냅니다 — 같은 결제도 최초 기준과 마지막 기준에서 다른 매체에 붙습니다.
+          <a href="<?= html_escape(tp_host_url('app', '/metrics#attribution')) ?>">광고가 만든 것<span aria-hidden="true">↗</span></a></p>
+        <p class="caption">홈의 웹툰 데이터 모델(연재 요일 · 기다리면 무료 · 언어와 문자 · 순위 기준)은 화면에서 덜어 내고 문서에 뒀습니다.
+          <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a> ·
           <a href="<?= $repo ?>docs/research-method.md">research-method.md 3-1<span aria-hidden="true">↗</span></a></p>
       </div>
     </section>

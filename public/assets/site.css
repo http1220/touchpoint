@@ -958,11 +958,12 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   /* 시연 안내 — 흐름도는 가로로 편다. 화살표도 → 로 */
   .layout-tour { align-content: start; align-items: start; }
   .layout-tour > .tour-intro { grid-column: 1 / -1; }
-  .layout-tour > .tour-hard  { grid-column: 1 / span 6; }
-  .layout-tour > .tour-model { grid-column: 7 / span 6; }
+  /* 귀속 칸이 표 하나를 더 이고 있어 조금 넓다 — 5:7 로 나눈다 */
+  .layout-tour > .tour-hard { grid-column: 1 / span 5; }
+  .layout-tour > .tour-attr { grid-column: 6 / span 7; }
   /* 두 칸이 나란히 설 때는 해설을 한 단으로 — 6열 안에서 두 단이면 줄이 너무 짧다 */
   .layout-tour .tour-hard .captions,
-  .layout-tour .tour-model .captions { grid-template-columns: 1fr; }
+  .layout-tour .tour-attr .captions { grid-template-columns: 1fr; }
   /* 해설 넉 줄을 두 단으로 — 한 단으로 쌓으면 시트 한 장을 넘긴다 */
   .layout-tour .captions {
     display: grid;
