@@ -6,6 +6,8 @@
 >
 > 실제 PG 연동은 범위 밖이다 → [ADR-008](decisions/ADR-008-stub-pg.md) ·
 > [ADR-016](decisions/ADR-016-payment-and-notification.md).
+> **09-19 이후**: 실PG(이니시스)는 [plan-multi-pg.md](plan-multi-pg.md) 가 다룬다. 이 문서의 스텁·CAS 는
+> 그대로 쓰이고, 실PG 결과도 같은 `applyEvent()` 로 들어간다. 12장 결정 5 의 "청구가 없다" 는 `pg=stub` 에서만 참이다.
 > 스키마는 [20260909000400](../application/migrations/20260909000400_create_payments_coins.php) 에
 > 이미 있다. **새로 만들지 않고 그것을 쓴다.**
 

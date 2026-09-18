@@ -121,6 +121,26 @@ END {
 	if (val["ACME_STAGING"] == "")
 		print "  경고: ACME_STAGING 이 비어 있습니다 — 프로덕션 인증서를 발급합니다. 처음이면 true 로 두세요"
 
+	# ── 실PG (docs/plan-multi-pg.md D5) ──
+	# 테스트 키가 운영에 들어가면 결제는 성공하는데 돈이 안 들어온다. 반대면
+	# 테스트라 믿고 실결제가 난다. 앱(libraries/Gateways.php)도 같은 조건이면
+	# 어댑터를 만들지 않지만, 배포 전에 여기서 먼저 막는다.
+	if (val["INICIS_MID"] != "") {
+		im = (val["INICIS_MODE"] == "") ? "test" : val["INICIS_MODE"]
+		if (im != "test" && im != "live") { print "  INICIS_MODE 는 test / live 중 하나여야 합니다"; bad++ }
+		else if ((im == "test") != (val["INICIS_MID"] == "INIpayTest")) {
+			print "  INICIS_MODE(" im ") 와 INICIS_MID 가 맞지 않습니다 — 테스트 MID(INIpayTest)는 test 에서만, 그 외는 live 에서만"
+			bad++
+		}
+		if (val["INICIS_SIGN_KEY"] == "") { print "  INICIS_MID 가 있는데 INICIS_SIGN_KEY 가 비었습니다"; bad++ }
+		if (val["INICIS_INIAPI_KEY"] == "" || val["INICIS_CLIENT_IP"] == "")
+			print "  참고: INICIS_INIAPI_KEY · INICIS_CLIENT_IP 가 비어 cli/pg refund 가 이니시스 환불을 하지 않습니다"
+		if (val["PAY_DEMO_TOKEN"] == "")
+			print "  참고: PAY_DEMO_TOKEN 이 비어 /pay 가 아무에게도 열리지 않습니다"
+		else if (length(val["PAY_DEMO_TOKEN"]) < 24)
+			print "  경고: PAY_DEMO_TOKEN 이 24자보다 짧습니다 (openssl rand -hex 16)"
+	}
+
 	if (bad) { print ""; print "  " bad "건을 고쳐야 합니다."; exit 1 }
 	print "  필수 값이 모두 채워졌습니다."
 }

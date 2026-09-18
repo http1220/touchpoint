@@ -154,7 +154,7 @@ CREATE TABLE payment_events (                    -- append-only 감사 추적
   payment_id  BIGINT UNSIGNED NOT NULL,
   from_status VARCHAR(24) NULL,
   to_status   VARCHAR(24) NOT NULL,
-  source      ENUM('api','webhook','admin') NOT NULL,
+  source      ENUM('api','webhook','admin','return') NOT NULL,  -- return: 이니시스 복귀 뒤 동기 승인 (20260919000200)
   raw_payload JSON NULL,
   created_at  DATETIME(3) NOT NULL,
   KEY ix_payment (payment_id, id)

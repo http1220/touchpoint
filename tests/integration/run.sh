@@ -66,4 +66,14 @@ expect "sent"                 200 "$(st count outbox sent)"
 expect "pending"              0   "$(st count outbox pending)"
 expect "같은 (행, 시도) 중복 기록" 0 "$(st count dispatch_duplicates)"
 
+echo "── 8. 이니시스 복귀 승인 ${N}개 동시 — 저마다 다른 tid (plan-multi-pg B12 · 동시 복귀)"
+# 이니시스는 부르지 않는다. 장부 쪽만 — source=return ENUM, 그리고 장부에 오른 승인의 tid 만 붙는가.
+# 무시된 쪽 tid 가 붙으면 cli/pg refund 가 엉뚱한 승인을 되돌린다. 실운영에서는 그 쪽을 망취소한다(Pay.php).
+RET=$(st payment "$USER_UID" "it-ret-$(date +%s)" | sed 's/.*"uid":"\([0-9a-f]*\)".*/\1/')
+parallel $N php public/index.php cli/selftest apply_return "$RET" "it-tid-{}" > /dev/null
+expect "captured 전이"                1  "$(st count captured_transitions "$RET")"
+expect "source=return 이벤트(전이+무시)" $N "$(st count return_events "$RET")"
+expect "붙은 PG 번호"                 1  "$(st count pg_refs "$RET")"
+expect "코인 lot"                     1  "$(st count lots "$RET")"
+
 finish

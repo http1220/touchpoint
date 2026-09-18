@@ -2,6 +2,7 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 use App\Payment\CoinProduct;
+use App\Payment\PayAccess;
 
 /**
  * 코인 결제 시작. `app.<도메인>` 에서만 열린다.
@@ -25,6 +26,11 @@ use App\Payment\CoinProduct;
  *
  * 즉 **서명이 GA4 오염을 막는 실질 방어선**이다. 스텁 PG 라 실제 청구도
  * 없다 → 계획 12장 결정 5
+ *
+ * **이 근거는 `pg=stub` 에서만 성립한다(09-19).** 이니시스 테스트 MID 는
+ * 실승인이다. 그래서 `pg≠stub` 은 시연 토큰 쿠키(PayAccess)를 요구한다 —
+ * 진짜 인증은 아니지만 공개 페이지에서 누구나 실승인을 일으키지는 못한다
+ * → docs/plan-multi-pg.md C4
  * ──────────────────────────────────────────────────────────
  *
  * 금액은 **서버 상품표와 대조한다**. 클라이언트가 금액을 정하면 그건
@@ -104,6 +110,8 @@ class Purchase extends MY_Controller
 				));
 		}
 
+		$pg = $this->pgFor(strtolower(self::text($body['pg'] ?? NULL)), $product);
+
 		$idempotencyKey = self::text($body['idempotency_key'] ?? NULL);
 
 		if ($idempotencyKey === '')
@@ -144,6 +152,7 @@ class Purchase extends MY_Controller
 			'currency'        => $product->currency,
 			'idempotency_key' => $idempotencyKey,
 			'product'         => $product->code,
+			'pg'              => $pg,
 
 			// 결제를 일으킨 방문. 쿠키가 없으면 NULL 이고, 그때만 가입 접점으로 떨어진다.
 			'visit_id'        => $this->currentVisitId(),
@@ -171,6 +180,48 @@ class Purchase extends MY_Controller
 	}
 
 	// ────────────────────────────────────────────────────────
+
+	/**
+	 * 어느 PG 로 결제하는가. 없으면 스텁 — D-3 측정 스크립트가 그대로 돈다.
+	 *
+	 * 실PG 는 세 가지를 본다: 이름이 맞는가(422) · 시연 토큰이 있는가(403) ·
+	 * 그 PG 가 지금 이 통화를 받는가(503·422). 결제 행을 만들기 **전에** 본다 —
+	 * 받을 수 없는 결제의 행을 남기면 오래된 결제 보고에 영원히 걸린다.
+	 */
+	private function pgFor($pg, CoinProduct $product)
+	{
+		if ($pg === '' OR $pg === 'stub')
+		{
+			return 'stub';
+		}
+
+		$this->load->library('gateways');
+
+		if ( ! $this->gateways->isReal($pg))
+		{
+			$this->problem(422, 'invalid-request', 'pg 는 stub | '.implode(' | ', Gateways::REAL).' 중 하나여야 합니다.', array('field' => 'pg'));
+		}
+
+		if ( ! PayAccess::allows($this->input->cookie(PayAccess::COOKIE, FALSE), (string) (getenv('PAY_DEMO_TOKEN') ?: '')))
+		{
+			$this->problem(403, 'pay-locked', '실결제 경로는 시연 토큰이 필요합니다.');
+		}
+
+		$gateway = $this->gateways->get($pg);
+
+		if ($gateway === NULL)
+		{
+			$this->output->set_header('Retry-After: 600');
+			$this->problem(503, 'pg-unavailable', $pg.' 설정이 없어 결제할 수 없습니다.');
+		}
+
+		if ( ! $gateway->supports($product->currency))
+		{
+			$this->problem(422, 'invalid-request', $pg.' 는 '.$product->currency.' 를 받지 않습니다.', array('field' => 'pg'));
+		}
+
+		return $pg;
+	}
 
 	/**
 	 * 같은 idempotency_key 로 다시 들어온 요청.

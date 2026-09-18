@@ -87,6 +87,34 @@ class Selftest extends MY_Controller
 		)));
 	}
 
+	/**
+	 * 이니시스 복귀 승인이 장부에 들어가는 자리를 흉내 낸다. **이니시스는 부르지 않는다.**
+	 *
+	 * source=return 과 PG 번호(tid)를 같은 트랜잭션에 넣는다. 두 가지를 DB 로 잰다:
+	 *   - ENUM 에 return 이 없으면 여기서 db-error 가 난다 → plan-multi-pg.md B12.
+	 *     단위 테스트는 DB 를 안 타서 이걸 못 잡는다
+	 *   - 동시 복귀에서 **장부에 오른 승인의 tid 만** 적재되는가(무시된 쪽 번호가 붙으면
+	 *     환불이 엉뚱한 승인을 되돌린다)
+	 */
+	public function apply_return($paymentUid, $tid)
+	{
+		$payment = $this->payment_model->findByUid($paymentUid);
+
+		if ($payment === NULL)
+		{
+			fwrite(STDERR, "결제 없음: $paymentUid\n");
+			exit(1);
+		}
+
+		$r = $this->payment_model->applyEvent($payment, 'captured', array('selftest' => TRUE, 'tid' => (string) $tid), 'return', array('tid' => (string) $tid));
+
+		$this->out(json_encode(array(
+			'applied' => $r['applied'],
+			'status'  => $r['status'],
+			'error'   => $r['error'],
+		)));
+	}
+
 	/** 코인 회수를 직접 부른다. 멱등성 확인용. */
 	public function revoke($paymentUid)
 	{
@@ -125,6 +153,8 @@ class Selftest extends MY_Controller
 	 *   outbox <status>              noop 채널 아웃박스 상태별
 	 *   dispatch_duplicates          같은 (outbox_id, attempt) 가 두 번 이상 기록된 수
 	 *   tables                       ci_migrations 를 뺀 테이블 수
+	 *   pg_refs <uid>                이 결제에 붙은 PG 번호 수
+	 *   return_events <uid>          source=return 이벤트 수 (전이 + 무시)
 	 */
 	public function count($what, $a = NULL, $b = NULL)
 	{
@@ -155,6 +185,15 @@ class Selftest extends MY_Controller
 			case 'dispatch_duplicates':
 				$sql = 'SELECT COUNT(*) n FROM (SELECT outbox_id, attempt FROM dispatch_log GROUP BY outbox_id, attempt HAVING COUNT(*) > 1) d';
 				$bind = array();
+				break;
+			case 'pg_refs':
+				$sql = 'SELECT COUNT(*) n FROM payment_pg_refs r JOIN payments p ON p.id = r.payment_id WHERE p.payment_uid = UNHEX(?)';
+				$bind = array($a);
+				break;
+			case 'return_events':
+				$sql = 'SELECT COUNT(*) n FROM payment_events e JOIN payments p ON p.id = e.payment_id
+				         WHERE p.payment_uid = UNHEX(?) AND e.source = "return"';
+				$bind = array($a);
 				break;
 			case 'tables':
 				$sql = 'SELECT COUNT(*) n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name <> "ci_migrations"';

@@ -43,7 +43,7 @@ $sections = array(
 
     <header class="masthead">
       <p class="masthead__mark"><a href="<?= html_escape(tp_host_url('root', '/')) ?>">touchpoint</a> <span class="masthead__sub">웹툰</span></p>
-      <p class="eyebrow masthead__note">시행일 2026년 9월 15일</p>
+      <p class="eyebrow masthead__note">시행일 2026년 9월 19일</p>
     </header>
 
     <section class="panel panel--bottom privacy-title" aria-labelledby="page-title">
@@ -51,7 +51,10 @@ $sections = array(
       <p>
         이 사이트는 <strong>개인이 운영하는 채용 포트폴리오 시연 사이트</strong>입니다.
         광고 유입부터 전환까지를 추적하는 구조를 보여 주기 위해 만들었고,
-        <strong>실제 회원가입과 결제(청구)는 없습니다.</strong>
+        <strong>실제 회원가입은 없습니다.</strong>
+        <?php /* 09-19: 이니시스 테스트 상점 연결(controllers/Pay.php). 전에는 "결제(청구)는 없습니다" 였다 */ ?>
+        결제는 <strong>시연 토큰을 받은 사람만 여는</strong> 결제대행사(PG)의 테스트 환경에만 연결되어 있습니다.
+        테스트 환경이라도 <strong>카드 승인은 실제로 일어나고</strong>, 결제대행사가 당일 자정 전에 자동으로 취소합니다.
         아래 내용은 이 사이트의 코드가 실제로 하는 일을 그대로 적은 것입니다
         (<a href="<?= $repo ?>">소스 공개</a>).
       </p>
@@ -105,9 +108,14 @@ $sections = array(
             <?php /* create_sessions — ci_sessions */ ?>
             <tr><td>세션</td><td>세션 식별자, IP 주소</td><td>만료(2시간) 후 삭제</td></tr>
             <?php /* create_users_conversions · create_payments_coins */ ?>
-            <tr><td>회원·전환·결제</td>
-                <td>시연용 데이터만 있습니다. 실제 가입·결제 기능이 생기면 이 표를 먼저 고칩니다</td>
+            <tr><td>회원·전환</td>
+                <td>시연용 데이터만 있습니다. 실제 가입 기능이 생기면 이 표를 먼저 고칩니다</td>
                 <td>(해당 시) 5년 — 전자상거래법</td></tr>
+            <?php /* create_payment_pg_refs · Gateway/InicisGateway STORED_FIELDS · PayloadRedactor — 09-19 */ ?>
+            <tr><td>결제 기록</td>
+                <td>결제 번호, 금액·통화, 상태가 바뀐 시각, 결제대행사 거래 번호, 승인 결과 일부(결과 코드·승인 일시·승인 번호·카드사 코드·할부 개월)<br>
+                    — <strong>카드번호와 구매자 이름·연락처는 저장하지 않습니다.</strong> 결제대행사 응답 원문은 해시값만 남깁니다</td>
+                <td>5년 — 전자상거래법</td></tr>
           </tbody>
         </table>
       </div>
@@ -129,6 +137,8 @@ $sections = array(
             <tr><td><code>tp_csrf</code></td><td>이 사이트</td><td>위조 요청 방지 토큰</td><td>2시간</td></tr>
             <tr><td><code>ab_rdb</code></td><td>이 사이트</td><td>읽기용 데이터베이스 배정 (개인 식별 없음)</td><td>1일</td></tr>
             <tr><td><code>tp_ad_optout</code></td><td>이 사이트</td><td>맞춤형 광고 거부 설정 기억</td><td>1년</td></tr>
+            <?php /* src/Payment/PayAccess · controllers/Pay::grant — 09-19 */ ?>
+            <tr><td><code>tp_pay</code></td><td>이 사이트</td><td>시연 결제 화면을 열 수 있는지 확인 (토큰의 해시값, 개인 식별 없음)</td><td>1일</td></tr>
             <tr><td><code>tp_probe_vid</code></td><td>이 사이트</td><td>진단 페이지(<code>/diag</code>)의 쿠키 동작 시험</td><td>짧은 기간</td></tr>
             <tr><td><code>_ga</code>, <code>_ga_*</code></td><td>Google</td><td>이용 통계</td><td>최대 2년</td></tr>
             <tr><td><code>_fbp</code></td><td>Meta</td><td>광고 성과 측정 (픽셀이 켜져 있을 때)</td><td>90일</td></tr>
@@ -158,6 +168,13 @@ $sections = array(
                 <td>페이지를 열 때 브라우저가 전송(픽셀) · 결제·전환이 기록되면 서버가 전송 (TLS)</td>
                 <td>광고 성과 측정, 맞춤형 광고</td>
                 <td><a href="https://www.facebook.com/privacy/policy/">Meta 정책</a>에 따름</td></tr>
+            <?php /* controllers/Pay::inicis_start · Gateway/InicisGateway::checkout — 09-19 */ ?>
+            <tr><td>(주)케이지이니시스<br>(국내 결제대행)</td>
+                <td>주문 번호, 금액, 상품명, 구매자 이름·휴대폰·이메일 — <strong>시연용 고정값이며 실제 개인정보가 아닙니다</strong><br>
+                    카드 정보는 이니시스 결제창에 직접 입력하며 이 사이트를 거치지 않습니다</td>
+                <td>시연 결제 화면에서 결제할 때 브라우저가 결제창으로 전송 · 승인·취소는 서버가 요청 (TLS)</td>
+                <td>카드 결제 처리 (테스트 환경)</td>
+                <td><a href="https://www.inicis.com/">KG이니시스 정책</a>에 따름</td></tr>
           </tbody>
         </table>
       </div>

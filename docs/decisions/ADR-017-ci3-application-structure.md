@@ -41,7 +41,8 @@ application/          ← CI3 영역
 src/                  ← PSR-4 영역 (App\)
 ├── Channel/          ChannelInterface · Ga4Channel · MetaChannel · NoopChannel
 ├── Notify/           NotifierInterface · WebPushNotifier · SmsNotifier
-├── Payment/          GatewayInterface · StubGateway · PgAGateway · PgBGateway
+├── Payment/          Gateway/ (GatewayInterface · InicisGateway — 09-19, 페이팔은 아직) · 스텁은 어댑터가 아니라 cli/pg
+│                     Tax/ (TaxPolicy · PassThroughTaxPolicy) → docs/plan-multi-pg.md
 ├── Attribution/      TouchpointResolver · DedupKey
 ├── Coin/             LedgerService (만료·소진 순서)
 └── Support/          Clock · TraceId

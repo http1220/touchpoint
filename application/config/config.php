@@ -117,9 +117,15 @@ $config['global_xss_filtering'] = FALSE;
 |
 |   collect · conversion   Origin 검사 (src/Http/CorsPolicy)
 |   webhooks/pg            HMAC 서명 (src/Payment/WebhookSignature)
-|   purchase               없음 — 인증 자체가 없다. 악용 범위는 아래
+|   purchase               pg=stub 은 없음 — 인증 자체가 없다. 악용 범위는 아래
+|                          pg≠stub 은 시연 토큰 쿠키 (src/Payment/PayAccess)
+|   pay/inicis/start       시연 토큰 쿠키. SameSite=Lax 라 다른 사이트의 POST 엔 안 실린다
+|   pay/inicis/return      이니시스 흐름 — authToken · authUrl 호스트 검사 · 금액 대조
+|                          **이니시스가 교차 사이트 POST 로 보낸다.** CSRF 토큰이 있을 수 없고
+|                          제외하지 않으면 모든 결제가 403 이다 → docs/plan-multi-pg.md C2
+|   pay/inicis/close       상태를 바꾸지 않는다
 |
-| `/purchase` 에 방어가 없어도 **전환도 코인도 만들 수 없다.** 그 둘은
+| `/purchase`(pg=stub)에 방어가 없어도 **전환도 코인도 만들 수 없다.** 그 둘은
 | captured 웹훅에서만 발화하고 웹훅은 서명을 요구한다. 누구나 만들 수
 | 있는 것은 status=created 인 payments 행뿐이고, 스텁 PG 라 청구도 없다.
 | → docs/plan-payment-webhook.md 12장 결정 5
@@ -140,6 +146,7 @@ $config['csrf_exclude_uris'] = array(
 	'click',
 	'purchase',
 	'webhooks/.*',
+	'pay/inicis/.*',
 );
 
 // 압축은 nginx 가 한다. PHP에서 또 하면 이중 처리다.

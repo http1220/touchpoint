@@ -55,9 +55,12 @@ class Payment_model extends CI_Model
 	 * HEX() 는 대문자, bin2hex() 는 소문자다. 같은 결제가 경로마다 다른
 	 * 문자열로 나가면 호출자가 둘을 다른 것으로 센다 — 여기서 맞춘다.
 	 */
-	const SELECT_COLUMNS = 'SELECT id, LOWER(HEX(payment_uid)) AS uid_hex, user_id, visit_id, status,
+	const SELECT_COLUMNS = 'SELECT id, LOWER(HEX(payment_uid)) AS uid_hex, user_id, visit_id, pg, status,
 	                               amount_minor, currency, idempotency_key, captured_at
 	                          FROM '.self::TABLE;
+
+	/** PG 번호. 이니시스 tid · 페이팔 order·capture → 20260919000100 */
+	const PG_REFS = 'payment_pg_refs';
 
 	/**
 	 * 결제 행을 만든다. 같은 idempotency_key 면 만들지 않는다.
@@ -66,7 +69,7 @@ class Payment_model extends CI_Model
 	 * **그 뒤에** 읽는다(`findByIdempotencyKey`). 미리 SELECT 해서 막으면
 	 * 동시 요청 둘이 다 통과한다 — Conversion_model 주석과 같은 규칙이다.
 	 *
-	 * @param array $p user_id · amount_minor · currency · idempotency_key · product
+	 * @param array $p user_id · amount_minor · currency · idempotency_key · product · pg
 	 * @return array [id, uid_hex, duplicated]
 	 */
 	public function createIfAbsent(array $p)
@@ -96,9 +99,15 @@ class Payment_model extends CI_Model
 				 */
 				isset($p['visit_id']) && $p['visit_id'] !== NULL ? (int) $p['visit_id'] : NULL,
 
-				// PG 는 스텁이다. 실제 연동이 아니라는 사실을 행마다 남긴다
-				// — 나중에 진짜 PG 가 붙어도 옛 행을 구분할 수 있게 → ADR-008
-				'stub',
+				/*
+				 * 어느 PG 로 결제하는가. 기본은 스텁이다.
+				 *
+				 * 처음엔 'stub' 을 박아 두고 "실제 연동이 아니라는 사실을 행마다
+				 * 남긴다" 고 적었다(ADR-008). 이니시스가 붙으면서 호출자가 고른다 —
+				 * 그 주석의 의도는 그대로다: 옛 행은 여전히 stub 이라 구분된다
+				 * → docs/plan-multi-pg.md B7
+				 */
+				isset($p['pg']) && $p['pg'] !== '' ? (string) $p['pg'] : 'stub',
 				'web',
 				PaymentStatus::CREATED,
 				(int) $p['amount_minor'],
@@ -283,12 +292,21 @@ class Payment_model extends CI_Model
 	 * 증상이 "결제 오류" 가 아니라 "재화 초과 지급" 이라 결제 로그를
 	 * 봐도 안 보인다 → 계획 3장. 그 경로는 대조군 스위치로만 탄다.
 	 *
+	 * ── 웹훅만 들어오는 문이 아니다 (09-19) ──
+	 *
+	 * 이니시스 카드 결제는 웹훅이 없다. 승인 결과를 우리가 **동기로** 받아
+	 * 이 메서드에 넣는다(source='return'). CLI 환불은 source='admin'.
+	 * 어느 문으로 들어와도 같은 CAS 를 탄다 — 중복·역전 방어를 PG 마다 다시
+	 * 만들지 않는다 → docs/plan-multi-pg.md 2장
+	 *
 	 * @param array  $payment findByUid() 의 결과
 	 * @param string $to      전이 목적지
-	 * @param mixed  $raw     payment_events.raw_payload. 웹훅 **원본 문자열**을 그대로 넘긴다
+	 * @param mixed  $raw     payment_events.raw_payload. 웹훅은 **원본 문자열**, 실PG 는 허용 목록을 거친 배열
+	 * @param string $source  webhook | return | admin
+	 * @param array  $pgRefs  PG 번호(ref_type => 값). **전이가 일어났을 때만** 같은 트랜잭션에 적재한다
 	 * @return array [applied, status, from, lot_id, conversion_uid, error]
 	 */
-	public function applyEvent(array $payment, $to, $raw)
+	public function applyEvent(array $payment, $to, $raw, $source = 'webhook', array $pgRefs = array())
 	{
 		$paymentId = (int) $payment['id'];
 		$to        = (string) $to;
@@ -359,13 +377,23 @@ class Payment_model extends CI_Model
 			 */
 			$current = $this->statusOf($paymentId, TRUE);
 
-			$this->appendEvent($paymentId, $current, $current, 'webhook', $raw, $now);
+			$this->appendEvent($paymentId, $current, $current, $source, $raw, $now);
 			$this->db->trans_commit();
 
 			return self::result(FALSE, $current, $current, NULL);
 		}
 
-		$this->appendEvent($paymentId, $before, $to, 'webhook', $raw, $now);
+		$this->appendEvent($paymentId, $before, $to, $source, $raw, $now);
+
+		/*
+		 * PG 번호는 **전이와 같은 트랜잭션**이다.
+		 *
+		 * captured 가 커밋됐는데 tid 가 없으면 환불할 방법이 없다. 따로 적재하면
+		 * 그 사이에 실패하는 창이 생긴다. 무시된 이벤트의 번호는 적재하지 않는다 —
+		 * 장부에 반영되지 않은 승인의 번호가 이 결제에 붙으면, 그 번호로 환불할 때
+		 * 엉뚱한 승인을 되돌린다.
+		 */
+		$this->addPgRefs($paymentId, isset($payment['pg']) ? (string) $payment['pg'] : 'stub', $pgRefs, $now);
 
 		if ($to === PaymentStatus::CAPTURED)
 		{
@@ -781,6 +809,83 @@ class Payment_model extends CI_Model
 		);
 	}
 
+	/**
+	 * 이 결제의 이벤트, 오래된 것부터. 결제 결과 화면(/pay/result)이 쓴다.
+	 *
+	 * raw_payload 는 싣지 않는다. 허용 목록을 거쳤어도 화면에 뿌릴 값은 아니다.
+	 * 프라이머리에서 읽는다 — 복귀 직후의 결과 화면이라 방금 쓴 것을 읽는다 → ADR-007
+	 *
+	 * @return list<array{from: string|null, to: string, source: string, created_at: string}>
+	 */
+	public function events($paymentId)
+	{
+		$rows = $this->db
+			->query('SELECT from_status, to_status, source, created_at FROM '.self::EVENTS.' WHERE payment_id = ? ORDER BY id', array((int) $paymentId))
+			->result();
+
+		$out = array();
+
+		foreach ($rows as $row)
+		{
+			$out[] = array(
+				'from'       => $row->from_status === NULL ? NULL : (string) $row->from_status,
+				'to'         => (string) $row->to_status,
+				'source'     => (string) $row->source,
+				'created_at' => (string) $row->created_at,
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * 이 결제에 붙은 PG 번호. ref_type => 값.
+	 *
+	 * 같은 종류가 여럿이면(페이팔 부분환불의 refund ID 등) 먼저 적재된 것이다.
+	 * 전체 환불에 필요한 tid · capture 는 결제당 하나다.
+	 *
+	 * @return array<string, string>
+	 */
+	public function findPgRefs($paymentId)
+	{
+		$rows = $this->db
+			->query('SELECT ref_type, ref_value FROM '.self::PG_REFS.' WHERE payment_id = ? ORDER BY id', array((int) $paymentId))
+			->result();
+
+		$out = array();
+
+		foreach ($rows as $row)
+		{
+			if ( ! isset($out[$row->ref_type]))
+			{
+				$out[$row->ref_type] = (string) $row->ref_value;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * INSERT IGNORE — 같은 번호를 다시 받아도(웹훅 재전송) 행이 늘지 않는다.
+	 * uq_pg_ref 가 **다른 결제**의 번호와 겹쳐서 무시된 것이면 그건 사고다.
+	 * 여기서는 판별하지 않고 호출자가 findPgRefs 로 본다.
+	 */
+	private function addPgRefs($paymentId, $pg, array $refs, $now)
+	{
+		foreach ($refs as $type => $value)
+		{
+			if ( ! is_string($value) OR $value === '')
+			{
+				continue;
+			}
+
+			$this->db->query(
+				'INSERT IGNORE INTO '.self::PG_REFS.' (payment_id, pg, ref_type, ref_value, created_at) VALUES (?, ?, ?, ?, ?)',
+				array((int) $paymentId, (string) $pg, (string) $type, $value, $now)
+			);
+		}
+	}
+
 	/** @param bool $forUpdate 잠금 읽기. 판정이 끝난 뒤에만 쓴다 */
 	private function statusOf($paymentId, $forUpdate)
 	{
@@ -828,6 +933,7 @@ class Payment_model extends CI_Model
 			'uid_hex'         => (string) $row->uid_hex,
 			'user_id'         => (int) $row->user_id,
 			'visit_id'        => $row->visit_id === NULL ? NULL : (int) $row->visit_id,
+			'pg'              => (string) $row->pg,
 			'status'          => (string) $row->status,
 			'amount_minor'    => (int) $row->amount_minor,
 			'currency'        => (string) $row->currency,

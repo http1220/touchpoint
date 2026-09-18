@@ -34,6 +34,13 @@ $route['track\.js']   = 'track/js';          // 서드파티 스크립트 — AD
 $route['signup']      = 'account/signup';    // 5. POST /signup
 $route['purchase']    = 'purchase/index';    // 6. POST /purchase
 $route['webhooks/pg'] = 'webhook/pg';        // PG 웹훅. app. 에서만 — docs/plan-payment-webhook.md 12장 결정 1
+
+// 실PG(이니시스) — 시연 토큰이 있어야 열린다. docs/plan-multi-pg.md
+$route['pay']                = 'pay/index';          // GET  시연 결제 화면
+$route['pay/inicis/start']   = 'pay/inicis_start';   // POST 결제창 필드 서명
+$route['pay/inicis/return']  = 'pay/inicis_return';  // POST 이니시스 복귀 → 승인 → 장부
+$route['pay/inicis/close']   = 'pay/inicis_close';   // *    결제창 닫기
+$route['pay/result/(:any)']  = 'pay/result/$1';      // GET  결과
 $route['metrics']     = 'metrics/index';     // 7. GET  /metrics
 $route['privacy']     = 'privacy/index';     // 개인정보처리방침 — 픽셀보다 먼저
 $route['privacy/ads'] = 'privacy/ads';       // 맞춤형 광고 거부 (쿠키)

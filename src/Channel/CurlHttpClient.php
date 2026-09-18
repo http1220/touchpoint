@@ -9,8 +9,13 @@ use RuntimeException;
 /**
  * 운영용 HTTP 클라이언트.
  *
- * 워커에서만 쓴다. 웹 요청 처리 중에는 외부 HTTP 를 부르지 않는다 —
- * 그게 아웃박스를 둔 이유다 → docs/outbox-and-channels.md 3장
+ * 매체 전송은 워커에서만 쓴다. 웹 요청 처리 중에는 매체로 외부 HTTP 를
+ * 부르지 않는다 — 그게 아웃박스를 둔 이유다 → docs/outbox-and-channels.md 3장
+ *
+ * **예외가 하나 생겼다(09-19): PG 승인.** 이니시스 카드 결제는 사용자가 복귀
+ * 페이지에서 기다리는 동안 우리가 승인을 동기로 요청해야 코인을 줄 수 있다.
+ * 아웃박스로 미룰 수 없다 — 두 번째 PG 가 깨뜨린 설계 중 하나다
+ * → docs/plan-multi-pg.md B11 · src/Payment/Gateway/GatewayInterface
  */
 final class CurlHttpClient implements HttpClient
 {

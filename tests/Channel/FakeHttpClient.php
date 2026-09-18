@@ -24,6 +24,14 @@ final class FakeHttpClient implements HttpClient
 
     public int $calls = 0;
 
+    /**
+     * 호출 순서 그대로. 결제처럼 **요청이 이어지는** 흐름(승인 → 망취소)은
+     * 마지막 요청만 봐서는 검증할 수 없다.
+     *
+     * @var list<array{method: string, url: string, form: array<string,string>|null, body: string|null}>
+     */
+    public array $requests = [];
+
     /** @var array<string,string>|null 마지막 postForm 의 필드 */
     public ?array $lastForm = null;
 
@@ -40,6 +48,7 @@ final class FakeHttpClient implements HttpClient
     public function get(string $url, array $headers = [], int $timeoutMs = 3000): HttpResponse
     {
         $this->calls++;
+        $this->requests[] = ['method' => 'GET', 'url' => $url, 'form' => null, 'body' => null];
         $this->lastUrl = $url;
         $this->lastHeaders = $headers;
 
@@ -49,6 +58,7 @@ final class FakeHttpClient implements HttpClient
     public function postForm(string $url, array $fields, int $timeoutMs = 3000): HttpResponse
     {
         $this->calls++;
+        $this->requests[] = ['method' => 'POST', 'url' => $url, 'form' => $fields, 'body' => null];
         $this->lastUrl = $url;
         $this->lastForm = $fields;
 
@@ -58,6 +68,7 @@ final class FakeHttpClient implements HttpClient
     public function postJson(string $url, string $json, array $headers = [], int $timeoutMs = 3000): HttpResponse
     {
         $this->calls++;
+        $this->requests[] = ['method' => 'POST', 'url' => $url, 'form' => null, 'body' => $json];
         $this->lastUrl = $url;
         $this->lastBody = $json;
         $this->lastHeaders = $headers;

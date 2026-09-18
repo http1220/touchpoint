@@ -17,7 +17,8 @@
 | 3-1 | POST | `/impression` | **`api.sshwan.com`** | 배너 노출 배치 (09-15) |
 | 3-2 | GET | `/click` | **`api.sshwan.com`** | 배너 클릭 기록 후 302 (09-15) |
 | 5 | POST | `/signup` | `app.sshwan.com` | 가입 |
-| 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(스텁) |
+| 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(기본 스텁 · `pg=inicis` 는 시연 토큰 필요) |
+| 6-1 | GET·POST | `/pay`, `/pay/inicis/*`, `/pay/result/{uid}` | `app.sshwan.com` | 실PG(이니시스 테스트 상점) 결제 — 시연 토큰 (09-19) |
 | 7 | GET | `/metrics` | `app.sshwan.com` | 지표 화면 |
 
 ---
@@ -285,6 +286,41 @@ created → pending → authorized → captured
 | 롤백(DB 오류)은 **503 + `Retry-After`** | 09-15 까지 200 `ignored` 로 나가 PG 가 재전송하지 않았다 |
 
 > PG는 스텁이다. **성공/실패/지연/중복 웹훅을 시나리오로 주입**할 수 있게 만들어 상태 머신과 멱등성만 진짜로 검증한다 → [ADR-008](decisions/ADR-008-stub-pg.md)
+
+### 선택 필드 `pg` (09-19)
+
+| 값 | 조건 | 거절 |
+|---|---|---|
+| 없음 · `stub` | 없음 (기존 그대로) | — |
+| `inicis` | 시연 토큰 쿠키 `tp_pay` · 이니시스 설정 · 통화 KRW | 403 `pay-locked` · 503 `pg-unavailable` · 422 |
+
+결제 행을 만들기 **전에** 검사한다. 받을 수 없는 결제의 행이 남으면 오래된 결제 보고에 영원히 걸린다.
+
+---
+
+## 6-1. 실PG — 이니시스 테스트 상점 (카드) → [plan-multi-pg.md](plan-multi-pg.md)
+
+| 메서드 | 경로 | 문 | 하는 일 |
+|---|---|---|---|
+| GET | `app./pay?t=<토큰>` | 토큰 | 쿠키 `tp_pay` 를 걸고 `303 /pay` (주소에서 토큰을 지운다) |
+| GET | `app./pay` | 쿠키 | 시연 결제 화면. 없으면 **404** — 잠긴 문이 있다는 것도 알리지 않는다 |
+| POST | `app./pay/inicis/start` `{payment_uid}` | 쿠키 | 결제창 필드에 **서버가** 서명해 돌려준다 (`signature` · `verification` · `mKey`) |
+| POST | `app./pay/inicis/return` | **이니시스 흐름** | 이니시스가 브라우저를 통해 보낸다 — 쿠키가 실리지 않는다(교차 사이트 POST). 승인 → 장부 → `303 /pay/result/{uid}` |
+| GET·POST | `app./pay/inicis/close` | — | 결제창 닫기 |
+| GET | `app./pay/result/{uid}` | 쿠키 | 결제 상태와 장부 이벤트 |
+
+### `return` 이 장부에 적는 것
+
+| 이니시스 결과 | 장부 | 이유 |
+|---|---|---|
+| 승인 + 금액·주문 일치 | `captured` (source=`return`) + `payment_pg_refs.tid` | 같은 트랜잭션 |
+| 승인됐는데 **장부에 못 올림** (DB 오류 · 동시 복귀) | **망취소** 후 `failed` | 이 요청의 승인은 이 요청이 되돌린다 |
+| 승인 응답 없음 · 읽을 수 없음 | **망취소** 후 `failed` | 결과 불명 — 승인이 났을 수 있다 |
+| 승인은 났는데 금액·주문번호 불일치 | **망취소** 후 `failed` | 받지 않는다 |
+| PG 가 승인 거절 | `failed` | 되돌릴 승인이 없다 |
+| 승인 요청 **전에** 거절 (authUrl 호스트 · mid · 주문번호 · 인증 실패 코드) | **바꾸지 않는다** | 근거가 브라우저 입력이다. `failed` 로 적으면 위조 요청 하나로 남의 결제를 실패시킬 수 있다 |
+
+환불은 웹이 아니라 CLI 다 — `cli/pg refund <uid>` (INIAPI 전체취소 → `refunded`, source=`admin`).
 
 ---
 
