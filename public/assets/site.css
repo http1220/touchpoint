@@ -778,6 +778,9 @@ a.flow__box:hover .flow__name { text-decoration-thickness: var(--border-width-st
 .headline td { font-size: var(--font-size-md); }
 .headline th .muted, .headline td .muted { font-size: var(--note-font-size); }
 .headline th { line-height: var(--line-height-tight); }
+/* 용어 꼬리표("도달률 · 2xx")는 줄을 바꾼다 — 붙여 두면 "매체가 받았다 도달률 2xx 응답" 이
+   한 문장처럼 읽힌다. 아는 사람은 용어로, 모르는 사람은 윗줄 문장으로 읽게 */
+.headline th .muted { display: block; margin-top: 2px; font-weight: var(--font-weight-normal); }
 .diag-table .kv th { width: 11rem; }  /* "억제된 deprecation" 같은 긴 이름이 두 줄로 접히지 않게 */
 .meta-line code, .masthead__note code { font-size: 0.85em; }
 

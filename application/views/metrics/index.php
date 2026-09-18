@@ -139,21 +139,22 @@ $thin_badge = function ($d) use ($small_sample)
     <?php /* 결론 세 줄이 들어오면서 칸이 길어졌다 — 아래로 밀어 두던 panel--bottom 을 뗀다.
              짧은 칸일 때는 아래 정렬이 옆 칸과 바닥선을 맞춰 줬지만, 지금은 위쪽에 빈 띠만 남는다 */ ?>
     <section class="panel summary" aria-labelledby="page-title">
-      <h1 id="page-title">숫자는 분모 · 표본 · 측정 시각과 함께만</h1>
+      <?php /*
+         제목은 **이 화면이 무엇인지**를 말한다.
+         전에는 "숫자는 분모·표본·측정 시각과 함께만" 이 제일 크게 있었는데, 그건 화면의 정체가
+         아니라 표기 규칙이고 이 프로젝트의 어휘를 모르면 뜻이 닿지 않는다. 규칙은 아래 목록의
+         머리로 내리고, 제목은 평범한 말로 바꿨다 (2026-09-18).
+
+         결론 세 줄도 "도달률 · 반영률" 대신 **그 말이 무슨 뜻인지**를 앞에 세운다.
+         용어는 괄호처럼 뒤에 붙여 둔다 — 아는 사람은 용어로, 모르는 사람은 문장으로 읽는다.
+      */ ?>
+      <h1 id="page-title">무엇이 들어왔고, 무엇이 매체로 돌아갔나</h1>
 
       <table class="data kv headline">
         <caption class="sr-only">이 화면의 결론 세 줄</caption>
         <tbody>
           <tr>
-            <th scope="row">매체 도달률 <span class="muted">가짜 채널 뺀 값</span></th>
-            <td><?= m_rate($real_ok, $real_try) ?><?= $thin_badge($real_try) ?></td>
-          </tr>
-          <tr>
-            <th scope="row">매체 반영률 <span class="muted">되읽은 기록</span></th>
-            <td><?= m_rate(543, 543) ?> <span class="muted">+40h 에 대조</span></td>
-          </tr>
-          <tr>
-            <th scope="row">광고가 만든 결제</th>
+            <th scope="row">광고가 만든 결제 <span class="muted">전환 전체 중</span></th>
             <td>
               <?= m_rate($ad['with_ad'], $ad['total']) ?><?= $thin_badge($ad['with_ad']) ?>
               <?php if ($ad['table']['value_total'] > 0): ?>
@@ -161,21 +162,30 @@ $thin_badge = function ($d) use ($small_sample)
               <?php endif; ?>
             </td>
           </tr>
+          <tr>
+            <th scope="row">매체가 받았다 <span class="muted">도달률 · 응답 <code>2xx</code></span></th>
+            <td><?= m_rate($real_ok, $real_try) ?><?= $thin_badge($real_try) ?></td>
+          </tr>
+          <tr>
+            <th scope="row">매체 보고서에 남았다 <span class="muted">반영률 · 되읽어 확인</span></th>
+            <td><?= m_rate(543, 543) ?> <span class="muted">+40h 에</span></td>
+          </tr>
         </tbody>
       </table>
-      <p class="meta-line">자세히 — <a href="#attribution">매체별 표</a> · <a href="#reflected">반영률을 어떻게 알았나</a></p>
-      <p class="caption">첫 줄만 지금 센 값이다. 반영률은 매체를 되읽어야 알 수 있어 <strong>측정 시각이 붙고</strong>, 셋째 줄 분모는 전환 전체다.</p>
+      <p class="meta-line">자세히 — <a href="#attribution">어느 광고가 만들었나</a> · <a href="#reflected">보고서에 남은 것을 어떻게 알았나</a></p>
+      <p class="caption"><strong>받은 것과 보고서에 남은 것은 다른 숫자다.</strong> 앞의 둘은 이 화면이 지금 셌고, 셋째 줄은 매체를 되읽어야 알 수 있어 <strong>측정 시각이 붙는다</strong>.</p>
       <nav class="toc" aria-label="지표 묶음">
         <a href="#inflow">① 유입</a>
         <a href="#attribution">광고가 만든 것</a>
         <a href="#convert">② 전환 → 적재</a>
         <a href="#dispatch">③ 매체 전송</a>
       </nav>
+      <p class="eyebrow">이 화면이 숫자를 내는 규칙 — 분모 · 표본 · 측정 시각과 함께만</p>
       <ol class="rules">
-        <li><strong><span class="badge badge--error">가짜 채널</span> 줄을 먼저 지운다.</strong> 합치면 분모가 가짜로 찬다 — 9,303건 중 9,300건이 <code>noop</code> 이었다.</li>
-        <li><strong>비율보다 분모.</strong> <span class="badge badge--warning">표본 N</span>(<?= html_escape((string) $small_sample) ?>건 미만)이면 아직 판정이 아니다.</li>
-        <li><strong>도달률 ≠ 반영률.</strong> 이 화면은 매체가 <code>2xx</code> 를 돌려줬다는 것까지만 안다.</li>
-        <li><strong>방금 한 일과 다르면</strong> 복제 지연부터 — 복제본 <code><?= html_escape($read_target) ?></code> 에서 읽었다.</li>
+        <li><strong>비율은 <code>몇 / 몇 (몇 %)</code> 로만 적는다.</strong> "95%" 는 20건 중 19건일 수도, 500건 중 475건일 수도 있다.</li>
+        <li><strong>표본이 얇으면 <span class="badge badge--warning">표본 N</span> 을 붙인다.</strong> <?= html_escape((string) $small_sample) ?>건 미만이면 아직 판정이 아니다.</li>
+        <li><strong>아무 데도 보내지 않는 <span class="badge badge--error">가짜 채널</span> 줄은 먼저 지운다.</strong> 합치면 분모가 가짜로 찬다 — 9,303건 중 9,300건이 <code>noop</code> 이었다.</li>
+        <li><strong>숫자가 방금 한 일과 다르면</strong> 복제 지연부터 본다 — 복제본 <code><?= html_escape($read_target) ?></code> 에서 읽었다.</li>
       </ol>
       <p class="caption">근거 <a href="<?= $repo ?>docs/benchmarks.md">benchmarks.md 5장<span aria-hidden="true">↗</span></a></p>
     </section>
