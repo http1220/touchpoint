@@ -32,7 +32,7 @@ $flow = array(
 	array('lane' => '브라우저', 'name' => '광고 클릭', 'href' => $go,
 	      'sub'  => '유입 파라미터를 달고 <code>/go</code> 로. 눌러 보세요'),
 	array('lane' => '서버', 'name' => '브리지 302', 'href' => NULL,
-	      'sub'  => '여기서 최초·마지막 유입이 남는다. 랜딩에는 방문 번호만 넘긴다'),
+	      'sub'  => '여기서 <code>first</code>·<code>last</code> 접점이 남는다. 랜딩에는 방문 번호(<code>vid</code>)만 넘긴다'),
 	array('lane' => '브라우저', 'name' => '작품 랜딩', 'href' => tp_host_url('lp', '/l/1'),
 	      'sub'  => '무엇이 기록됐는지 화면이 보여 준다. <code>track.js</code> 가 노출·클릭을 모은다'),
 	array('lane' => '브라우저', 'name' => '결제', 'href' => NULL,
@@ -98,7 +98,7 @@ $flow = array(
       <h2 id="hard-title">어려운 자리는 여기다</h2>
       <p class="meta-line">흐름도는 잘 풀린 한 바퀴다. 실제로 시간을 쓴 곳은 그 길이 어긋나는 자리였다.</p>
       <div class="captions">
-        <p class="caption"><strong>파라미터 없이 다시 들어와도 최초 유입을 덮지 않는다.</strong> 직접 유입은 마지막 유입만 만든다 — 광고 공을 나중 방문이 가로채지 않게.
+        <p class="caption"><strong>직접 유입은 <code>first</code> 를 덮지 않는다</strong>(규칙 3·4). 광고 기여가 나중 방문에 가로채이지 않게.
           <a href="<?= $repo ?>docs/failure-scenarios.md">failure-scenarios.md<span aria-hidden="true">↗</span></a></p>
         <p class="caption"><strong>같은 결제 알림이 두 번 와도 한 번만 센다.</strong> <code>dedup_key</code> 에 UNIQUE 를 걸어 DB 가 막는다. 막힌 건 행을 남기지 않아 화면이 셀 수 없다는 것도 적어 뒀다.</p>
         <p class="caption"><strong>전환과 보낼 것을 같은 트랜잭션에 적는다.</strong> 따로 적으면 "결제는 됐는데 매체에 안 간" 건이 조용히 생긴다.
@@ -116,26 +116,28 @@ $flow = array(
       <h2 id="attr-title">귀속은 이렇게 정해진다</h2>
       <p class="meta-line">광고 성과가 조용히 사라지는 자리가 여기다. 규칙을 코드에 적어 두고 화면이 그대로 말한다.</p>
 
+      <?php /* 표의 말은 코드의 말과 같아야 한다 — TouchpointResolver 의 규칙 번호와 first/last 를 그대로 쓴다.
+               풀어 쓰면 읽기는 쉬워도 **코드와 대조할 수 없다**. 대조할 수 있는 것이 이 화면의 값어치다 */ ?>
       <table class="data data--tight">
-        <caption class="sr-only">들어온 접점에 따른 최초·마지막 유입 갱신 규칙 네 가지</caption>
-        <thead><tr><th scope="col">들어온 접점</th><th scope="col">지금 상태</th><th scope="col">하는 일</th></tr></thead>
+        <caption class="sr-only">들어온 접점에 따른 first·last touch 갱신 규칙 네 가지</caption>
+        <thead><tr><th scope="col">규칙</th><th scope="col">들어온 접점</th><th scope="col">지금 상태</th><th scope="col">하는 일</th></tr></thead>
         <tbody>
-          <tr><td>유입 파라미터 있음</td><td>최초 없음</td><td>최초를 만들고 마지막도 갱신</td></tr>
-          <tr><td>유입 파라미터 있음</td><td>최초 있음</td><td><strong>최초는 보존</strong>, 마지막만 갱신</td></tr>
-          <tr><td>직접 유입</td><td>마지막 있음</td><td><strong>아무것도 바꾸지 않는다</strong></td></tr>
-          <tr><td>직접 유입</td><td>마지막 없음</td><td>마지막만 기록 <span class="muted">(최초로는 삼지 않는다)</span></td></tr>
+          <tr><td class="n">1</td><td>유입 소스 있음</td><td><code>first</code> 없음</td><td><code>first</code> 생성 + <code>last</code> 갱신</td></tr>
+          <tr><td class="n">2</td><td>유입 소스 있음</td><td><code>first</code> 있음</td><td><strong><code>first</code> 보존</strong> · <code>last</code> 만 갱신</td></tr>
+          <tr><td class="n">3</td><td>직접 유입</td><td><code>last</code> 있음</td><td><strong>아무것도 바꾸지 않는다</strong></td></tr>
+          <tr><td class="n">4</td><td>직접 유입</td><td><code>last</code> 없음</td><td><code>last</code> 만 기록 <span class="muted">(<code>first</code> 로 삼지 않는다)</span></td></tr>
         </tbody>
       </table>
 
       <div class="captions">
-        <p class="caption"><strong>셋째 줄이 핵심입니다.</strong> 광고를 타고 온 사람이 나중에 북마크로 다시 오면 직접 유입입니다.
-          이때 마지막 유입을 덮으면 그 사람의 결제는 <strong>어느 매체에도 붙지 않습니다</strong> — 매체 대시보드와 자체 집계가 어긋나는 흔한 원인입니다.
+        <p class="caption"><strong>규칙 3이 핵심입니다.</strong> 광고를 타고 온 사람이 나중에 북마크로 다시 오면 직접 유입입니다.
+          이때 <code>last</code> 를 덮으면 그 사람의 결제는 <strong>어느 매체에도 귀속되지 않습니다</strong> — 매체 대시보드와 자체 집계가 어긋나는 흔한 원인입니다.
           <a href="<?= $repo ?>src/Attribution/TouchpointResolver.php">TouchpointResolver<span aria-hidden="true">↗</span></a></p>
-        <p class="caption"><strong>결제에는 한 층이 더 있습니다.</strong> 결제 시점의 방문이 있으면 그쪽, 없으면 가입 접점으로 떨어집니다 —
+        <p class="caption"><strong>결제 귀속에는 한 층이 더 있습니다.</strong> 결제 시점 방문이 있으면 그쪽, 없으면 가입 접점(<code>signup_visit_id</code>)으로 떨어집니다 —
           가입은 A 광고로 하고 석 달 뒤 B 광고를 보고 돌아와 결제할 수 있으니까요.
           전에는 <strong>고를 수 없었습니다</strong> — 결제에 방문을 적을 칸이 없어 무조건 가입 접점이었습니다.
           <a href="<?= $repo ?>application/migrations/20260914000100_add_payment_visit.php">방문 칸을 더한 마이그레이션<span aria-hidden="true">↗</span></a></p>
-        <p class="caption">그래서 지표 화면은 <strong>한 기준을 고르지 않고 둘을 나란히</strong> 냅니다 — 같은 결제도 최초 기준과 마지막 기준에서 다른 매체에 붙습니다.
+        <p class="caption">그래서 지표 화면은 <strong>한 기준을 고르지 않고 둘을 나란히</strong> 냅니다 — 같은 결제도 first-touch 기준과 last-touch 기준에서 다른 매체에 붙습니다.
           <a href="<?= html_escape(tp_host_url('app', '/metrics#attribution')) ?>">광고가 만든 것<span aria-hidden="true">↗</span></a></p>
         <p class="caption">홈의 웹툰 데이터 모델(연재 요일 · 기다리면 무료 · 언어와 문자 · 순위 기준)은 화면에서 덜어 내고 문서에 뒀습니다.
           <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a> ·

@@ -324,9 +324,15 @@ class Metrics_model extends CI_Model
 		 * 전환이 한 번씩만 센다. 묶음을 가로질러 더하지 않는 것은 뷰가 아니라
 		 * AdAttribution 이 책임진다(금액은 last 에서만).
 		 */
+		/*
+		 * 전환 유형을 함께 내린다. **환불 전환의 value_minor 는 양수**다
+		 * (원 결제 금액 그대로 → Payment_model::refundConversion). 유형을 보지 않고 더하면
+		 * 환불이 매출로 잡힌다. 유형별로 나누는 일은 AdAttribution 이 한다.
+		 */
 		$rows = $db->query(
 			'SELECT t.position,
 			        t.utm_source                    AS source,
+			        c.type,
 			        c.currency,
 			        COUNT(DISTINCT c.id)            AS conversions,
 			        SUM(COALESCE(c.value_minor, 0)) AS value_minor
@@ -336,7 +342,7 @@ class Metrics_model extends CI_Model
 			     OR t.utm_source IS NOT NULL
 			     OR t.gclid      IS NOT NULL
 			     OR t.fbclid     IS NOT NULL
-			  GROUP BY t.position, t.utm_source, c.currency'
+			  GROUP BY t.position, t.utm_source, c.type, c.currency'
 		)->result_array();
 
 		return array(

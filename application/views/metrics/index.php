@@ -113,7 +113,8 @@ $thin_badge = function ($d) use ($small_sample)
       <p class="masthead__mark">touchpoint <span class="masthead__sub">지표</span></p>
       <p class="meta-line masthead__note">
         읽기 대상 <code><?= html_escape($read_target) ?></code> (복제본) ·
-        서버 시각 <code><?= html_escape($now) ?></code> UTC
+        서버 시각 <code><?= html_escape($now) ?></code> UTC ·
+        <strong>방금 한 일과 숫자가 다르면</strong> 복제 지연부터
       </p>
     </header>
 
@@ -140,13 +141,12 @@ $thin_badge = function ($d) use ($small_sample)
              짧은 칸일 때는 아래 정렬이 옆 칸과 바닥선을 맞춰 줬지만, 지금은 위쪽에 빈 띠만 남는다 */ ?>
     <section class="panel summary" aria-labelledby="page-title">
       <?php /*
-         제목은 **이 화면이 무엇인지**를 말한다.
-         전에는 "숫자는 분모·표본·측정 시각과 함께만" 이 제일 크게 있었는데, 그건 화면의 정체가
-         아니라 표기 규칙이고 이 프로젝트의 어휘를 모르면 뜻이 닿지 않는다. 규칙은 아래 목록의
-         머리로 내리고, 제목은 평범한 말로 바꿨다 (2026-09-18).
+         제목은 **이 화면이 무엇인지**를 말한다. 전에는 표기 규칙("숫자는 분모·표본·측정 시각과
+         함께만")이 제일 크게 있었다 — 규칙은 아래 목록의 머리로 내렸다 (2026-09-18).
 
-         결론 세 줄도 "도달률 · 반영률" 대신 **그 말이 무슨 뜻인지**를 앞에 세운다.
-         용어는 괄호처럼 뒤에 붙여 둔다 — 아는 사람은 용어로, 모르는 사람은 문장으로 읽는다.
+         **용어는 그대로 쓴다.** 도달률·반영률·귀속은 뜻이 정해진 말이고, 풀어 쓰면 오히려 흐려진다
+         ("매체가 받았다" 는 언제 받은 것인지, 무엇을 받은 것인지 말하지 못한다).
+         대신 용어 바로 아래 한 줄로 **무엇을 세는지**를 붙인다 — 모르는 사람은 그 줄에서 배운다.
       */ ?>
       <h1 id="page-title">무엇이 들어왔고, 무엇이 매체로 돌아갔나</h1>
 
@@ -154,26 +154,27 @@ $thin_badge = function ($d) use ($small_sample)
         <caption class="sr-only">이 화면의 결론 세 줄</caption>
         <tbody>
           <tr>
-            <th scope="row">광고가 만든 결제 <span class="muted">전환 전체 중</span></th>
+            <th scope="row">광고 귀속 전환 <span class="muted">광고 접점이 붙은 전환 / 전환 전체</span></th>
             <td>
               <?= m_rate($ad['with_ad'], $ad['total']) ?><?= $thin_badge($ad['with_ad']) ?>
               <?php if ($ad['table']['value_total'] > 0): ?>
-                · <?= html_escape(m_int($ad['table']['value_total'])) ?> <span class="muted"><?= html_escape(implode(' · ', $ad['table']['currencies'])) ?></span>
+                <span class="muted">· 결제 <?= html_escape(m_int($ad['table']['value_total'])) ?> <?= html_escape(implode(' · ', $ad['table']['currencies'])) ?><?php
+                  if ($ad['table']['refund_total'] > 0): ?> · 환불 <?= html_escape(m_int($ad['table']['refund_total'])) ?><?php endif; ?></span>
               <?php endif; ?>
             </td>
           </tr>
           <tr>
-            <th scope="row">매체가 받았다 <span class="muted">도달률 · 응답 <code>2xx</code></span></th>
+            <th scope="row">도달률 <span class="muted">매체가 <code>2xx</code> 를 돌려준 전송 / 전송 시도</span></th>
             <td><?= m_rate($real_ok, $real_try) ?><?= $thin_badge($real_try) ?></td>
           </tr>
           <tr>
-            <th scope="row">매체 보고서에 남았다 <span class="muted">반영률 · 되읽어 확인</span></th>
-            <td><?= m_rate(543, 543) ?> <span class="muted">+40h 에</span></td>
+            <th scope="row">반영률 <span class="muted">매체 보고서에 있는 전환 / 보낸 전환</span></th>
+            <td><?= m_rate(543, 543) ?> <span class="muted">+40h 에 되읽어 대조</span></td>
           </tr>
         </tbody>
       </table>
-      <p class="meta-line">자세히 — <a href="#attribution">어느 광고가 만들었나</a> · <a href="#reflected">보고서에 남은 것을 어떻게 알았나</a></p>
-      <p class="caption"><strong>받은 것과 보고서에 남은 것은 다른 숫자다.</strong> 앞의 둘은 이 화면이 지금 셌고, 셋째 줄은 매체를 되읽어야 알 수 있어 <strong>측정 시각이 붙는다</strong>.</p>
+      <p class="meta-line">자세히 — <a href="#attribution">매체별 귀속</a> · <a href="#reflected">반영률 되읽기</a></p>
+      <p class="caption"><strong>도달률과 반영률은 다른 숫자다.</strong> 같은 전송이 <code>+0h</code> 에 도달률 100% · 반영률 1.2% 였다. 반영률만 이 화면 밖(매체 되읽기)에서 온다.</p>
       <nav class="toc" aria-label="지표 묶음">
         <a href="#inflow">① 유입</a>
         <a href="#attribution">광고가 만든 것</a>
@@ -185,7 +186,6 @@ $thin_badge = function ($d) use ($small_sample)
         <li><strong>비율은 <code>몇 / 몇 (몇 %)</code> 로만 적는다.</strong> "95%" 는 20건 중 19건일 수도, 500건 중 475건일 수도 있다.</li>
         <li><strong>표본이 얇으면 <span class="badge badge--warning">표본 N</span> 을 붙인다.</strong> <?= html_escape((string) $small_sample) ?>건 미만이면 아직 판정이 아니다.</li>
         <li><strong>아무 데도 보내지 않는 <span class="badge badge--error">가짜 채널</span> 줄은 먼저 지운다.</strong> 합치면 분모가 가짜로 찬다 — 9,303건 중 9,300건이 <code>noop</code> 이었다.</li>
-        <li><strong>숫자가 방금 한 일과 다르면</strong> 복제 지연부터 본다 — 복제본 <code><?= html_escape($read_target) ?></code> 에서 읽었다.</li>
       </ol>
       <p class="caption">근거 <a href="<?= $repo ?>docs/benchmarks.md">benchmarks.md 5장<span aria-hidden="true">↗</span></a></p>
     </section>
@@ -212,15 +212,17 @@ $thin_badge = function ($d) use ($small_sample)
     $ad_table = $ad['table'];
     // 광고 접점이 붙은 전환이 분모다. 전환 전체를 분모로 쓰면 "광고가 다 만들었다" 로 읽힌다
     $ad_rows  = $ad_table['rows'];
-    $ad_money = $ad_table['value_total'] > 0;
+    $ad_money  = $ad_table['value_total'] > 0;
+    // 환불 전환의 value_minor 도 양수다. 매출과 같은 열에 넣으면 환불이 매출이 된다
+    $ad_refund = $ad_table['refund_total'] > 0;
   ?>
   <div class="sheet layout-metrics-ad">
     <section class="panel ad-attr" aria-labelledby="ad-attr">
       <p class="eyebrow" id="attribution">광고 → 결제</p>
-      <h2 id="ad-attr">광고가 만든 것 <span class="muted">매체별 · 귀속 기준 둘</span></h2>
+      <h2 id="ad-attr">광고가 만든 것 <span class="muted">매체별 귀속 · first-touch 와 last-touch</span></h2>
 
       <p class="caption"><strong>같은 결제도 어느 접점에 붙이냐에 따라 매체가 달라진다.</strong>
-        최초 유입으로 세면 처음 데려온 매체가, 마지막 유입으로 세면 마지막에 밀어 준 매체가 가져간다.
+        <strong>first-touch</strong>(처음 데려온 매체)로 세느냐 <strong>last-touch</strong>(마지막에 밀어 준 매체)로 세느냐에 따라 공이 옮겨 간다.
         정산에서 다투는 자리라 <strong>한 기준을 고르지 않고 둘을 나란히</strong> 놓는다.
         결제 자체가 어느 방문에 붙는지는 또 다른 결정이다 — 결제 시점 방문이 있으면 그쪽, 없으면 가입 접점.
         <a href="<?= $repo ?>docs/plan-payment-webhook.md">plan-payment-webhook.md 6장<span aria-hidden="true">↗</span></a></p>
@@ -241,10 +243,11 @@ $thin_badge = function ($d) use ($small_sample)
             <thead>
               <tr>
                 <th scope="col">매체 <code>utm_source</code></th>
-                <th scope="col" class="n">최초 유입 기준</th>
-                <th scope="col" class="n">마지막 유입 기준</th>
+                <th scope="col" class="n">first-touch 기준</th>
+                <th scope="col" class="n">last-touch 기준</th>
                 <th scope="col" class="n">차이</th>
-                <?php if ($ad_money): ?><th scope="col" class="n">결제 금액 <span class="muted">마지막 기준</span></th><?php endif; ?>
+                <?php if ($ad_money): ?><th scope="col" class="n">결제 금액 <span class="muted">last-touch 기준</span></th><?php endif; ?>
+                <?php if ($ad_refund): ?><th scope="col" class="n">환불 <span class="muted">되돌린 금액</span></th><?php endif; ?>
               </tr>
             </thead>
             <tbody>
@@ -260,6 +263,9 @@ $thin_badge = function ($d) use ($small_sample)
                   <?php if ($ad_money): ?>
                     <td class="n"><?= html_escape(m_int($r['value_minor'])) ?><?= $r['currency'] === NULL ? '' : ' <span class="muted">'.html_escape($r['currency']).'</span>' ?></td>
                   <?php endif; ?>
+                  <?php if ($ad_refund): ?>
+                    <td class="n"><?= $r['refund_minor'] > 0 ? html_escape(m_int($r['refund_minor'])) : '<span class="muted">—</span>' ?></td>
+                  <?php endif; ?>
                 </tr>
               <?php endforeach; ?>
               <tr class="sum">
@@ -270,18 +276,26 @@ $thin_badge = function ($d) use ($small_sample)
                 <?php if ($ad_money): ?>
                   <td class="n"><?= html_escape(m_int($ad_table['value_total'])) ?><?= $ad_table['currencies'] === array() ? '' : ' <span class="muted">'.html_escape(implode(' · ', $ad_table['currencies'])).'</span>' ?></td>
                 <?php endif; ?>
+                <?php if ($ad_refund): ?>
+                  <td class="n"><?= html_escape(m_int($ad_table['refund_total'])) ?></td>
+                <?php endif; ?>
               </tr>
             </tbody>
           </table>
         </div>
 
         <p class="caption">
-          <?php if ($ad_table['moved']): ?>
+          <?php if ($ad_table['moved'] && $ad_table['first_total'] === $ad_table['last_total']): ?>
             <strong>두 기준의 합계는 같은데 매체별로는 옮겨 갔다.</strong> 이 표에서 "차이" 가 붙은 줄이 그 자리다 — 기준을 말하지 않은 전환 수는 뜻이 없다.
+          <?php elseif ($ad_table['moved']): ?>
+            <?php /* 합계가 갈리는 경우도 있다 — 접점이 한쪽만 있는 방문이 섞이면 그렇다. 같다고 단정하지 않는다 */ ?>
+            <strong>기준을 바꾸면 매체도, 합계도 달라진다</strong>(최초 <?= html_escape(m_int($ad_table['first_total'])) ?> · 마지막 <?= html_escape(m_int($ad_table['last_total'])) ?>).
+            한쪽 접점만 있는 방문이 섞여 있다는 뜻이다 — 기준을 말하지 않은 전환 수는 뜻이 없다.
           <?php else: ?>
             <strong>두 기준이 같은 값을 냈다.</strong> 지금 표본에서는 한 방문 안에서 최초와 마지막 유입이 같은 매체라는 뜻이고, 매체를 갈아타며 들어온 방문이 쌓이면 갈라진다.
           <?php endif; ?>
-          금액은 <strong>마지막 유입 기준으로만 한 번</strong> 더한다 — 두 기준에 다 더하면 매출이 두 배가 된다.
+          금액은 <strong>last-touch 기준으로만 한 번</strong> 더한다 — 두 기준에 다 더하면 매출이 두 배가 된다.
+          <strong>환불은 열을 갈랐다.</strong> 환불 전환의 <code>value_minor</code> 도 양수라(원 결제 금액 그대로) 같은 열에 넣으면 환불이 매출로 잡힌다.
           KRW 의 minor unit 은 원이다(9,900원 = <code>9900</code>).
         </p>
         <p class="caption"><strong>매체 이름이 <code>home</code>·<code>demo</code> 같은 것은 광고를 실제로 집행하지 않기 때문이다.</strong>

@@ -9,14 +9,27 @@ use PHPUnit\Framework\TestCase;
 
 final class AdAttributionTest extends TestCase
 {
-    /** @return list<array{position: string, source: ?string, conversions: int, value_minor: int, currency: ?string}> */
+    /** 모델이 내려 주는 행 한 줄 — 빠뜨리기 쉬운 자리(type)를 기본값으로 채워 둔다 */
+    private function row(string $position, ?string $source, int $n, int $minor = 0, string $type = 'purchase', ?string $currency = null): array
+    {
+        return [
+            'position' => $position,
+            'source' => $source,
+            'type' => $type,
+            'conversions' => $n,
+            'value_minor' => $minor,
+            'currency' => $minor > 0 ? ($currency ?? 'KRW') : $currency,
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
     private function rows(): array
     {
         return [
-            ['position' => 'first', 'source' => 'naver', 'conversions' => 3, 'value_minor' => 0, 'currency' => null],
-            ['position' => 'last', 'source' => 'naver', 'conversions' => 1, 'value_minor' => 9900, 'currency' => 'KRW'],
-            ['position' => 'first', 'source' => 'meta', 'conversions' => 1, 'value_minor' => 0, 'currency' => null],
-            ['position' => 'last', 'source' => 'meta', 'conversions' => 3, 'value_minor' => 28000, 'currency' => 'KRW'],
+            $this->row('first', 'naver', 3),
+            $this->row('last', 'naver', 1, 9900),
+            $this->row('first', 'meta', 1),
+            $this->row('last', 'meta', 3, 28000),
         ];
     }
 
@@ -53,18 +66,50 @@ final class AdAttributionTest extends TestCase
     public function test_first_행의_금액은_세지_않는다(): void
     {
         $table = AdAttribution::table([
-            ['position' => 'first', 'source' => 'naver', 'conversions' => 1, 'value_minor' => 9900, 'currency' => 'KRW'],
-            ['position' => 'last', 'source' => 'naver', 'conversions' => 1, 'value_minor' => 9900, 'currency' => 'KRW'],
+            $this->row('first', 'naver', 1, 9900),
+            $this->row('last', 'naver', 1, 9900),
         ]);
 
         self::assertSame(9900, $table['value_total']);
     }
 
+    public function test_환불은_매출로_세지_않는다(): void
+    {
+        /*
+         * 환불 전환의 value_minor 는 **양수**다(원 결제 금액 그대로).
+         * 유형을 보지 않고 더하면 9,900원을 환불한 자리가 19,800원 매출로 잡힌다.
+         */
+        $table = AdAttribution::table([
+            $this->row('last', 'naver', 1, 9900, 'purchase'),
+            $this->row('last', 'naver', 1, 9900, 'refund'),
+        ]);
+
+        self::assertSame(9900, $table['value_total']);
+        self::assertSame(9900, $table['refund_total']);
+
+        // 전환 건수는 둘 다 센다 — 환불도 매체로 보내는 전환이다
+        self::assertSame(2, $table['last_total']);
+        self::assertSame(9900, $table['rows'][0]['value_minor']);
+        self::assertSame(9900, $table['rows'][0]['refund_minor']);
+    }
+
+    public function test_금액이_없는_유형은_어느_쪽에도_안_더한다(): void
+    {
+        $table = AdAttribution::table([
+            $this->row('last', 'naver', 2, 0, 'signup'),
+            $this->row('last', 'naver', 1, 9900, 'purchase'),
+        ]);
+
+        self::assertSame(9900, $table['value_total']);
+        self::assertSame(0, $table['refund_total']);
+        self::assertSame(3, $table['last_total']);
+    }
+
     public function test_기준을_바꿔도_안_움직이면_moved_는_거짓이다(): void
     {
         $table = AdAttribution::table([
-            ['position' => 'first', 'source' => 'naver', 'conversions' => 2, 'value_minor' => 0, 'currency' => null],
-            ['position' => 'last', 'source' => 'naver', 'conversions' => 2, 'value_minor' => 1000, 'currency' => 'KRW'],
+            $this->row('first', 'naver', 2),
+            $this->row('last', 'naver', 2, 1000),
         ]);
 
         self::assertFalse($table['moved']);
@@ -74,8 +119,8 @@ final class AdAttributionTest extends TestCase
     public function test_이름_없는_매체는_한_줄로_모은다(): void
     {
         $table = AdAttribution::table([
-            ['position' => 'last', 'source' => null, 'conversions' => 1, 'value_minor' => 100, 'currency' => 'KRW'],
-            ['position' => 'last', 'source' => '  ', 'conversions' => 2, 'value_minor' => 200, 'currency' => 'KRW'],
+            $this->row('last', null, 1, 100),
+            $this->row('last', '  ', 2, 200),
         ]);
 
         self::assertCount(1, $table['rows']);
@@ -87,8 +132,8 @@ final class AdAttributionTest extends TestCase
     public function test_모르는_position_은_버린다(): void
     {
         $table = AdAttribution::table([
-            ['position' => 'middle', 'source' => 'naver', 'conversions' => 9, 'value_minor' => 9900, 'currency' => 'KRW'],
-            ['position' => 'last', 'source' => 'naver', 'conversions' => 1, 'value_minor' => 1000, 'currency' => 'KRW'],
+            $this->row('middle', 'naver', 9, 9900),
+            $this->row('last', 'naver', 1, 1000),
         ]);
 
         self::assertSame(1, $table['last_total']);
@@ -99,9 +144,9 @@ final class AdAttributionTest extends TestCase
     public function test_많이_만든_매체가_위로_온다(): void
     {
         $table = AdAttribution::table([
-            ['position' => 'last', 'source' => 'naver', 'conversions' => 1, 'value_minor' => 0, 'currency' => 'KRW'],
-            ['position' => 'last', 'source' => 'meta', 'conversions' => 5, 'value_minor' => 0, 'currency' => 'KRW'],
-            ['position' => 'last', 'source' => 'kakao', 'conversions' => 3, 'value_minor' => 0, 'currency' => 'KRW'],
+            $this->row('last', 'naver', 1),
+            $this->row('last', 'meta', 5),
+            $this->row('last', 'kakao', 3),
         ]);
 
         self::assertSame(['meta', 'kakao', 'naver'], array_column($table['rows'], 'source'));
@@ -115,6 +160,7 @@ final class AdAttributionTest extends TestCase
         self::assertSame(0, $table['first_total']);
         self::assertSame(0, $table['last_total']);
         self::assertSame(0, $table['value_total']);
+        self::assertSame(0, $table['refund_total']);
         self::assertSame([], $table['currencies']);
         self::assertFalse($table['moved']);
     }
@@ -123,10 +169,21 @@ final class AdAttributionTest extends TestCase
     {
         // PDO 는 설정에 따라 숫자를 문자열로 준다
         $table = AdAttribution::table([
-            ['position' => 'last', 'source' => 'naver', 'conversions' => '2', 'value_minor' => '9900', 'currency' => 'KRW'],
+            ['position' => 'last', 'source' => 'naver', 'type' => 'purchase', 'conversions' => '2', 'value_minor' => '9900', 'currency' => 'KRW'],
         ]);
 
         self::assertSame(2, $table['last_total']);
         self::assertSame(9900, $table['value_total']);
+    }
+
+    public function test_유형이_없는_행은_금액을_더하지_않는다(): void
+    {
+        // 유형을 안 내려 주는 호출이 생기면 건수만 세고 금액은 비운다 — 조용히 매출을 만들지 않는다
+        $table = AdAttribution::table([
+            ['position' => 'last', 'source' => 'naver', 'conversions' => 1, 'value_minor' => 9900, 'currency' => 'KRW'],
+        ]);
+
+        self::assertSame(1, $table['last_total']);
+        self::assertSame(0, $table['value_total']);
     }
 }

@@ -23,12 +23,18 @@ final class AdAttribution
     /** 매체 이름이 비어 있을 때 — utm_source 없이 pid·gclid 만 온 유입 */
     public const UNNAMED = '(이름 없음)';
 
+    /** 금액이 매출인 전환 유형. 이것만 더한다 */
+    public const PAID = 'purchase';
+
+    /** 금액이 매출을 되돌리는 유형. `value_minor` 가 **양수**로 들어오므로 따로 센다 */
+    public const REFUNDED = 'refund';
+
     /**
-     * @param list<array{position: string, source: ?string, conversions: int|string, value_minor: int|string, currency: ?string}> $rows
+     * @param list<array{position: string, source: ?string, type?: ?string, conversions: int|string, value_minor: int|string, currency: ?string}> $rows
      *        position 은 'first' | 'last'. 그 밖의 값은 버린다 — 접점 종류가 늘어도 표가 깨지지 않게.
      * @return array{
-     *     rows: list<array{source: string, first: int, last: int, value_minor: int, currency: ?string, moved: bool}>,
-     *     first_total: int, last_total: int, value_total: int,
+     *     rows: list<array{source: string, first: int, last: int, value_minor: int, refund_minor: int, currency: ?string, moved: bool}>,
+     *     first_total: int, last_total: int, value_total: int, refund_total: int,
      *     currencies: list<string>, moved: bool
      * }
      */
@@ -44,19 +50,32 @@ final class AdAttribution
             }
 
             $source = self::name($row['source'] ?? null);
-            $bySource[$source] ??= ['source' => $source, 'first' => 0, 'last' => 0, 'value_minor' => 0, 'currency' => null];
+            $bySource[$source] ??= [
+                'source' => $source, 'first' => 0, 'last' => 0,
+                'value_minor' => 0, 'refund_minor' => 0, 'currency' => null,
+            ];
 
             $bySource[$source][$position] += (int) ($row['conversions'] ?? 0);
 
             /*
              * 금액은 **마지막 유입 기준 한 번만** 더한다. 두 기준을 다 더하면
              * 같은 결제를 두 번 세어 합계가 실제 매출의 두 배가 된다.
+             *
+             * 그리고 **유형을 본다.** 환불 전환도 value_minor 가 양수라, 유형을 보지 않으면
+             * 환불이 매출로 잡힌다. 가입처럼 금액이 없는 유형은 어느 쪽에도 안 더한다.
              */
             if ($position === 'last') {
-                $bySource[$source]['value_minor'] += (int) ($row['value_minor'] ?? 0);
+                $type = (string) ($row['type'] ?? '');
+                $amount = (int) ($row['value_minor'] ?? 0);
+
+                if ($type === self::PAID) {
+                    $bySource[$source]['value_minor'] += $amount;
+                } elseif ($type === self::REFUNDED) {
+                    $bySource[$source]['refund_minor'] += $amount;
+                }
 
                 $currency = $row['currency'] ?? null;
-                if (is_string($currency) && $currency !== '') {
+                if ($amount > 0 && is_string($currency) && $currency !== '') {
                     $bySource[$source]['currency'] ??= $currency;
                     $currencies[$currency] = true;
                 }
@@ -77,11 +96,13 @@ final class AdAttribution
         $firstTotal = 0;
         $lastTotal = 0;
         $valueTotal = 0;
+        $refundTotal = 0;
         $moved = false;
         foreach ($out as $entry) {
             $firstTotal += $entry['first'];
             $lastTotal += $entry['last'];
             $valueTotal += $entry['value_minor'];
+            $refundTotal += $entry['refund_minor'];
             $moved = $moved || $entry['moved'];
         }
 
@@ -93,6 +114,7 @@ final class AdAttribution
             'first_total' => $firstTotal,
             'last_total' => $lastTotal,
             'value_total' => $valueTotal,
+            'refund_total' => $refundTotal,
             'currencies' => $names,
             'moved' => $moved,
         ];
