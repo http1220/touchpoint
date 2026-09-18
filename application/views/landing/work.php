@@ -64,7 +64,7 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
       <p class="eyebrow">작품 #<?= html_escape($work) ?></p>
       <?php if ($work_row === NULL): ?>
         <h1 id="page-title">이 번호의 작품은 없습니다</h1>
-        <p>그래도 방문과 유입은 기록됩니다 — 아래 기록 시트에 남은 것이 그것입니다.</p>
+        <p>그래도 방문과 유입은 기록됩니다 — 아래 <strong>기록</strong> 칸에 남은 것이 그것입니다.</p>
       <?php else: ?>
         <h1 id="page-title"<?= $title_lang ?>><?= html_escape($work_row['title']) ?></h1>
         <p class="work-info__meta">
@@ -87,24 +87,26 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
           광고 유입은 <strong>브리지(<code>/go</code>)가 먼저 기록</strong>하고, 랜딩에는 방문 번호(<code>vid</code>)만 넘깁니다 — 공유된 주소가 광고 클릭으로 다시 세어지지 않게.
           <a href="<?= $repo ?>docs/failure-scenarios.md">C-2<span aria-hidden="true">↗</span></a>
         <?php else: ?>
-          방금 이 요청이 기록한 것입니다. 전체는 아래 기록 시트에.
+          방금 이 요청이 기록한 것입니다. 전체는 아래 <strong>기록</strong> 칸에 있습니다.
         <?php endif; ?>
       </p>
       <h2 id="visit-now-title" class="visit-now__title">이번 요청</h2>
       <dl class="facts">
         <dt>방문</dt>
         <dd><span class="badge<?= $is_new ? ' badge--strong' : '' ?>"><?= $is_new ? '새 방문' : '기존 방문' ?></span></dd>
-        <dt>이번 요청</dt>
+        <dt>유입 소스</dt>
         <dd>
-          <?php if ( ! $result['is_direct']): ?>유입 파라미터 있음
-          <?php elseif ($via_bridge): ?>브리지에서 넘어옴 — 이 요청엔 <code>vid</code> 만
-          <?php else: ?>파라미터 없음 — 직접 유입
+          <?php if ( ! $result['is_direct']): ?>있음 — 광고 유입
+          <?php elseif ($via_bridge): ?>브리지에서 넘어옴 — 이 요청엔 방문 번호(<code>vid</code>)만
+          <?php else: ?>없음 — 직접 유입
           <?php endif; ?>
         </dd>
+        <?php /* kept · created · updated 는 TouchpointResolver 가 돌려준 판정이다.
+               코드 값만 두면 읽는 사람이 무슨 일이 일어났는지 모른다 — 우리말을 앞에 둔다 */ ?>
         <dt>최초 접점</dt>
-        <dd><span class="badge<?= $result['first'] === 'created' ? ' badge--strong' : '' ?>"><code><?= html_escape($result['first']) ?></code></span></dd>
+        <dd><span class="badge<?= $result['first'] === 'created' ? ' badge--strong' : '' ?>"><?= $result['first'] === 'created' ? '새로 만듦' : '그대로 둠' ?> <code><?= html_escape($result['first']) ?></code></span></dd>
         <dt>마지막 접점</dt>
-        <dd><span class="badge<?= $result['last'] === 'updated' ? ' badge--strong' : '' ?>"><code><?= html_escape($result['last']) ?></code></span></dd>
+        <dd><span class="badge<?= $result['last'] === 'updated' ? ' badge--strong' : '' ?>"><?= $result['last'] === 'updated' ? '갱신함' : ' 그대로 둠' ?> <code><?= html_escape($result['last']) ?></code></span></dd>
       </dl>
     </section>
 
@@ -139,9 +141,7 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
     <section class="panel record-head" aria-labelledby="record-title">
       <h2 id="record-title">기록</h2>
       <p class="meta-line">
-        방문 <code><?= html_escape($visit_uid) ?></code> ·
-        읽기 대상 <code><?= html_escape($read_target) ?></code> (복제본) ·
-        상관 ID <code><?= html_escape($trace_id) ?></code>
+        <strong>방문 번호</strong> <code><?= html_escape($visit_uid) ?></code> <span class="muted">— 이 브라우저의 방문을 가리키는 값. 쿠키 <code>ab_vid</code> 에 들어 있다</span>
       </p>
       <p class="caption">
         <strong>확인할 것</strong> — 유입 파라미터를 붙여 <code>/go?work=<?= html_escape($work) ?>&amp;pid=google&amp;utm_source=google</code> 로 들어온 뒤
@@ -182,7 +182,8 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
 
     <section class="panel events" aria-labelledby="events-title">
       <h3 id="events-title">수집 이벤트 <span class="muted">최근 10</span></h3>
-      <p class="caption">복제본 <code><?= html_escape($read_target) ?></code> 에서 읽었습니다. 방금 보낸 것이 안 보이면 <strong>복제 지연</strong>입니다 — 새로고침해 보세요.
+      <p class="meta-line"><strong>수집 이벤트</strong> = 이 페이지의 <code>track.js</code> 가 서버로 보낸 기록. 배너 노출 · 클릭 · 페이지뷰가 여기 쌓인다.</p>
+      <p class="caption">방금 보낸 것이 안 보이면 <strong>복제 지연</strong>입니다 — 새로고침해 보세요(바닥글에 어느 복제본인지 적혀 있습니다).
         <a href="<?= $repo ?>docs/decisions/ADR-007-read-write-split.md">ADR-007<span aria-hidden="true">↗</span></a></p>
       <?php if ($events === array()): ?>
         <p class="empty">아직 없습니다.</p>
@@ -208,6 +209,7 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
 
     <section class="panel experiment" aria-labelledby="experiment-title">
       <h3 id="experiment-title">두 전송 경로를 눌러 보세요</h3>
+      <p class="meta-line">같은 기록을 <strong>두 가지 방법</strong>으로 보내 본다 — <code>fetch</code>(보통의 요청)와 <code>sendBeacon</code>(페이지를 떠나는 중에도 보내지는 브라우저 API).</p>
       <div class="buttons">
         <button type="button" class="button" onclick="tp.track('click', {}, 'fetch')">fetch 로 click</button>
         <button type="button" class="button" onclick="tp.track('click', {}, 'beacon')">beacon 으로 click</button>

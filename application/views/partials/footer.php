@@ -18,9 +18,9 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 <footer class="site-footer">
   <p>
     <?php if (isset($read_target)): ?>
-      읽기 대상 <code><?= html_escape($read_target) ?></code> (복제본) ·
+      <strong>복제본 DB</strong> <code><?= html_escape($read_target) ?></code> 에서 읽음 ·
     <?php endif; ?>
-    상관 ID <code><?= html_escape($trace_id) ?></code> ·
+    상관 ID <code><?= html_escape($trace_id) ?></code> <span class="muted">(이 요청에 붙은 번호 — 서버 로그와 맞댈 때 쓴다)</span> ·
     <a href="https://github.com/http1220/touchpoint">소스<span aria-hidden="true">↗</span></a>
     <?php if (empty($hide_privacy)): ?>
       · <a href="<?= html_escape(tp_host_url('root', '/privacy')) ?>"><?= html_escape(isset($privacy_label) ? $privacy_label : '개인정보처리방침') ?></a>
