@@ -27,7 +27,7 @@ $labels = array(
 </head>
 <body>
 <main class="stage">
-  <div class="sheet">
+  <div class="sheet layout-pay">
     <?php $this->load->view('partials/demo_bar', array('demo_step' => NULL)); ?>
 
     <header class="masthead">

@@ -28,7 +28,7 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
 </head>
 <body>
 <main class="stage">
-  <div class="sheet">
+  <div class="sheet layout-pay">
     <?php $this->load->view('partials/demo_bar', array('demo_step' => NULL)); ?>
 
     <header class="masthead">
@@ -95,7 +95,8 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
       btn.disabled = true;
       say('결제를 만드는 중…');
       try {
-        // 같은 클릭의 재시도는 같은 키 — 이중 결제는 서버의 uq_idem 이 막는다
+        // 키는 클릭마다 새로 만든다. 두 번 누름은 버튼 비활성이 막는다(위 disabled) —
+        // 그래도 행이 둘 생기면 결제창을 연 쪽만 승인되고 나머지는 created 로 남아 오래된 결제 보고에 잡힌다
         var purchase = await post('/purchase', {
           product: btn.dataset.product,
           amount_minor: Number(btn.dataset.amount),

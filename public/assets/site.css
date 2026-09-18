@@ -1075,4 +1075,8 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-diag { align-content: start; align-items: start; }
   .layout-diag > .diag-table { grid-column: 1 / span 7; }
   .layout-diag > .diag-check { grid-column: 8 / span 5; }
+
+  /* 시연 결제 · 결과 — 한 칸. 칸을 안 주면 패널이 첫 열(1/12)에 갇혀 제목이 한 글자씩 접힌다(09-19 스크린샷) */
+  .layout-pay { align-content: start; align-items: start; }
+  .layout-pay > .panel { grid-column: 1 / -1; }
 }
