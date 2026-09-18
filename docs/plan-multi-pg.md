@@ -93,11 +93,12 @@
 | `src/Payment/Gateway/GatewayResult.php` | 목적 상태(`captured`/`pending`/`failed`) 또는 **`unknown`** · PG 참조 ID · 저장용 필드 · 오류 분류(재시도 가능/종결) |
 | `src/Payment/Gateway/InicisGateway.php` | 서명 필드 생성(`oid·price·timestamp` SHA256, `mKey`) · 복귀 값 검증 · **`idc_name`→호스트 허용 목록**(C1) · 승인 · 망취소 |
 | `src/Payment/Gateway/PaypalGateway.php` | OAuth → 주문 생성(`custom_id`=payment_uid, `PayPal-Request-Id`=멱등키) · capture · 환불 |
-| `src/Payment/Gateway/PaypalWebhook.php` | **자체 검증**: 원본 바이트 crc32 + 인증서(`paypal-cert-url` 호스트 허용 목록) · 이벤트 타입 → 상태 매핑 |
+| `src/Payment/Gateway/PaypalWebhook.php` | **자체 검증**: 원본 바이트 crc32 + 인증서(`paypal-cert-url` 호스트 허용 목록 + 캐시) · 이벤트 타입 → 상태 매핑 · 분쟁·역전 이벤트는 기록만(6장 C6) · **시각 창 없음**(6장 B8) |
+| `src/Payment/Tax/{TaxPolicy,TaxQuote,PassThroughTaxPolicy}.php` | **만들었다(09-19).** 세무는 범위 밖이라 인터페이스와 통과 구현만 둔다 — 금액 불변, `reason=out-of-scope`(6장 A) |
 | `src/Payment/Gateway/PgAmount.php` | PG별 소수 자릿수(페이팔 HUF·JPY·TWD=0). `MinorUnits`(ISO)와 **일부러 따로 둔다**(B2) |
 | `src/Payment/Gateway/PayloadRedactor.php` | 저장할 필드만 남기는 허용 목록(C5). 원문 전체 대신 `sha256(raw)`를 함께 남긴다 |
 | `application/libraries/Gateways.php` | [`Channels.php`](../application/libraries/Channels.php)와 같은 조립 방식. 통화 → PG 규칙을 한 곳에(KRW→inicis, USD→paypal) |
-| `application/controllers/Pay.php` | `GET /pay`(시연 결제 화면, **`PAY_DEMO_TOKEN`으로 잠금**, noindex — C4) · `POST /pay/inicis/start` · `POST /pay/inicis/return` · `/pay/inicis/close` · `POST /pay/paypal/order` · `POST /pay/paypal/capture` · `GET /pay/result/{uid}` |
+| `application/controllers/Pay.php` | **전부 `PAY_DEMO_TOKEN`으로 잠금**(6장 C4) · `GET /pay`(시연 결제 화면, noindex) · `POST /pay/inicis/start` · `POST /pay/inicis/return` · `/pay/inicis/close` · `POST /pay/paypal/order` · `POST /pay/paypal/capture` · `GET /pay/result/{uid}` |
 | `application/views/pay/{index,result}.php` | 바닐라 JS([ADR-009](decisions/ADR-009-no-spa.md)). INIStdPay.js / 페이팔 JS SDK |
 | `application/migrations/20260919000100_create_payment_pg_refs.php` | `payment_pg_refs(payment_id, pg, ref_type, ref_value, created_at)`, `UNIQUE(pg, ref_type, ref_value)` (B7) |
 | `tests/Payment/Gateway/*Test.php` | 4장 검증 1 |
@@ -106,9 +107,10 @@
 ### 고칠 기존 파일
 
 - `Payment_model.php` — `createIfAbsent()`가 `pg`를 받는다(하드코딩과 `→ ADR-008` 주석 교체) · `applyEvent(..., $source='webhook')`(`return`·`capture`·`admin` 추가) · `addPgRef()`·`findByPgRef()`
-- `Purchase.php` — 선택 필드 `pg`(기본 `stub` → D-3 측정 스크립트 유지), `gateway->supports(currency)` 검사, 결정 5 주석 갱신(C4)
+- `Purchase.php` — 선택 필드 `pg`(기본 `stub` → D-3 측정 스크립트 유지), `gateway->supports(currency)` 검사, **`pg≠stub` 이면 토큰 필수**, 결정 5 주석 갱신(C4)
 - `Webhook.php` — `paypal()` 추가. 기존 `pg()`(스텁 HMAC)는 그대로 둔다
-- `CoinProduct.php` — USD 3종 추가(`coin_30_usd` 등). 통화 안에서 금액이 유일하다는 불변식은 기존 테스트가 지킨다
+- `CoinProduct.php` — **USD 2종**($9.99·$24.99) 추가(6장 A 수수료). 코인 수는 국내 비율 × 가정 환율이고, 그 가정을 주석에 적는다. 통화 안에서 금액이 유일하다는 불변식은 기존 테스트가 지킨다
+- `cli/Verify.php` — `payments` 에 **오래된 `created`·`pending`** 항목 추가(6장 D1·D3)
 - `src/Channel/HttpClient.php` + `CurlHttpClient` + 테스트용 가짜 구현 — `postForm()`에 `headers` 추가(페이팔 OAuth Basic 인증). **인터페이스 변경이라 구현체를 전부 grep으로 찾는다**
 - `config/routes.php` · `config.php`의 `csrf_exclude_uris`에 `pay/inicis/return`·`pay/inicis/close` 추가(C2) · `.env.example`(키 이름만) · `scripts/check-env.sh`(PG 모드 일치 검사, D5)
 - `cli/Pg.php` — `refund <uid>`(PG 환불 API → `applyEvent(refunded, source=admin)`) · `list`. **웹 어드민은 만들지 않는다** — 인증이 없으면 누구나 누를 수 있는 환불 버튼이 된다. ADR-020에 그 이유를 적는다
@@ -176,3 +178,35 @@
 | 테스트 MID `INIpayTest` 와 signKey | [pg-inicis 샘플](https://github.com/visualplus/pg-inicis/blob/master/config/inicis.php) | 대조 벡터 2개를 로컬에서 재계산해 일치 |
 | 페이팔 판매자 보호에서 디지털 재화 제외 | [Chargeflow 요약](https://www.chargeflow.io/blog/what-is-paypal-seller-protection) · [공식 페이지](https://www.paypal.com/us/legalhub/paypal/seller-protection) | 공식 원문은 가져오지 못함(잘림) |
 | 페이팔 AUP 성인 콘텐츠 | [공식 페이지](https://www.paypal.com/us/legalhub/paypal/acceptableuse-full) | **미확인**(잘림) |
+| 페이팔 한국 가맹점 요율: 해외 4.40% + $0.30, 환전 3%, 차지백 $10, 분쟁 $8, **환불해도 원래 수수료는 반환되지 않음** | [PayPal KR 가맹점 수수료](https://www.paypal.com/kr/webapps/mpp/merchant-fees) | 확인 |
+| 분쟁·역전 웹훅 `CUSTOMER.DISPUTE.CREATED` · `PAYMENT.CAPTURE.REVERSED` | [PayPal Disputes webhooks](https://developer.paypal.com/docs/disputes/webhooks/) | 확인(검색 요약) |
+| 카드번호는 앞 6·뒤 4자리를 넘지 않게 자르면 카드 소지자 데이터가 아님 | [PCI SSC Data Storage Do's and Don'ts](https://listings.pcisecuritystandards.org/pdfs/pci_fs_data_storage.pdf) | 확인(검색 요약). 이니시스 `CARD_Num` 형식은 미확인 |
+| 재전송 때 서명을 새로 만드는가 | 페이팔 문서에 언급 없음 | **미확인** → 6장 B8 에서 위험 자체를 없앴다 |
+
+---
+
+## 6. 결정 — 2026-09-19
+
+리스크마다 대응할지 받아들일지를 정했다. **받아들인 것은 무엇을 감수하는지를 함께 적는다.**
+
+| 리스크 | 결정 | 하는 것 / 감수하는 것 |
+|---|---|---|
+| A 세무 | **인터페이스만, 통과** | `TaxPolicy` + `PassThroughTaxPolicy`. 금액을 바꾸지 않고 `reason=out-of-scope` 를 남긴다 — "세금 0" 이 계산 결과가 아니라 미룬 판단임을 나중에 골라낼 수 있게. **아직 어디서도 부르지 않는다** |
+| A 장애 | **수용** | 지역마다 단일 장애점이다. 대신 타임아웃·결과 불명은 망취소(B4)로 처리해 장애가 "결제 불가"로 끝나게 한다. **멀티는 지역 분할이지 이중화가 아니다** |
+| A 수수료 | **해외는 큰 묶음만** | USD 2종 $9.99·$24.99. 해외 요율(4.40% + $0.30)로 계산하면 $2.99 는 14.4%, **$9.99 는 7.4%, $24.99 는 5.6%**. 국내와 가격 구조가 달라지는 것을 감수한다 |
+| A 잠김 | **해당 없음** | 범위가 코인 구매라 정기결제 빌링키가 생기지 않는다 |
+| B1·B2 | **USD 한 통화 고정가** | B2 는 USD 에서 드러나지 않는다. `PgAmount` 와 "다른 통화 거절" 테스트로 막아 둔다. 비유럽 구매자는 자기 카드사 환전 수수료를 낸다 |
+| B3·B4·B5·B7 | 대응 (선택지 없음) | 수용하면 결제가 성립하지 않거나 위조가 가능해진다 |
+| B6 | **자체 검증** | 원본 바이트 규칙을 지킨다. 인증서 URL 호스트 허용 목록과 캐시를 직접 만든다 |
+| B8 | **시각 창 없이 CAS 에 맡김** | 진짜 서명의 재생은 같은 전이를 다시 시도하는 것일 뿐이라 무시된다(D-3). 종결 상태는 되돌릴 수 없다. **스텁(HMAC, 300초 창)과 규칙이 달라진다.** 재전송 서명 실측은 컷 ① 로 남는다 |
+| C1·C2·C3 | 대응 (선택지 없음) | |
+| C4 | **토큰 잠금** | `/pay/*` 전부와 `/purchase`(pg≠stub). 스텁 경로는 D-3 측정 스크립트 때문에 그대로 둔다. 진짜 인증은 아니다 |
+| C5 | **허용 목록 + 원문 sha256** | 카드번호·결제자 개인정보가 보존 범위에 들어오지 않는다. **허용 목록 밖 필드는 나중에 분쟁이 생겨도 복원할 수 없다** |
+| C6 | **기록만, 판단은 사람** | 분쟁·역전 이벤트를 `from=to` 로 남기고 error 로그. 상태와 코인은 바꾸지 않는다([RefundPolicy](../src/Payment/RefundPolicy.php) ② 와 같은 판단). **손실을 받아들인다** |
+| C7 | 해당 없음 | 이 프로젝트에는 성인 콘텐츠가 없다. AUP 원문은 확인하지 못했다 |
+| D1·D3 | **오래된 결제 보고 + 당일 환불** | `cli/verify payments` 가 오래된 `created`·`pending` 을 보고한다. 테스트 결제는 그날 `cli/pg refund`. INIAPI 환불 키를 얻지 못하면 → PG 자동 취소 뒤 `refunded` 를 수동 기록(source=admin). PG 조회 API·정산 파일 대사는 하지 않는다 |
+| D2 | **표시 없이 보냄** (검토한 추천과 다름) | 테스트 결제도 운영 GA4 에 실거래와 구분 없이 간다 — 스텁 결제도 지금 그렇다. 당일 환불로 **순매출은 맞지만, GA4 에서 테스트와 실거래를 가려낼 수 없다.** `/metrics` 와 반영률 표본에도 섞인다 |
+| D4 | **카드만** | 수단별 분기는 `GatewayResult` 에 결제 수단 칸만 둔다 |
+| D5 | 대응 | `check-env.sh` 에서 PG 모드 일치 검사 |
+| D6 | 설정 | GA4 "원치 않는 추천"에 PG 도메인 추가(사람 작업) |
+| 통합 어드민 | **CLI 만** | `cli/pg list·refund`. 인증 없는 환불 버튼은 누구나 누를 수 있는 버튼이 된다. 보여 줄 화면은 없다 |
