@@ -1,0 +1,178 @@
+# 멀티 PG 연동 계획 — 두 번째 PG 가 깨는 자리와 숨은 리스크
+
+> [ADR-016](decisions/ADR-016-payment-and-notification.md) 이 비워 둔 `PgAGateway`·`PgBGateway` 자리를
+> **이니시스(국내)·페이팔(해외)** 로 채우는 계획이다. 목적은 결제 기능이 아니라
+> ADR-016 이 적어 둔 그대로 — **"두 번째를 붙일 때 무엇이 깨지는지를 기록하는 것"** 이다.
+>
+> 작성 2026-09-19 · 선행 문서: [plan-payment-webhook.md](plan-payment-webhook.md) (스텁 PG · CAS · D-3 측정)
+
+## 0. 출발점 — 가정 시나리오 (축자)
+
+> 기술적 주도권 및 데이터 내재화 (Lock-in 우려)
+> 중간 플랫폼 의존성 및 장애 리스크
+> 글로벌 세금 및 정산(Settlement) 정산 구조의 복잡성
+> 추가적인 수수료 부담
+> 위 사유로 통합pG솔루션을 사용하지 않고
+>
+> 코인 구입을 위한 멀티 PG 시스템 개발 필요
+>
+> 연동할 pg사 : (해외유저용)페이팔, (국내 이용자용)이니시스
+>
+> 숨은 리스크?
+>
+> 구현과제
+> PG사별 맞춤형 API 연동 코드 개발 / 통합 결제 어드민(Admin) 및 대시보드 개발 / 복잡한 에러 핸들링 및 예외 처리 시스템 / PG사별 웹훅(Webhook) 수신 및 파싱 엔진 구현 / 각기 다른 통화/결제 수단별 분기 처리 로직
+
+**지금 있는 것** (운영 중): 스텁 PG(`cli/pg`) · `/purchase` · `/webhooks/pg`(HMAC) · CAS 상태 머신 · 환불(09-15) · 코인 lot · 결제→전환→아웃박스→GA4.
+
+표기: **[확인-문서]** 공식 문서로 확인 / **[확인-코드]** 이 저장소에서 확인 / **[확인-계산]** 로컬에서 다시 계산 / **[추정]** 착수 전(3장 0단계)에 검증
+
+---
+
+## 1. 숨은 리스크
+
+### A. 시나리오의 사유가 뒤집히는 자리
+
+| 사유 | 숨은 리스크 |
+|---|---|
+| 세금·정산 복잡성 | PG를 직접 붙이면 **우리가 판매자(seller of record)**가 된다. 해외 B2C 디지털 재화의 현지 소비세(EU VAT 등)를 신고·납부할 책임이 우리에게 온다. 통합 오케스트레이션(PortOne류)은 원래 이 짐을 지지 않고, 지는 것은 MoR(판매 대행)형이다. **"통합 PG"가 어느 쪽을 뜻하는지에 따라 이 사유가 반대로 뒤집힌다** [추정 — 세무 판단은 범위 밖] |
+| 중간 플랫폼 장애 | 지역별로 PG가 1개씩이면 **지역마다 단일 장애점**이 생긴다. 중간 계층을 빼도 장애 조치(failover)가 생기지 않는다. 이 구성의 "멀티"는 이중화가 아니라 **지역 분할**이다 |
+| 수수료 | 해외 결제 수수료, 페이팔 환전 스프레드, 환불 때 돌려받지 못하는 고정 수수료 [추정] |
+| 잠김(lock-in) | 원문 내재화(`payment_events.raw_payload`)는 실제 이득이다. 다만 정기결제 **빌링키는 PG에 묶여** 옮겨지지 않는다 [추정] |
+
+### B. 두 번째 PG가 기존 설계를 깨는 자리 ← ADR-016이 기록하라고 한 것
+
+| # | 깨지는 것 | 근거 |
+|---|---|---|
+| B1 | **페이팔은 KRW를 지원하지 않는다.** `CoinProduct`는 KRW 3종뿐이고, `findByPrice()`로 통화 안에서 금액을 역검색한다 → 통화별 가격표가 필요하고 환율 위험을 떠안는다 | [확인-문서] 지원 통화 24종에 KRW 없음 · [확인-코드] [`CoinProduct.php:37`](../src/Payment/CoinProduct.php) |
+| B2 | **PG의 소수 자릿수가 ISO 4217과 다르다.** 페이팔은 HUF·JPY·TWD를 소수 0자리로 받는데, ISO에서 HUF·TWD는 2자리다. `MinorUnits`(ISO 기준)를 그대로 쓰면 PG가 거절한다 | [확인-문서] · [확인-코드] [`MinorUnits.php`](../src/Channel/MinorUnits.php) |
+| B3 | **이니시스 카드 결제에는 서버 간 웹훅이 없다.** 결과는 브라우저가 `returnUrl`로 POST하고, 우리 서버가 `authUrl`로 승인을 요청하는 **동기 흐름**이다. "PG별 웹훅 엔진"이라는 과제 틀이 국내 PG에서는 성립하지 않는다 | [확인-문서] 웹표준 매뉴얼 STEP2~4. 노티는 가상계좌용만 따로 있다 |
+| B4 | **승인은 났는데 우리 DB가 실패하면 망취소**를 해야 한다(인증 결과 후 10분 이내). 승인 요청이 타임아웃돼 성공 여부를 모를 때도 같다. 망취소를 빠뜨리면 **돈은 빠졌는데 코인이 없다**. 망취소를 일반 취소 용도로 써서는 안 된다 | [확인-문서] |
+| B5 | **서명 방식이 PG마다 다르다.** 스텁은 HMAC, 페이팔은 인증서 기반 RSA-SHA256(`전송ID\|시각\|웹훅ID\|crc32`), 이니시스는 요청 쪽 SHA256(`signature`·`verification`)이다. 지금의 `WebhookSignature` 하나로는 받을 수 없다 | [확인-문서] |
+| B6 | 페이팔의 **postback 검증 API는 이벤트 JSON을 다시 인코딩해 보내야** 한다. 저장소 규칙 ①("원본 바이트로 서명")과 충돌한다 → **자체 검증(원본 바이트 crc32 + 인증서)**을 택한다 | [확인-코드] [`WebhookSignature.php:20`](../src/Payment/WebhookSignature.php) |
+| B7 | `payments.pg`가 `'stub'`으로 **하드코딩**돼 있다. PG 거래 ID(tid·order·capture)를 담을 칸이 없다. 페이팔 환불 웹훅은 우리 uid가 아니라 capture ID를 가리킬 수 있다 | [확인-코드] [`Payment_model.php:101`](../application/models/Payment_model.php) · [추정] |
+| B8 | **재전송할 때 서명을 새로 만드는가** — [plan-payment-webhook.md](plan-payment-webhook.md) 11장에 "모른다"로 남은 항목이다. 재전송이 처음 시각을 그대로 쓰면 300초 창이 **재전송을 전부 거절**한다. 페이팔은 최대 3일 동안 25회 재전송한다 | [확인-문서] 재전송 정책 · 서명 갱신 여부는 실측 |
+
+### C. 보안·프라이버시
+
+| # | 리스크 | 근거 |
+|---|---|---|
+| C1 | **`authUrl`·`netCancelUrl`은 브라우저 POST에 실려 온다 = 공격자가 조작할 수 있다.** 검증하지 않으면 가짜 승인 서버가 `0000`을 돌려줘 **코인이 무료로 지급**되고 SSRF 경로도 열린다. `idc_name`(fc·ks·stg) ↔ 허용 호스트 대조가 필수다 | [확인-문서] "IDC센터코드와 비교 검증 필수" |
+| C2 | **CSRF 403.** `csrf_protection=TRUE`라서 이니시스가 보내는 교차 사이트 POST는 제외 목록에 넣지 않으면 막힌다. `webhooks/pg` 때 이미 한 번 겪었다 | [확인-코드] [`config.php:131-142`](../application/config/config.php) |
+| C3 | **SameSite=Lax 쿠키가 결과 복귀 요청에 실리지 않는다**(세션, `ab_vid`). 복귀 처리는 쿠키가 아니라 `orderNumber`(=payment_uid)로 결제를 찾아야 한다. `Visitor::current()`를 부르면 `landing_path=/pay/inicis/return`인 유령 방문이 생겨 **어트리뷰션 분모를 오염**시킨다 → [domains-and-cookies.md](domains-and-cookies.md) | [확인-코드] `config.php:99`, [`Purchase.php:50`](../application/controllers/Purchase.php) |
+| C4 | **인증 없는 `/purchase`의 전제가 무너진다.** [결정 5](plan-payment-webhook.md)의 근거는 "스텁이라 청구가 없다"였다. 실PG가 붙으면 **공개 페이지에서 누구나 실결제**를 할 수 있다 | [확인-코드] `Purchase.php:26`, `config.php` 주석 |
+| C5 | **`raw_payload`에 PG 응답 원문**을 넣으면 카드 정보(부분 마스킹)와 페이팔 결제자 개인정보가 **5년 동안 보존**된다(PCI·개인정보 범위) | [추정] 필드 목록은 0단계에서 확인 |
+| C6 | 페이팔 판매자 보호는 **디지털 재화를 제외**한다. 코인을 쓴 뒤 분쟁을 걸면 손실은 우리가 진다. 지금 상태 머신에는 `disputed`·`reversed`가 없다 | [확인-검색] 공식 원문은 가져오지 못함 |
+| C7 | 페이팔 이용 정책(AUP)의 성인 콘텐츠 제한 — 성인 콘텐츠를 파는 서비스라면 **계정 제한·자금 동결** 위험이 있다 | [미확인] AUP 원문 가져오기 실패 |
+
+### D. 운영·정산
+
+| # | 리스크 | 근거 |
+|---|---|---|
+| D1 | **이니시스 테스트 MID는 실제 카드로 출금**되고, 매일 23:00~23:50에 **자동 취소**된다. PG가 **우리에게 알리지 않고** 취소하므로, 우리 DB에는 `captured`·코인·GA4 매출이 남는다. 이것이 **PG 쪽 대사**가 없을 때의 모양이다([`LedgerReconciliation`](../src/Payment/LedgerReconciliation.php)은 내부 장부끼리만 맞춘다) | [확인-문서] 이니시스 FAQ · [확인-코드] |
+| D2 | 테스트 결제가 **운영 GA4 매출에 섞인다** — [worklog 09-18](worklog.md) "확인 작업이 운영 지표를 틀었다"와 같은 유형이다 | [확인-코드] |
+| D3 | 재전송 한도(3일)를 넘긴 웹훅은 사라진다 → 오래된 `created`·`pending`을 PG 조회 API로 쓸어 담는 배치가 필요하다 | [확인-문서] |
+| D4 | 결제 수단마다 환불 방법이 다르다(휴대폰 결제는 당월에만, 가상계좌는 환불 계좌가 필요하다) | [추정] → 이번 범위는 **카드만** |
+| D5 | 테스트 키가 운영에 들어가거나 그 반대인 경우 — 결제는 성공하는데 돈이 들어오지 않는다 | 설계 → `check-env.sh`에서 모드 일치 검사 |
+| D6 | PG에서 돌아온 브라우저 세션이 GA4에서 `paypal.com / referral`로 **새로 시작**된다 — 도메인·리다이렉트를 건너며 데이터가 끊기는 문제 그대로다 | [추정] → GA4 "원치 않는 추천" 설정 |
+
+---
+
+## 2. 구현 설계
+
+### 핵심 판단: 하나로 모으는 자리는 "웹훅 엔진"이 아니라 `applyEvent()`
+
+동기 결과(이니시스 승인, 페이팔 capture)와 비동기 웹훅(페이팔, 스텁)이 **모두 같은 CAS 전이**(`Payment_model::applyEvent`)로 들어가게 한다. 중복·역전 방어는 이미 측정을 마쳤으므로([D-3](failure-scenarios.md)) 새로 만들지 않는다.
+**페이팔은 동기 capture 뒤에 `COMPLETED` 웹훅이 한 번 더 온다** → **자연 발생한 중복 수신**이다. D-3을 실PG에서 다시 관측할 수 있다.
+
+### 새로 만들 파일
+
+| 파일 | 역할 |
+|---|---|
+| `src/Payment/Gateway/GatewayInterface.php` | `name()` · `supports(currency)` · `start(payment)` → 브라우저가 쓸 값 · `confirm(input)` → `GatewayResult` · `refund(refs, amount)` |
+| `src/Payment/Gateway/GatewayResult.php` | 목적 상태(`captured`/`pending`/`failed`) 또는 **`unknown`** · PG 참조 ID · 저장용 필드 · 오류 분류(재시도 가능/종결) |
+| `src/Payment/Gateway/InicisGateway.php` | 서명 필드 생성(`oid·price·timestamp` SHA256, `mKey`) · 복귀 값 검증 · **`idc_name`→호스트 허용 목록**(C1) · 승인 · 망취소 |
+| `src/Payment/Gateway/PaypalGateway.php` | OAuth → 주문 생성(`custom_id`=payment_uid, `PayPal-Request-Id`=멱등키) · capture · 환불 |
+| `src/Payment/Gateway/PaypalWebhook.php` | **자체 검증**: 원본 바이트 crc32 + 인증서(`paypal-cert-url` 호스트 허용 목록) · 이벤트 타입 → 상태 매핑 |
+| `src/Payment/Gateway/PgAmount.php` | PG별 소수 자릿수(페이팔 HUF·JPY·TWD=0). `MinorUnits`(ISO)와 **일부러 따로 둔다**(B2) |
+| `src/Payment/Gateway/PayloadRedactor.php` | 저장할 필드만 남기는 허용 목록(C5). 원문 전체 대신 `sha256(raw)`를 함께 남긴다 |
+| `application/libraries/Gateways.php` | [`Channels.php`](../application/libraries/Channels.php)와 같은 조립 방식. 통화 → PG 규칙을 한 곳에(KRW→inicis, USD→paypal) |
+| `application/controllers/Pay.php` | `GET /pay`(시연 결제 화면, **`PAY_DEMO_TOKEN`으로 잠금**, noindex — C4) · `POST /pay/inicis/start` · `POST /pay/inicis/return` · `/pay/inicis/close` · `POST /pay/paypal/order` · `POST /pay/paypal/capture` · `GET /pay/result/{uid}` |
+| `application/views/pay/{index,result}.php` | 바닐라 JS([ADR-009](decisions/ADR-009-no-spa.md)). INIStdPay.js / 페이팔 JS SDK |
+| `application/migrations/20260919000100_create_payment_pg_refs.php` | `payment_pg_refs(payment_id, pg, ref_type, ref_value, created_at)`, `UNIQUE(pg, ref_type, ref_value)` (B7) |
+| `tests/Payment/Gateway/*Test.php` | 4장 검증 1 |
+| `docs/decisions/ADR-020-multi-pg-direct.md` | 시나리오의 사유 · 1장의 리스크 · **깨진 것 B1~B8** · 기각한 대안(통합 PG) · ADR-016과 양방향 링크 |
+
+### 고칠 기존 파일
+
+- `Payment_model.php` — `createIfAbsent()`가 `pg`를 받는다(하드코딩과 `→ ADR-008` 주석 교체) · `applyEvent(..., $source='webhook')`(`return`·`capture`·`admin` 추가) · `addPgRef()`·`findByPgRef()`
+- `Purchase.php` — 선택 필드 `pg`(기본 `stub` → D-3 측정 스크립트 유지), `gateway->supports(currency)` 검사, 결정 5 주석 갱신(C4)
+- `Webhook.php` — `paypal()` 추가. 기존 `pg()`(스텁 HMAC)는 그대로 둔다
+- `CoinProduct.php` — USD 3종 추가(`coin_30_usd` 등). 통화 안에서 금액이 유일하다는 불변식은 기존 테스트가 지킨다
+- `src/Channel/HttpClient.php` + `CurlHttpClient` + 테스트용 가짜 구현 — `postForm()`에 `headers` 추가(페이팔 OAuth Basic 인증). **인터페이스 변경이라 구현체를 전부 grep으로 찾는다**
+- `config/routes.php` · `config.php`의 `csrf_exclude_uris`에 `pay/inicis/return`·`pay/inicis/close` 추가(C2) · `.env.example`(키 이름만) · `scripts/check-env.sh`(PG 모드 일치 검사, D5)
+- `cli/Pg.php` — `refund <uid>`(PG 환불 API → `applyEvent(refunded, source=admin)`) · `list`. **웹 어드민은 만들지 않는다** — 인증이 없으면 누구나 누를 수 있는 환불 버튼이 된다. ADR-020에 그 이유를 적는다
+
+### 이 결정을 참조하는 곳까지 따라간다
+
+`grep -rn "ADR-016\|ADR-008\|PgAGateway\|스텁이다\|스텁 PG 라\|청구도 없다\|마이그레이션뿐" docs application src README.md` 결과를 전부 갱신한다. 알고 있는 곳:
+
+- [ADR-016](decisions/ADR-016-payment-and-notification.md) 결과의 "실제 정산·환불이 일어나지 않는다" → **틀렸다**(D1). ADR-020으로 링크
+- [ADR-017](decisions/ADR-017-ci3-application-structure.md) 44행 디렉터리 목록의 `PgAGateway · PgBGateway`
+- [architecture.md](architecture.md) 201행의 "`payments` 는 마이그레이션뿐이다"(이미 낡음)
+- [plan-payment-webhook.md](plan-payment-webhook.md) 0장("범위에서 뺀 것: GatewayInterface")과 11장의 "재전송 서명" 미확인 항목 → 실측 결과로 닫는다
+- [decisions/README.md](decisions/README.md) 표 · README "아직 없는 것" · [api-spec.md](api-spec.md)(새 엔드포인트)
+
+---
+
+## 3. 순서와 컷 라인
+
+| 단계 | 내용 | 게이트 |
+|---|---|---|
+| **0** (≈1h) | 규격 원문 확보 → 5장 출처의 축자 발췌를 [worklog](worklog.md)에 남긴다(ADR-016의 "착수 전 확인"). [추정] 항목 검증: INIAPI 환불 키가 테스트 MID에 공개돼 있는가, 복귀가 iframe 안에서 열리는가(`X-Frame-Options: SAMEORIGIN`), 승인 응답 필드 목록, 페이팔 환불 리소스에 `custom_id`가 있는가 · 사람이 할 일(아래) | 원문 없이 코드를 쓰지 않는다 |
+| **1** 이니시스 | 인터페이스 · `InicisGateway` + 테스트 · 마이그레이션 · `Pay` 복귀 흐름 · 망취소 → 배포 → 실결제 1건 → `cli/pg refund` | 09-20 정오까지 운영에서 `captured`→`refunded` 관통 |
+| **2** 페이팔 | 주문·capture · 자체 서명 검증 웹훅 · 환불 · 재전송 서명 실측 | 09-20 밤 |
+| **3** 문서 | ADR-020 · worklog · 참조 갱신 · README | Phase 1 마감 전 |
+
+**컷 순서**(밀리면 이 순서로 버린다): ① 재전송 서명 실측 → ② 페이팔 웹훅(동기 capture만 유지) → ③ 페이팔 전체 → **이니시스 + 스텁으로 후퇴**(ADR-016에 적힌 후퇴선). 이니시스까지 밀리면 **리스크 문서(ADR-020)만 내고 코드는 Phase 2**로 넘긴다. 어떤 경우에도 README에는 **운영에서 확인한 것만** 적는다.
+
+### 사람이 해야 할 것 (0단계, 코드 밖)
+
+1. 페이팔 개발자 계정 → 샌드박스 REST 앱(client id/secret) → 웹훅 등록(`https://app.<도메인>/webhooks/paypal`, 이벤트 `PAYMENT.CAPTURE.*`) → **webhook id** → 서버 `.env`에만 넣는다
+2. **이니시스 테스트 결제는 본인 카드에서 실제로 출금된다**(당일 23시대 자동 취소). 동의가 먼저 필요하다. 그날 안에 `cli/pg refund`로 우리가 먼저 취소한다
+3. GA4 관리 화면의 "원치 않는 추천"에 `inicis.com`·`paypal.com` 추가(D6)
+
+---
+
+## 4. 검증
+
+1. **단위 테스트**(도커 `php:8.2-cli` 안에서 `vendor/bin/phpunit`, CI도 동일)
+   - 이니시스 서명: 매뉴얼의 **공개 대조 벡터**를 그대로 고정값으로 쓴다 [확인-계산 09-19]
+     - `sha256("oid=INIpayTest_1361252896871&price=1004&timestamp=1361252896871")` = `422a0e78529b419d9412d6e344c6e138584d9174c691da6cd91d4330240b9192`
+     - 테스트 MID signKey의 sha256(`mKey`) = `3a9503069192f207491d4b19bd743fc249a761ed94246c8c42fed06c3cd15a33`
+   - `idc_name=fc` + `authUrl=https://evil.example` → 거절되고 **HTTP 호출 0회**(가짜 `HttpClient`로 확인)
+   - 승인 성공 + `applyEvent` 실패(`db-error`) → `netCancelUrl`로 망취소 1회 / 승인 타임아웃 → 망취소
+   - 페이팔 웹훅: 샌드박스에서 실제로 받은 원본 바이트와 헤더를 고정값으로 → 통과, 1바이트 변조 → 거절, 인증서 URL 호스트 위조 → 거절
+   - `PgAmount`: HUF는 페이팔 0자리, ISO 2자리 — **둘이 다르다는 것을 테스트로 못박는다**
+   - `PayloadRedactor`: 카드번호·결제자 이메일 필드가 남지 않음
+2. **운영 관통**: 이니시스 1건 → `payments.captured` · `coin_lots` 1 · `conversions` 1 · 아웃박스 → GA4. 환불 → `refunded` · 코인 회수 · GA4 `refund`. `cli/verify payments` 불일치 0
+3. **페이팔 자연 중복**: capture(동기) 뒤 `COMPLETED` 웹훅 → `payment_events`의 전이(`from<>to`) 1행 + 무시(`from=to`) ≥1행, `coin_lots` 1행
+4. **재전송 서명**: 첫 배달에 503을 주는 스위치(대조군 관례) → 재배달의 `transmission-time`이 새 값인지 기록 → plan-payment-webhook.md 11장을 닫는다
+5. **복귀 경로**: 이니시스 복귀 뒤 `visits`의 `MAX(id)`가 늘지 않는다(C3), CSRF 403 없음(C2)
+6. **참조 갱신**: 2장의 `grep`을 다시 돌려 남은 참조 0
+7. 결과는 측정 원문 그대로 worklog → [failure-scenarios.md](failure-scenarios.md) · [benchmarks.md](benchmarks.md)로 옮긴다. **절차를 먼저 커밋하고 그다음에 측정한다**
+
+---
+
+## 5. 출처 (09-19 조회)
+
+| 무엇 | 출처 | 상태 |
+|---|---|---|
+| 페이팔 지원 통화 24종(KRW 없음), 소수 0자리 HUF·JPY·TWD | [PayPal Currency Codes](https://developer.paypal.com/reference/currency-codes/) | 확인 |
+| 페이팔 웹훅 서명(헤더 4종, `transmissionId\|timeStamp\|webhookId\|crc32`, SHA256withRSA), 재전송 3일간 25회 | [PayPal Webhooks](https://developer.paypal.com/api/rest/webhooks/rest/) | 확인. 순서 보장은 문서에 언급 없음 |
+| 이니시스 웹표준 STEP2~4, `authUrl`·`idc_name` 대조, 망취소 10분 | [KG이니시스 웹표준 연동가이드](https://manual.inicis.com/pay/stdpay_pc.html) | 확인 |
+| 이니시스 테스트모드 실출금 + 23:00~23:50 자동 취소 | [KG이니시스 모듈연동 FAQ](https://www.inicis.com/blog/archives/category/cs/cs_best/%EB%AA%A8%EB%93%88%EC%97%B0%EB%8F%99-faq/page/3) | 확인(검색 요약) — 0단계에서 원문 재확인 |
+| 이니시스 승인 API 호스트(`fcstdpay`·`ksstdpay`·`stdpay`·`drstdpay`) | 검색 요약 | [추정] 0단계에서 매뉴얼로 확정 |
+| 테스트 MID `INIpayTest` 와 signKey | [pg-inicis 샘플](https://github.com/visualplus/pg-inicis/blob/master/config/inicis.php) | 대조 벡터 2개를 로컬에서 재계산해 일치 |
+| 페이팔 판매자 보호에서 디지털 재화 제외 | [Chargeflow 요약](https://www.chargeflow.io/blog/what-is-paypal-seller-protection) · [공식 페이지](https://www.paypal.com/us/legalhub/paypal/seller-protection) | 공식 원문은 가져오지 못함(잘림) |
+| 페이팔 AUP 성인 콘텐츠 | [공식 페이지](https://www.paypal.com/us/legalhub/paypal/acceptableuse-full) | **미확인**(잘림) |
