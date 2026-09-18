@@ -66,6 +66,7 @@ class Metrics extends MY_Controller
 			'conversions' => $this->metrics_model->conversionsByType($db),
 			'funnel'      => $this->metrics_model->visitFunnel($db),
 			'ctr'         => $this->collect_model->ctrBySlot($db, 7),
+			'ad'          => $this->adAttribution($db),
 
 			'outbox_statuses' => Metrics_model::OUTBOX_STATUSES,
 			'small_sample'    => self::SMALL_SAMPLE,
@@ -80,5 +81,24 @@ class Metrics extends MY_Controller
 		// "지금 무엇이 그런가" 이므로 중간 캐시를 허용하지 않는다.
 		$this->output->set_header('Cache-Control: no-store');
 		$this->load->view('metrics/index', $data);
+	}
+
+	/**
+	 * 광고 → 결제 귀속. 모델이 읽어 온 행을 순수 계산에 넘겨 표로 만든다.
+	 *
+	 * 두 층을 나눠 둔 이유: SQL 은 DB 없이 못 재고, 표를 합치는 규칙(같은 결제를
+	 * 두 기준에 두 번 세되 **금액은 한 번만** 더한다)은 틀리면 매출이 두 배가 된다.
+	 * 그 규칙만 떼어 내 테스트를 붙였다 → tests/Metrics/AdAttributionTest.php
+	 */
+	private function adAttribution($db)
+	{
+		$raw = $this->metrics_model->adAttribution($db);
+
+		return array(
+			'total'      => $raw['total'],
+			'with_visit' => $raw['with_visit'],
+			'with_ad'    => $raw['with_ad'],
+			'table'      => \App\Metrics\AdAttribution::table($raw['rows']),
+		);
 	}
 }

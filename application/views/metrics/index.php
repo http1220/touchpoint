@@ -4,11 +4,17 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 /*
 | 지표 화면.
 |
-| 시트 네 장 — 파이프라인 순서로 읽는다.
+| 시트 여섯 장 — 파이프라인 순서로 읽는다.
 |   1  읽는 순서 · ① 유입 (방문과 접점 · 배너 CTR)
-|   2  ② 전환 → 적재 (전환 · 아웃박스)
-|   3  ③ 매체 전송 (도달률 · HTTP 상태 · 재시도 회복)
-|   4  ③ 계속 (재시도 분포 · 구간별 소요 시간)
+|   2  광고가 만든 것 (매체별 전환 · 귀속 기준 둘) ← 이 시스템이 답하려는 질문
+|   3  반영률 (매체를 되읽은 실측 기록)
+|   4  ② 전환 → 적재 (전환 · 아웃박스)
+|   5  ③ 매체 전송 (도달률 · HTTP 상태 · 재시도 회복)
+|   6  ③ 계속 (재시도 분포 · 구간별 소요 시간)
+|
+| 2번은 파이프라인의 한 단계가 아니라 **그 파이프라인이 무엇을 위한 것인지**를
+| 말하는 자리다. 적재율·도달률이 아무리 좋아도 "어느 광고가 결제를 만들었나"에
+| 답하지 못하면 이 시스템은 값을 하지 않는다 — 2026-09-18.
 |
 | 해설은 칸 안의 나레이션 박스 — 결론 한 문장과 근거 문서. 근거는 docs 가 가진다.
 |
@@ -116,6 +122,7 @@ $thin_badge = function ($d) use ($small_sample)
       <h1 id="page-title">숫자는 분모 · 표본 · 측정 시각과 함께만</h1>
       <nav class="toc" aria-label="지표 묶음">
         <a href="#inflow">① 유입</a>
+        <a href="#attribution">광고가 만든 것</a>
         <a href="#convert">② 전환 → 적재</a>
         <a href="#dispatch">③ 매체 전송</a>
       </nav>
@@ -174,7 +181,119 @@ $thin_badge = function ($d) use ($small_sample)
     </section>
   </div>
 
-  <!-- ── 시트 2 · ② 전환 → 적재 ─────────────────── -->
+  <!-- ── 시트 2 · 광고가 만든 것 ─────────────────── -->
+  <?php
+    $ad_table = $ad['table'];
+    // 광고 접점이 붙은 전환이 분모다. 전환 전체를 분모로 쓰면 "광고가 다 만들었다" 로 읽힌다
+    $ad_rows  = $ad_table['rows'];
+    $ad_money = $ad_table['value_total'] > 0;
+  ?>
+  <div class="sheet layout-metrics-ad">
+    <section class="panel ad-attr" aria-labelledby="ad-attr">
+      <p class="eyebrow" id="attribution">광고 → 결제</p>
+      <h2 id="ad-attr">광고가 만든 것 <span class="muted">매체별 · 귀속 기준 둘</span></h2>
+
+      <p class="caption"><strong>같은 결제도 어느 접점에 붙이냐에 따라 매체가 달라진다.</strong>
+        최초 유입으로 세면 처음 데려온 매체가, 마지막 유입으로 세면 마지막에 밀어 준 매체가 가져간다.
+        정산에서 다투는 자리라 <strong>한 기준을 고르지 않고 둘을 나란히</strong> 놓는다.
+        결제 자체가 어느 방문에 붙는지는 또 다른 결정이다 — 결제 시점 방문이 있으면 그쪽, 없으면 가입 접점.
+        <a href="<?= $repo ?>docs/plan-payment-webhook.md">plan-payment-webhook.md 6장<span aria-hidden="true">↗</span></a></p>
+
+      <table class="data kv">
+        <tbody>
+          <tr><th scope="row">전환</th><td class="n"><b><?= html_escape(m_int($ad['total'])) ?></b></td><td class="muted">아래 비율의 분모</td></tr>
+          <tr><th scope="row">방문이 붙은 전환</th><td class="n"><?= html_escape(m_int($ad['with_visit'])) ?></td><td><?= m_rate($ad['with_visit'], $ad['total']) ?></td></tr>
+          <tr><th scope="row">광고 접점까지 붙은 전환</th><td class="n"><b><?= html_escape(m_int($ad['with_ad'])) ?></b></td><td><?= m_rate($ad['with_ad'], $ad['total']) ?><?= $thin_badge($ad['with_ad']) ?> <span class="muted">← 아래 표의 분모</span></td></tr>
+        </tbody>
+      </table>
+
+      <?php if ($ad_rows === array()): ?>
+        <p class="empty">광고 접점이 붙은 전환이 없습니다. 유입 파라미터를 달고 들어온 방문에서 결제가 일어나야 이 표에 줄이 생깁니다.</p>
+      <?php else: ?>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="매체별 전환 표 — 가로로 스크롤">
+          <table class="data data--tight">
+            <thead>
+              <tr>
+                <th scope="col">매체 <code>utm_source</code></th>
+                <th scope="col" class="n">최초 유입 기준</th>
+                <th scope="col" class="n">마지막 유입 기준</th>
+                <th scope="col" class="n">차이</th>
+                <?php if ($ad_money): ?><th scope="col" class="n">결제 금액 <span class="muted">마지막 기준</span></th><?php endif; ?>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($ad_rows as $r): ?>
+                <tr>
+                  <td><code><?= html_escape($r['source']) ?></code></td>
+                  <td class="n"><?= html_escape(m_int($r['first'])) ?></td>
+                  <td class="n"><?= html_escape(m_int($r['last'])) ?></td>
+                  <td class="n"><?php $d = $r['last'] - $r['first']; ?>
+                    <?php if ($d === 0): ?><span class="muted">—</span>
+                    <?php else: ?><span class="badge badge--warning"><?= $d > 0 ? '+' : '−' ?><?= html_escape(m_int(abs($d))) ?></span><?php endif; ?>
+                  </td>
+                  <?php if ($ad_money): ?>
+                    <td class="n"><?= html_escape(m_int($r['value_minor'])) ?><?= $r['currency'] === NULL ? '' : ' <span class="muted">'.html_escape($r['currency']).'</span>' ?></td>
+                  <?php endif; ?>
+                </tr>
+              <?php endforeach; ?>
+              <tr class="sum">
+                <td>합계</td>
+                <td class="n"><?= html_escape(m_int($ad_table['first_total'])) ?></td>
+                <td class="n"><?= html_escape(m_int($ad_table['last_total'])) ?></td>
+                <td class="n"><span class="muted">—</span></td>
+                <?php if ($ad_money): ?>
+                  <td class="n"><?= html_escape(m_int($ad_table['value_total'])) ?><?= $ad_table['currencies'] === array() ? '' : ' <span class="muted">'.html_escape(implode(' · ', $ad_table['currencies'])).'</span>' ?></td>
+                <?php endif; ?>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="caption">
+          <?php if ($ad_table['moved']): ?>
+            <strong>두 기준의 합계는 같은데 매체별로는 옮겨 갔다.</strong> 이 표에서 "차이" 가 붙은 줄이 그 자리다 — 기준을 말하지 않은 전환 수는 뜻이 없다.
+          <?php else: ?>
+            <strong>두 기준이 같은 값을 냈다.</strong> 지금 표본에서는 한 방문 안에서 최초와 마지막 유입이 같은 매체라는 뜻이고, 매체를 갈아타며 들어온 방문이 쌓이면 갈라진다.
+          <?php endif; ?>
+          금액은 <strong>마지막 유입 기준으로만 한 번</strong> 더한다 — 두 기준에 다 더하면 매출이 두 배가 된다.
+          KRW 의 minor unit 은 원이다(9,900원 = <code>9900</code>).
+        </p>
+      <?php endif; ?>
+    </section>
+
+  </div>
+
+  <!-- ── 시트 3 · 반영률 ─────────────────────────── -->
+  <div class="sheet layout-metrics-ad">
+    <?php /* 이 칸만 라이브 값이 아니다. 매체를 되읽어야 알 수 있는 숫자라
+             측정 시각과 방법을 함께 적고, 화면이 스스로 센 값과 섞이지 않게 갈라 둔다 */ ?>
+    <section class="panel reflected" aria-labelledby="reflected">
+      <p class="eyebrow">되돌려 보낸 것이 매체에 남았는가</p>
+      <h2 id="reflected">반영률 <span class="muted">실측 기록 · 이 화면이 센 값이 아니다</span></h2>
+
+      <p class="caption"><strong>도달률은 매체가 <code>2xx</code> 를 줬다는 말이고, 반영률은 매체 보고서에 실제로 있다는 말이다.</strong>
+        같은 전송을 두고 <strong>+0h 에는 도달률 100% 와 반영률 1.2% 가 동시에 참</strong>이었다.
+        그래서 이 시스템은 GA4 Data API 로 <code>transaction_id</code> 를 한 건씩 되맞댄다.
+        <a href="<?= $repo ?>docs/benchmarks.md">benchmarks.md 5-1<span aria-hidden="true">↗</span></a></p>
+
+      <table class="data data--tight">
+        <thead><tr><th scope="col">전송 후 경과</th><th scope="col" class="n">누락</th><th scope="col">반영률 (매체가 집계한 것 / 보낸 것)</th><th scope="col">그때 내린 판단</th></tr></thead>
+        <tbody>
+          <tr><td><code>+0h</code></td><td class="n">502</td><td><?= m_rate(6, 508) ?><span class="muted"> 그때까지 보낸 것</span></td><td class="muted">"매체가 99%를 버린다" — <strong>오판</strong></td></tr>
+          <tr><td><code>+7h</code></td><td class="n">35</td><td><?= m_rate(508, 543) ?></td><td class="muted">—</td></tr>
+          <tr><td><code>+25h</code></td><td class="n">26</td><td><?= m_rate(517, 543) ?></td><td class="muted">"수렴했다, 4.8%는 영구 유실" — <strong>오판</strong></td></tr>
+          <tr class="sum"><td><code>+40h</code></td><td class="n">0</td><td><?= m_rate(543, 543) ?></td><td>전부 들어왔다</td></tr>
+        </tbody>
+      </table>
+      <p class="caption"><strong>첫 줄만 분모가 다르다</strong> — +0h 에는 아직 508건까지만 보낸 상태였다. 분모를 최종 543 으로 맞춰 적으면 그 시점에 없던 전송까지 누락으로 세게 된다.</p>
+
+      <p class="caption"><strong>감속은 수렴이 아니다.</strong> 유입이 1.10 → 0.10건/h 으로 떨어지는 것을 보고 25시간에 판정했는데,
+        GA4 가 적어 둔 처리 창은 <strong>24~48시간</strong>이었다. 끝났는지는 <strong>값이 멈춘 것</strong>으로 판정해야지 느려진 것으로 판정하면 안 된다.
+        <br>되읽기: <code>php public/index.php cli/verify ga4</code> — 2026-09-12 전송분 543건, 마지막 대조 <strong>2026-09-14 13:46</strong>(+40h).</p>
+    </section>
+  </div>
+
+  <!-- ── 시트 4 · ② 전환 → 적재 ─────────────────── -->
   <?php
     // 합계는 쿼리를 하나 더 쓰지 않고 여기서 더한다 —
     // 유형별 행이 이미 전부 와 있어서 DB 를 한 번 더 갈 이유가 없다.
@@ -267,7 +386,7 @@ $thin_badge = function ($d) use ($small_sample)
     </section>
   </div>
 
-  <!-- ── 시트 3 · ③ 매체 전송 ─────────────────────── -->
+  <!-- ── 시트 5 · ③ 매체 전송 ─────────────────────── -->
   <div class="sheet layout-metrics-3">
     <section class="panel reach" aria-labelledby="reach">
       <p class="caption caption--corner">
@@ -277,7 +396,7 @@ $thin_badge = function ($d) use ($small_sample)
       </p>
       <p class="eyebrow" id="dispatch">③ 매체 전송</p>
       <h2 id="reach">도달률 <span class="muted">2xx / 시도</span></h2>
-      <p class="meta-line">분모는 전송 시도 수. 무응답(타임아웃·커넥션 실패)은 실패로 센다 — 빼면 분모가 조용히 줄어 도달률이 오른다. 반영률 되읽기: <code>cli/verify ga4</code></p>
+      <p class="meta-line">분모는 전송 시도 수. 무응답(타임아웃·커넥션 실패)은 실패로 센다 — 빼면 분모가 조용히 줄어 도달률이 오른다. 반영률은 이 표가 아니라 <a href="#reflected">매체를 되읽은 기록</a>에 있다 — <code>cli/verify ga4</code></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="도달률 표 — 가로로 스크롤">
         <table class="data data--tight">
           <thead>
@@ -367,7 +486,7 @@ $thin_badge = function ($d) use ($small_sample)
     </section>
   </div>
 
-  <!-- ── 시트 4 · ③ 계속 ──────────────────────────── -->
+  <!-- ── 시트 6 · ③ 계속 ──────────────────────────── -->
   <?php $segments = array('parse' => 'parse_ms', 'db' => 'db_ms', 'send' => 'send_ms', 'total' => 'total_ms'); ?>
   <div class="sheet layout-metrics-4">
     <section class="panel latency" aria-labelledby="latency">

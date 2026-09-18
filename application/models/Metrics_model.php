@@ -281,6 +281,73 @@ class Metrics_model extends CI_Model
 	}
 
 	/**
+	 * 광고가 만든 것 — 매체별 전환 귀속.
+	 *
+	 * 이 시스템이 존재하는 이유가 이 질문이다: **어느 광고가 결제를 만들었나.**
+	 * 파이프라인이 건강하다는 숫자(적재·도달·재시도)는 그 답이 아니다.
+	 *
+	 * 한 전환을 **최초 유입(first)에도, 마지막 유입(last)에도** 붙여서 두 번 센다.
+	 * 정산에서 다투는 자리가 정확히 여기라서 한 기준을 고르지 않는다 —
+	 * 표를 합치는 쪽은 App\Metrics\AdAttribution (순수 계산 · 테스트 있음).
+	 *
+	 * 분모를 위해 전환 전체와 방문·광고 접점이 붙은 전환 수를 따로 낸다.
+	 * **비율만 내면 "광고가 다 만들었다" 로 읽힌다** — 대량 적재된 전환에는
+	 * 방문이 아예 없다(쿠키 없이 서버에서 만든 것).
+	 *
+	 * 금액은 conversions.value_minor 를 그대로 더한다. KRW 의 minor unit 은 원이다
+	 * (9,900원 = 9900) → App\Attribution\ConversionInput.
+	 *
+	 * 식별자·회원 정보는 내리지 않는다. 이 화면은 인증이 없다.
+	 *
+	 * @return array{total: int, with_visit: int, with_ad: int, rows: array<int, array>}
+	 */
+	public function adAttribution($db)
+	{
+		$totals = $db->query(
+			'SELECT COUNT(*)                                            AS total,
+			        SUM(CASE WHEN c.visit_id IS NOT NULL THEN 1 ELSE 0 END) AS with_visit
+			   FROM conversions c'
+		)->row_array();
+
+		$withAd = $db->query(
+			'SELECT COUNT(DISTINCT c.id) AS n
+			   FROM conversions c
+			   JOIN touchpoints t ON t.visit_id = c.visit_id
+			  WHERE t.pid        IS NOT NULL
+			     OR t.utm_source IS NOT NULL
+			     OR t.gclid      IS NOT NULL
+			     OR t.fbclid     IS NOT NULL'
+		)->row_array();
+
+		/*
+		 * position 으로 묶으므로 한 방문에 first·last 가 다 있어도 각 묶음 안에서는
+		 * 전환이 한 번씩만 센다. 묶음을 가로질러 더하지 않는 것은 뷰가 아니라
+		 * AdAttribution 이 책임진다(금액은 last 에서만).
+		 */
+		$rows = $db->query(
+			'SELECT t.position,
+			        t.utm_source                    AS source,
+			        c.currency,
+			        COUNT(DISTINCT c.id)            AS conversions,
+			        SUM(COALESCE(c.value_minor, 0)) AS value_minor
+			   FROM conversions c
+			   JOIN touchpoints t ON t.visit_id = c.visit_id
+			  WHERE t.pid        IS NOT NULL
+			     OR t.utm_source IS NOT NULL
+			     OR t.gclid      IS NOT NULL
+			     OR t.fbclid     IS NOT NULL
+			  GROUP BY t.position, t.utm_source, c.currency'
+		)->result_array();
+
+		return array(
+			'total'      => (int) ($totals['total'] ?? 0),
+			'with_visit' => (int) ($totals['with_visit'] ?? 0),
+			'with_ad'    => (int) ($withAd['n'] ?? 0),
+			'rows'       => $rows,
+		);
+	}
+
+	/**
 	 * 방문과 접점.
 	 *
 	 * **"접점이 있는 방문 ÷ 전체 방문" 은 지표가 아니다.** 직접 유입도
