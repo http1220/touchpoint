@@ -52,6 +52,8 @@
 | B6 | 페이팔의 **postback 검증 API는 이벤트 JSON을 다시 인코딩해 보내야** 한다. 저장소 규칙 ①("원본 바이트로 서명")과 충돌한다 → **자체 검증(원본 바이트 crc32 + 인증서)**을 택한다 | [확인-코드] [`WebhookSignature.php:20`](../src/Payment/WebhookSignature.php) |
 | B7 | `payments.pg`가 `'stub'`으로 **하드코딩**돼 있다. PG 거래 ID(tid·order·capture)를 담을 칸이 없다. 페이팔 환불 웹훅은 우리 uid가 아니라 capture ID를 가리킬 수 있다 | [확인-코드] [`Payment_model.php:101`](../application/models/Payment_model.php) · [추정] |
 | B8 | **재전송할 때 서명을 새로 만드는가** — [plan-payment-webhook.md](plan-payment-webhook.md) 11장에 "모른다"로 남은 항목이다. 재전송이 처음 시각을 그대로 쓰면 300초 창이 **재전송을 전부 거절**한다. 페이팔은 최대 3일 동안 25회 재전송한다 | [확인-문서] 재전송 정책 · 서명 갱신 여부는 실측 |
+| B9 | **이니시스는 구매자 이름·휴대폰·이메일이 필수다**(`buyername*` `buyertel*` `buyeremail*`). 가입이 없어 받을 곳이 없다. 승인 결과로도 되돌아온다(`buyerName` `buyerTel` `buyerEmail`) → C5 허용 목록에서 뺀다 | [확인-원문] 0단계 ([worklog 09-19](worklog.md)) |
+| B10 | **PC 웹표준과 모바일은 다른 규격이다**(`P_` 파라미터, SHA512 금액 해시, 망취소 "인증TID 기준 10분, 승인TID 기준 1분"). 이번 범위는 PC뿐이라 **모바일 브라우저에서는 결제할 수 없다** | [확인-원문] 0단계 |
 
 ### C. 보안·프라이버시
 
@@ -64,6 +66,7 @@
 | C5 | **`raw_payload`에 PG 응답 원문**을 넣으면 카드 정보(부분 마스킹)와 페이팔 결제자 개인정보가 **5년 동안 보존**된다(PCI·개인정보 범위) | [추정] 필드 목록은 0단계에서 확인 |
 | C6 | 페이팔 판매자 보호는 **디지털 재화를 제외**한다. 코인을 쓴 뒤 분쟁을 걸면 손실은 우리가 진다. 지금 상태 머신에는 `disputed`·`reversed`가 없다 | [확인-검색] 공식 원문은 가져오지 못함 |
 | C7 | 페이팔 이용 정책(AUP)의 성인 콘텐츠 제한 — 성인 콘텐츠를 파는 서비스라면 **계정 제한·자금 동결** 위험이 있다 | [미확인] AUP 원문 가져오기 실패 |
+| C8 | **개인정보 처리방침이 "실제 회원가입과 결제(청구)는 없습니다"** 라고 적고 있다. 테스트 MID 는 실승인이다. 방침 스스로 "실제 가입·결제 기능이 생기면 이 표를 먼저 고칩니다" 라고 약속했으므로 **실카드 결제 전에 방침부터** 고친다 | [확인-코드] `application/views/privacy/index.php:54·109` |
 
 ### D. 운영·정산
 
@@ -124,6 +127,7 @@
 - [architecture.md](architecture.md) 201행의 "`payments` 는 마이그레이션뿐이다"(이미 낡음)
 - [plan-payment-webhook.md](plan-payment-webhook.md) 0장("범위에서 뺀 것: GatewayInterface")과 11장의 "재전송 서명" 미확인 항목 → 실측 결과로 닫는다
 - [decisions/README.md](decisions/README.md) 표 · README "아직 없는 것" · [api-spec.md](api-spec.md)(새 엔드포인트)
+- **개인정보 처리방침** `application/views/privacy/index.php` — "결제(청구)는 없습니다" · 위탁 표에 PG 추가(C8). **실카드 결제보다 먼저**
 
 ---
 
@@ -149,15 +153,17 @@
 ## 4. 검증
 
 1. **단위 테스트**(도커 `php:8.2-cli` 안에서 `vendor/bin/phpunit`, CI도 동일)
-   - 이니시스 서명: 매뉴얼의 **공개 대조 벡터**를 그대로 고정값으로 쓴다 [확인-계산 09-19]
-     - `sha256("oid=INIpayTest_1361252896871&price=1004&timestamp=1361252896871")` = `422a0e78529b419d9412d6e344c6e138584d9174c691da6cd91d4330240b9192`
-     - 테스트 MID signKey의 sha256(`mKey`) = `3a9503069192f207491d4b19bd743fc249a761ed94246c8c42fed06c3cd15a33`
+   - 이니시스 대조 벡터 셋을 고정값으로 쓴다. **출처가 서로 다르다** — [worklog 09-19](worklog.md) 막힌 것 1
+     - signature: `sha256("oid=INIpayTest_1361252896871&price=1004&timestamp=1361252896871")` = `422a0e78529b419d9412d6e344c6e138584d9174c691da6cd91d4330240b9192` — **이니시스 공개 해시 도구의 출력**. 매뉴얼 원문의 예시 해시(`ec1e9c63…`)는 이 평문과 맞지 않는다(문서 오류)
+     - `mKey` = sha256(테스트 MID signKey) = `3a9503069192f207491d4b19bd743fc249a761ed94246c8c42fed06c3cd15a33` — **매뉴얼 원문과 일치**
+     - INIAPI 환불 `hashData`(SHA512, 매뉴얼의 카드취소 예시) = `b2dc4d43…5f92d6d69` — **매뉴얼 원문과 일치**
+   - 서명 평문의 필드 이름 대소문자(`signKey`)는 로그인 뒤 샘플에만 있다 → 단위 테스트가 아니라 **스테이징이 판정**한다
    - `idc_name=fc` + `authUrl=https://evil.example` → 거절되고 **HTTP 호출 0회**(가짜 `HttpClient`로 확인)
    - 승인 성공 + `applyEvent` 실패(`db-error`) → `netCancelUrl`로 망취소 1회 / 승인 타임아웃 → 망취소
    - 페이팔 웹훅: 샌드박스에서 실제로 받은 원본 바이트와 헤더를 고정값으로 → 통과, 1바이트 변조 → 거절, 인증서 URL 호스트 위조 → 거절
    - `PgAmount`: HUF는 페이팔 0자리, ISO 2자리 — **둘이 다르다는 것을 테스트로 못박는다**
    - `PayloadRedactor`: 카드번호·결제자 이메일 필드가 남지 않음
-2. **운영 관통**: 이니시스 1건 → `payments.captured` · `coin_lots` 1 · `conversions` 1 · 아웃박스 → GA4. 환불 → `refunded` · 코인 회수 · GA4 `refund`. `cli/verify payments` 불일치 0
+2. **운영 관통**: ~~이니시스 1건 → `payments.captured` · `coin_lots` 1 · `conversions` 1 · 아웃박스 → GA4. 환불 → `refunded` · 코인 회수 · GA4 `refund`~~ → **실카드 검증을 하지 않기로 했다(6장).** 이니시스는 무과금 확인 둘(결제창 열기 · 없는 tid 환불)만 하고, 승인 뒤 경로는 단위 테스트(가짜 `HttpClient`)로만 확인한다. 페이팔은 샌드박스로 관통한다. `cli/verify payments` 불일치 0
 3. **페이팔 자연 중복**: capture(동기) 뒤 `COMPLETED` 웹훅 → `payment_events`의 전이(`from<>to`) 1행 + 무시(`from=to`) ≥1행, `coin_lots` 1행
 4. **재전송 서명**: 첫 배달에 503을 주는 스위치(대조군 관례) → 재배달의 `transmission-time`이 새 값인지 기록 → plan-payment-webhook.md 11장을 닫는다
 5. **복귀 경로**: 이니시스 복귀 뒤 `visits`의 `MAX(id)`가 늘지 않는다(C3), CSRF 403 없음(C2)
@@ -173,9 +179,10 @@
 | 페이팔 지원 통화 24종(KRW 없음), 소수 0자리 HUF·JPY·TWD | [PayPal Currency Codes](https://developer.paypal.com/reference/currency-codes/) | 확인 |
 | 페이팔 웹훅 서명(헤더 4종, `transmissionId\|timeStamp\|webhookId\|crc32`, SHA256withRSA), 재전송 3일간 25회 | [PayPal Webhooks](https://developer.paypal.com/api/rest/webhooks/rest/) | 확인. 순서 보장은 문서에 언급 없음 |
 | 이니시스 웹표준 STEP2~4, `authUrl`·`idc_name` 대조, 망취소 10분 | [KG이니시스 웹표준 연동가이드](https://manual.inicis.com/pay/stdpay_pc.html) | 확인 |
-| 이니시스 테스트모드 실출금 + 23:00~23:50 자동 취소 | [KG이니시스 모듈연동 FAQ](https://www.inicis.com/blog/archives/category/cs/cs_best/%EB%AA%A8%EB%93%88%EC%97%B0%EB%8F%99-faq/page/3) | 확인(검색 요약) — 0단계에서 원문 재확인 |
-| 이니시스 승인 API 호스트(`fcstdpay`·`ksstdpay`·`stdpay`·`drstdpay`) | 검색 요약 | [추정] 0단계에서 매뉴얼로 확정 |
-| 테스트 MID `INIpayTest` 와 signKey | [pg-inicis 샘플](https://github.com/visualplus/pg-inicis/blob/master/config/inicis.php) | 대조 벡터 2개를 로컬에서 재계산해 일치 |
+| 이니시스 테스트모드 실출금 + 자동 취소 | 원문 "결제테스트 시 지불수단별로 거래가 실승인 됩니다" · "당일 자정 이전에 자동취소 됩니다. (매입전송X)" — [std-info (2022-07 아카이브)](http://web.archive.org/web/20220702225403/https://manual.inicis.com/stdpay/std-info.php) · FAQ 는 23:00~23:50 | **확인-원문** (0단계) |
+| 이니시스 승인 호스트 | 스테이징 `stgstdpay` · 운영 `fcstdpay`·`ksstdpay` · `idc_name` [fc, ks, stg] — [PC 일반결제](https://manual.inicis.com/pay/stdpay_pc.html) | **확인-원문** (0단계) |
+| 테스트 MID `INIpayTest` 와 signKey · INIAPI 키 | 이니시스가 예전에 공개한 원문 — [std-info (2022-07)](http://web.archive.org/web/20220702225403/https://manual.inicis.com/stdpay/std-info.php) · [iniapi/api-info (2021-06)](http://web.archive.org/web/20210619023141/https://manual.inicis.com/iniapi/api-info.php). 현행 매뉴얼에서는 **가맹점 로그인 뒤**라 받지 않았다 | 확인-원문. **지금도 유효한지는 스테이징에서** |
+| 이니시스 환불(INIAPI) | [취소/환불](https://manual.inicis.com/pay/cancel.html) — `/api/v1/refund`, SHA512 `hashData`, 성공 "00" | **확인-원문** (0단계) |
 | 페이팔 판매자 보호에서 디지털 재화 제외 | [Chargeflow 요약](https://www.chargeflow.io/blog/what-is-paypal-seller-protection) · [공식 페이지](https://www.paypal.com/us/legalhub/paypal/seller-protection) | 공식 원문은 가져오지 못함(잘림) |
 | 페이팔 AUP 성인 콘텐츠 | [공식 페이지](https://www.paypal.com/us/legalhub/paypal/acceptableuse-full) | **미확인**(잘림) |
 | 페이팔 한국 가맹점 요율: 해외 4.40% + $0.30, 환전 3%, 차지백 $10, 분쟁 $8, **환불해도 원래 수수료는 반환되지 않음** | [PayPal KR 가맹점 수수료](https://www.paypal.com/kr/webapps/mpp/merchant-fees) | 확인 |
@@ -204,9 +211,18 @@
 | C5 | **허용 목록 + 원문 sha256** | 카드번호·결제자 개인정보가 보존 범위에 들어오지 않는다. **허용 목록 밖 필드는 나중에 분쟁이 생겨도 복원할 수 없다** |
 | C6 | **기록만, 판단은 사람** | 분쟁·역전 이벤트를 `from=to` 로 남기고 error 로그. 상태와 코인은 바꾸지 않는다([RefundPolicy](../src/Payment/RefundPolicy.php) ② 와 같은 판단). **손실을 받아들인다** |
 | C7 | 해당 없음 | 이 프로젝트에는 성인 콘텐츠가 없다. AUP 원문은 확인하지 못했다 |
-| D1·D3 | **오래된 결제 보고 + 당일 환불** | `cli/verify payments` 가 오래된 `created`·`pending` 을 보고한다. 테스트 결제는 그날 `cli/pg refund`. INIAPI 환불 키를 얻지 못하면 → PG 자동 취소 뒤 `refunded` 를 수동 기록(source=admin). PG 조회 API·정산 파일 대사는 하지 않는다 |
+| D1·D3 | **오래된 결제 보고 + 당일 환불** | `cli/verify payments` 가 오래된 `created`·`pending` 을 보고한다. 테스트 결제는 그날 `cli/pg refund`. ~~INIAPI 환불 키를 얻지 못하면 → 수동 기록~~ → **0단계에서 테스트 MID 의 INIAPI 키를 공개 원문으로 확인해 INIAPI 환불로 간다**(키가 무효면 그때 수동 기록으로 후퇴). PG 조회 API·정산 파일 대사는 하지 않는다 |
 | D2 | **표시 없이 보냄** (검토한 추천과 다름) | 테스트 결제도 운영 GA4 에 실거래와 구분 없이 간다 — 스텁 결제도 지금 그렇다. 당일 환불로 **순매출은 맞지만, GA4 에서 테스트와 실거래를 가려낼 수 없다.** `/metrics` 와 반영률 표본에도 섞인다 |
 | D4 | **카드만** | 수단별 분기는 `GatewayResult` 에 결제 수단 칸만 둔다 |
 | D5 | 대응 | `check-env.sh` 에서 PG 모드 일치 검사 |
 | D6 | 설정 | GA4 "원치 않는 추천"에 PG 도메인 추가(사람 작업) |
 | 통합 어드민 | **CLI 만** | `cli/pg list·refund`. 인증 없는 환불 버튼은 누구나 누를 수 있는 버튼이 된다. 보여 줄 화면은 없다 |
+
+### 0단계(이니시스) 뒤에 추가로 정한 것 — 2026-09-19
+
+| 리스크 | 결정 | 하는 것 / 감수하는 것 |
+|---|---|---|
+| 실카드 검증 | **하지 않는다** (검토한 추천과 다름) | 대신 **돈이 빠지지 않는 확인 둘**: ① 스테이징 결제창을 열고 카드 입력 전에 닫는다 — 서명·`mKey`·`signKey` 대소문자를 결제창이 받아 주는가 [추정: 결제창이 이 시점에 검사한다] ② INIAPI 에 **없는 tid** 로 환불 1회 — "해시 오류"와 "거래 없음"을 갈라 공개 키가 아직 유효한지 본다. **승인·망취소·환불 성공 경로는 운영에서 확인되지 않은 채 남는다** — README 에 "운영 미확인"으로 적는다 |
+| B9 구매자 정보 | **시연용 고정값** | 서버 `.env` 의 이름·번호·이메일만 보낸다. 실제 개인정보는 서버를 지나지 않고 DB 에도 남지 않는다. 이메일은 우리가 받을 수 있는 주소로 둔다 |
+| B10 모바일 | **PC 결제창으로 시도** (검토한 추천과 다름) | 모바일 규격을 구현하지 않고 안내도 하지 않는다. 모바일에서는 동작하지 않거나 이상하게 동작할 수 있고, **그 실패를 사용자가 먼저 발견한다** |
+| C8 방침 | 대응 — **실PG 경로를 배포하기 전에** | 실카드 검증을 안 해도 토큰을 가진 사람은 실승인을 일으킬 수 있다 |

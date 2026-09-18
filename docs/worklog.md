@@ -21,6 +21,102 @@
 
 ---
 
+## 2026-09-19 (토) · D-2 — 멀티 PG 0단계(이니시스): 원문을 받아 읽자 "확인"이 확인이 아니었다
+
+### 막힌 것
+
+**1. "매뉴얼 대조 벡터 [확인-계산]" 이라고 적은 값을 매뉴얼과 대조한 적이 없었다**
+
+**증상** 공식 매뉴얼(2022-07-02 아카이브)의 signature 예시:
+
+```
+PlainText: oid=INIpayTest_1361252896871&price=1004&timestamp=1361252896871
+Hash 데이터: ec1e9c63ddad0b81f316ada2e3861e81db5f4f6652d9ff0f255b4cb5499ce893
+```
+
+[plan-multi-pg.md](plan-multi-pg.md) 4장에 "매뉴얼의 공개 대조 벡터" 로 적은 값은 `422a0e78…b9192` 였다.
+**원인** [확인] `422a0e78` 은 검색 요약에서 온 값이었다. 내가 한 "재계산" 은 같은 평문을 다시 해시한 것이라 **순환 확인**이었다 — 매뉴얼 원문은 그때 보지 않았다.
+그런데 매뉴얼 값 쪽도 재현되지 않았다. 변형 7개(`&amp;` · 끝 `&` · `signKey`/`signkey` 포함 · `mid` 포함 · 개행)를 돌려도 `ec1e9c…` 는 안 나온다. 이니시스 공개 해시 도구(`/pay/demo/hash-sha256.php`)에 같은 평문을 **한 번** 넣으니 `422a0e78…` 을 돌려줬다.
+[확인] **매뉴얼의 예시 해시가 매뉴얼의 예시 평문과 맞지 않는다.** 우리 벡터는 맞지만 근거는 "매뉴얼" 이 아니라 "이니시스 해시 도구" 다.
+**대응** 계획 문서의 근거를 고쳤다. 나머지 두 벡터는 원문과 **직접** 대조했다 — `mKey`(SHA256, `3a9503…`)와 INIAPI 환불 `hashData`(SHA512, `b2dc4d43…`) 둘 다 원문 값과 일치.
+**배운 것** 같은 입력을 두 번 해시한 것은 확인이 아니다. 대조 대상은 **독립된 출처**여야 한다. 그리고 공식 예시도 틀릴 수 있다 — 최종 판정은 스테이징이 우리 서명을 받아 주는가다.
+
+**2. 공식 샘플은 가맹점 로그인 뒤에 있다**
+
+**증상** 매뉴얼의 `Download` 는 `download_popup('general_pc.zip')` → `/download/download.php?filename=general_pc.zip`. 받으면 zip 이 아니라 로그인 폼이다.
+
+```
+<title>KG INICIS LOGIN</title>
+<input type="text" name="mid_id" id="mid_id" placeholder="MID">
+<input type="password" name="mid_pw" id="mid_pw" placeholder="상점 비밀번호">
+```
+
+해시 도구 페이지도 "테스트계정 signkey 는 샘플다운로드 시 확인가능합니다" 라고 적는다 — 현행 매뉴얼에서 테스트 키의 공식 경로는 로그인 뒤다.
+**대응** 받지 않았다(비로그인 공개 자료만). 테스트 키는 **이니시스가 예전에 공개했던 매뉴얼 원문**을 웹 아카이브에서 확인했다 — [std-info.php (2022-07-02)](http://web.archive.org/web/20220702225403/https://manual.inicis.com/stdpay/std-info.php) · [iniapi/api-info.php (2021-06-19)](http://web.archive.org/web/20210619023141/https://manual.inicis.com/iniapi/api-info.php).
+[미확인] 그 키가 지금도 유효한가 — 스테이징 첫 결제·첫 환불에서 판정한다. 서명 평문의 필드 이름 대소문자(`signKey`)도 샘플에만 있어 같은 자리에서 판정한다.
+
+**3. 요약 도구가 PC 와 모바일 규격을 섞었다**
+
+**증상** 앞서 받은 요약: "Network cancellation can be requested within 10 minutes based on the authentication TID or 1 minute based on the approval TID".
+**원인** [확인] 원문을 받아 보니 그 문장은 **모바일** 절이다. PC 는 "인증결과 응답 후 10분 이내" 하나뿐이다.
+**대응** 매뉴얼을 `curl` 로 받아 태그를 걷어 내고 읽었다. 이후 인용은 전부 그 텍스트에서 옮긴다.
+
+### 한 일
+
+- 멀티 PG 계획 공개본, 리스크별 결정(6장), 세금 인터페이스와 통과 구현 (`349e597`, `731baff`)
+- 안내 화면: 화면이 없는 걸음에 코드 링크 (`0e5b80b`)
+- 0단계(이니시스): 현행 매뉴얼 3쪽(PC 일반결제 · 취소/환불 · 모바일)과 아카이브 2쪽을 원문으로 받아 읽었다. 요청은 매뉴얼 페이지 5 · 해시 도구 1 · 아카이브 조회 몇 번
+
+### 원문으로 확인한 규격
+
+| 항목 | 원문 (축자) | 출처 |
+|---|---|---|
+| 승인 호스트 | 스테이징 `stgstdpay.inicis.com` · 운영 `fcstdpay.inicis.com` `ksstdpay.inicis.com` | [PC 일반결제](https://manual.inicis.com/pay/stdpay_pc.html) 방화벽정보 |
+| `idc_name` | "IDC센터코드 [fc, ks, stg] 승인요청 시 authUrl 과 비교검증 필요" | 같은 쪽 STEP2 |
+| `authUrl` | "이니시스 제공 승인API 가 맞는지 확인 필요 (IDC센터코드와 비교 검증 필요)" | 같은 쪽 STEP2·3 |
+| 센터코드 수신 | `acceptmethod` 에 "centerCd(Y)" IDC센터코드 수신 사용옵션 세팅 필수 — **없으면 `idc_name` 이 안 온다** | 같은 쪽 STEP1 |
+| JS | 운영 `https://stdpay.inicis.com/stdjs/INIStdPay.js` · 테스트는 "상용JS (테스트JS 에서 stg 제거)" | 같은 쪽 · std-info(2022) |
+| signature | "NVP 방식으로 연결한 데이터를 SHA256으로 Hash" · "필드 순서 유지(알파벳순), 마지막 &는 생략, 공백생략" | std-info(2022) |
+| 승인 timestamp | "인증요청 시 timestamp값과 상이" | std-info(2022) |
+| 망취소(PC) | "인증결과 응답 후 10분 이내" · "망취소를 일반 결제취소 용도로 사용하지 마십시오." · `netCancelUrl` "승인요청 후 승인결과 수신 실패 / DB저장 실패 시" | PC 일반결제 |
+| 테스트 MID | "결제테스트 시 지불수단별로 거래가 실승인 됩니다." · "당일 자정 이전에 자동취소 됩니다. (매입전송X)" · "부분취소 테스트는 권장하지 않음" | std-info(2022) · api-info(2021) |
+| 스테이징 | "테스트MID 만 사용가능" | 같은 두 쪽 |
+| 환불 | `POST https://iniapi.inicis.com/api/v1/refund`(스테이징 `stginiapi.inicis.com`) · form · `type` "Refund" 고정 · `timestamp` [YYYYMMDDhhmmss] · `hashData` "SHA512 … 대상 : INIAPIKey + type + paymethod + timestamp + clientIp + mid + tid" · 성공 `resultCode` **"00"** (승인은 "0000") | [취소/환불](https://manual.inicis.com/pay/cancel.html) |
+| 통화 | "WON":한화,"USD":달러 · "USD는 카드 결제만 가능" · `price` "1달러는 100으로 시작" | PC 일반결제 STEP1 |
+| returnUrl | "결제요청페이지 도메인과 일치하도록 리턴 URL을 수정해 주세요." | 같은 쪽 |
+
+### 새로 나온 리스크
+
+1. **구매자 이름·휴대폰·이메일이 결제 요청 필수다**(`buyername*` `buyertel*` `buyeremail*`). 가입이 없어 받을 곳이 없다. 이니시스는 이 값을 승인 결과로 되돌려준다(`buyerName` `buyerTel` `buyerEmail`) → 원문 허용 목록(C5)에서 뺀다
+2. **이번 범위는 PC 웹표준뿐이다.** 모바일은 파라미터(`P_`)·금액 해시(SHA512)·망취소 창이 다른 별개 규격이라, 모바일 브라우저에서는 결제할 수 없다
+3. **개인정보 처리방침**이 "실제 회원가입과 결제(청구)는 없습니다" 라고 적고 있다. 테스트 MID 는 실승인이다. 방침 스스로 "실제 가입·결제 기능이 생기면 이 표를 먼저 고칩니다" 라고 약속했으므로 **실카드 결제 전에 방침부터** 고친다
+4. 이니시스도 USD 카드 결제를 받는다. A 장애의 폴백 후보가 될 수 있지만(해외카드 계약 조건은 미확인) 이번 결정은 바꾸지 않는다
+
+### 결정한 것
+
+| 결정 | 근거 |
+|---|---|
+| 테스트 모드는 스테이징 호스트(`stgstdpay` · `stginiapi`)만 쓴다 | 원문 "테스트MID 만 사용가능". 운영 호스트에서 테스트 MID 가 되는지는 확인하지 않았다 |
+| `authUrl`·`netCancelUrl` 허용 목록 = `idc_name` 1:1 (`fc`→`fcstdpay` · `ks`→`ksstdpay` · `stg`→`stgstdpay`), https, 호스트 완전 일치 | 원문 방화벽 표와 STEP2 |
+| 대조 벡터 셋 — signature(이니시스 해시 도구) · `mKey`(원문) · INIAPI `hashData`(원문) | 막힌 것 1 |
+| D1 의 조건부는 **당일 INIAPI 환불**로 푼다 | 테스트 MID 의 INIAPI 키가 공개 원문에 있다. 유효성은 첫 환불에서 |
+| 공개 테스트 키 값은 문서에 옮기지 않고 링크만 건다 | 문서는 설명이고, 값이 필요한 곳은 테스트 고정값과 서버 `.env` 다 |
+| **실카드 검증을 하지 않는다** (사용자 결정, 추천과 다름) | 대신 무과금 확인 둘 — 스테이징 결제창을 열고 닫기, 없는 tid 로 INIAPI 환불 1회. 승인 뒤 경로는 운영 미확인으로 남는다 |
+| 구매자 정보(B9)는 시연용 고정값 (`.env`) | 실제 개인정보가 서버를 지나지 않는다 |
+| **모바일도 PC 결제창으로 시도한다** (사용자 결정, 추천과 다름) | 모바일 규격도 안내도 없다. 실패를 사용자가 먼저 발견하는 것을 받아들였다 |
+| 개인정보 처리방침은 실PG 경로 배포 **전에** 고친다 | 실카드 검증을 안 해도 토큰이 있으면 실승인이 가능하다 |
+
+→ [plan-multi-pg.md](plan-multi-pg.md) 6장 「0단계 뒤에 추가로 정한 것」
+
+### 다음
+
+- [ ] 개인정보 처리방침(C8)
+- [ ] 1단계: 게이트웨이 인터페이스 + `InicisGateway` + 대조 벡터 셋 테스트
+- [ ] 무과금 확인 둘 (결제창 열기 · 없는 tid 환불)
+- [ ] 페이팔 0단계
+
+---
+
 ## 2026-09-18 (금) · D-3 — 화면 재설계, 그리고 확인 요청이 남긴 운영 데이터
 
 ### 막힌 것
