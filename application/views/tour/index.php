@@ -29,19 +29,23 @@ $go = tp_host_url('lp', '/go?work=1&pid=tour&utm_source=tour&utm_medium=internal
  * 목적이므로 도착을 확인해야 이야기가 닫힌다 (2026-09-18).
  */
 $flow = array(
-	array('lane' => '브라우저', 'name' => '광고 클릭', 'href' => $go,
+	array('lane' => '브라우저', 'name' => '광고 클릭', 'href' => $go, 'code' => NULL,
 	      'sub'  => '유입 파라미터를 달고 <code>/go</code> 로. 눌러 보세요'),
 	array('lane' => '서버', 'name' => '브리지', 'href' => NULL,
+	      'code' => 'application/controllers/Bridge.php',
 	      'sub'  => '광고 링크가 <strong>먼저 들르는 서버</strong>. 유입을 적고 <code>302</code> 로 랜딩에 넘긴다 — 바로 들여보내면 기록할 기회가 없다'),
-	array('lane' => '브라우저', 'name' => '작품 랜딩', 'href' => tp_host_url('lp', '/l/1'),
+	array('lane' => '브라우저', 'name' => '작품 랜딩', 'href' => tp_host_url('lp', '/l/1'), 'code' => NULL,
 	      'sub'  => '무엇이 기록됐는지 화면이 보여 준다. <code>track.js</code> 가 노출·클릭을 모은다'),
-	array('lane' => '브라우저', 'name' => '결제', 'href' => NULL,
-	      'sub'  => '<code>/purchase</code> — 금액의 진실은 서버 상품표에 있다. 브라우저가 부른 값을 믿지 않는다'),
-	array('lane' => '서버', 'name' => 'PG 웹훅', 'href' => NULL,
-	      'sub'  => '결제 확정은 <strong>웹훅으로</strong> 온다. 같은 알림이 두 번 와도 한 번만 센다'),
+	array('lane' => 'API', 'name' => '결제', 'href' => NULL,
+	      'code' => 'application/controllers/Purchase.php',
+	      'sub'  => '<code>POST /purchase</code> — 금액의 진실은 서버 상품표에 있다. 브라우저가 부른 값을 믿지 않는다'),
+	array('lane' => 'API', 'name' => 'PG 웹훅', 'href' => NULL,
+	      'code' => 'application/controllers/Webhook.php',
+	      'sub'  => '<code>POST /webhooks/pg</code> — 결제 확정은 <strong>웹훅으로</strong> 온다. 같은 알림이 두 번 와도 한 번만 센다'),
 	array('lane' => '서버', 'name' => '전환 기록 · 발송 적재', 'href' => NULL,
+	      'code' => 'application/models/Conversion_model.php',
 	      'sub'  => '결제 같은 <strong>값어치 있는 사건</strong>(전환)과 매체로 보낼 것을 <strong>같은 트랜잭션</strong>에 적는다. 어느 광고에서 왔는지가 여기서 붙는다'),
-	array('lane' => '매체', 'name' => '워커 → GA4·Meta', 'href' => tp_host_url('app', '/metrics'),
+	array('lane' => '매체', 'name' => '워커 → GA4·Meta', 'href' => tp_host_url('app', '/metrics'), 'code' => NULL,
 	      'sub'  => '보낸 뒤 <strong>매체를 되읽어</strong> 보고서에 남았는지 맞댄다 — 543/543, +40h'),
 );
 ?><!doctype html>
@@ -76,18 +80,26 @@ $flow = array(
                 <span class="flow__sub"><?= $s['sub'] ?></span>
               </a>
             <?php else: ?>
+              <?php /* 화면이 없는 걸음은 "안 만든 것" 으로 읽힌다. 그 걸음이 도는 코드로 링크를 건다 —
+                       누를 것이 없다는 말과 만들지 않았다는 말은 다르다 (2026-09-18) */ ?>
               <div class="flow__box">
                 <span class="flow__lane"><?= html_escape($s['lane']) ?></span>
                 <span class="flow__name"><?= html_escape($s['name']) ?></span>
                 <span class="flow__sub"><?= $s['sub'] ?></span>
+                <?php if ($s['code'] !== NULL): ?>
+                  <a class="flow__code" href="<?= $repo.html_escape($s['code']) ?>">코드<span aria-hidden="true">↗</span></a>
+                <?php endif; ?>
               </div>
             <?php endif; ?>
           </li>
         <?php endforeach; ?>
       </ol>
 
-      <p class="meta-line"><strong>밑줄 친 세 칸만 화면이 있습니다.</strong> 나머지 넷은 서버와 API 라 눌러 볼 것이 없고, 그 결과를 랜딩과 지표에서 봅니다.
-        결제도 화면이 아니라 <code>/purchase</code> 로 시연합니다 — 가짜 PG 로 웹훅까지 한 바퀴 돕니다.</p>
+      <p class="meta-line"><strong>일곱 걸음 모두 만들어져 돌아갑니다.</strong> 밑줄 친 셋은 화면이 있어 눌러 볼 수 있고,
+        나머지 넷은 <strong>서버와 API 라 눌러 볼 화면이 없을 뿐</strong>입니다 — 그 걸음이 도는 <strong>코드로 링크</strong>를 걸어 두었고,
+        실제로 돈 결과는 <a href="<?= html_escape(tp_host_url('app', '/metrics#convert')) ?>">지표의 전환 표</a>에 있습니다(결제 · 환불 · 가입).
+        결제는 <strong>가짜 PG</strong> 로 웹훅까지 한 바퀴 돕니다 — 실제 PG 는 붙이지 않았습니다.
+        <a href="<?= $repo ?>docs/decisions/ADR-008-stub-pg.md">ADR-008<span aria-hidden="true">↗</span></a></p>
     </section>
   </div>
 

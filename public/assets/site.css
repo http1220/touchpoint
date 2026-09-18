@@ -750,6 +750,17 @@ a.flow__box:hover .flow__name { text-decoration-thickness: var(--border-width-st
   color: var(--color-text-secondary);
 }
 .flow__sub code { font-size: 0.9em; }
+/* 화면이 없는 걸음의 "코드↗" — 눌러 볼 화면이 없다는 것과 만들지 않았다는 것은 다르다.
+   글자는 작지만 누르는 자리는 44px 이어야 한다 — 여백으로 키우고 왼쪽은 음수 여백으로 글줄에 맞춘다 */
+.flow__code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: var(--space-1) calc(-1 * var(--space-2)) calc(-1 * var(--space-3));
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
 
 /* 지표 — 읽는 순서 · 목차 */
 .summary h1 { font-size: var(--font-size-xl); }
