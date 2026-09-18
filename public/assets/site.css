@@ -475,6 +475,30 @@ a.panel:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width) - var(
 .cover-5 { background: var(--color-cover-5); }
 
 /* 작품 카드 — 표지 + 제목 + 배지. 오늘 칸은 large, 요일 줄은 small */
+/* 다음 업데이트 — 오늘 칸 아래. 작품이 하나뿐인 날 칸이 비지 않게, 이미 있는 요일 데이터로 채운다 */
+.next-up {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--caption-rule);
+}
+.next-up__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--note-font-size);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-text-secondary);
+}
+.next-up__list { margin: 0; padding: 0; list-style: none; }
+.next-up__list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+  font-size: var(--note-font-size);
+  line-height: var(--note-line-height);
+}
+.next-up__works { color: var(--color-text-secondary); }
+
 .works {
   display: flex;
   flex-wrap: wrap;
@@ -666,6 +690,9 @@ p.buttons { margin-bottom: var(--space-4); }
 .facts-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .panel ul { margin: 0 0 var(--space-4); padding-left: 1.3em; }
 .panel li { margin: var(--space-1) 0; }
+/* 스스로 여백을 정하는 목록은 위의 들여쓰기를 받지 않는다 — .panel ul 이 더 세서 덮고 있었다.
+   작품 카드가 제목보다 21px 안쪽에서 시작하던 원인 (2026-09-18) */
+.panel .works, .panel .next-up__list { margin: 0; padding-left: 0; }
 
 /* 흐름도 — 시연 안내. SVG 가 아니라 글자와 선으로 그린다.
    좁으면 세로(↓), 넓으면 가로(→)로 화살표가 바뀌고 글자는 줄어들지 않는다 */
@@ -886,11 +913,32 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   .layout-404 > .panel--route { grid-column: 8 / span 5; }
   .layout-404 .panel--title h1 { font-size: var(--font-size-2xl); }
 
-  /* 홈 시트 1 — 서비스만. 오늘(12열) + 회차 많은 작품(5열) · 최근 회차(7열) */
-  .layout-home-1 { grid-template-rows: auto auto auto minmax(min-content, 1fr); }
-  .layout-home-1 > .today  { grid-column: 1 / -1; }
-  .layout-home-1 > .rank   { grid-column: 1 / span 5; }
+  /* 홈 시트 1 — 서비스만. 오늘(5열)·최근 회차(7열) 이 한 줄, 순위가 아래 전폭 띠.
+     오늘을 12열로 두면 작품이 하나뿐인 날 카드 하나가 빈 띠에 매달렸고,
+     표를 12열로 늘리면 열 사이가 성겼다. 둘 다 재 보고 이 배치로 왔다 */
+  .layout-home-1 { grid-template-rows: auto auto minmax(min-content, 1fr) auto; }
+  .layout-home-1 > .today  { grid-column: 1 / span 5; }
   .layout-home-1 > .recent { grid-column: 6 / span 7; }
+  .layout-home-1 > .rank   { grid-column: 1 / -1; }
+  /* 순위는 목록이 아니라 다섯 칸 띠로 편다 — 번호는 counter 가 그린다 */
+  .layout-home-1 .rank-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    counter-reset: rank;
+  }
+  .layout-home-1 .rank-list li { margin: 0; counter-increment: rank; }
+  .layout-home-1 .rank-list li::before {
+    content: counter(rank);
+    display: block;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+  }
+  .layout-home-1 .rank__meta { display: block; margin-left: 0; }
 
   /* 시연 안내 — 흐름도는 가로로 편다. 화살표도 → 로 */
   .layout-tour { align-content: start; align-items: start; }

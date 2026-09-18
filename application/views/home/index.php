@@ -7,7 +7,7 @@ use App\Support\PublishDay;
  * 홈. 서버 렌더 · JS 없음 (ADR-009).
  *
  * 시트 두 장이다 — 넓은 가로 화면에서는 4:3 판, 세로 폰에서는 칸이 한 줄.
- *   1  서비스 머리 · 오늘 · 회차가 많은 작품 · 최근 올라온 회차
+ *   1  서비스 머리 · 오늘(+다음 업데이트) · 최근 올라온 회차 · 회차가 많은 작품
  *   2  연재 요일 7줄
  *
  * **이 화면은 서비스다.** 시연 설명(한 문장 · ①②③ · 스키마 해설)은 /tour 로 옮겼다 — 2026-09-18.
@@ -121,18 +121,29 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
           <?php foreach ($byDay[$today] as $w) { $card($w, 'large'); } ?>
         </ul>
       <?php endif; ?>
-    </section>
 
-    <section class="panel rank" aria-labelledby="top-title">
-      <h2 id="top-title">회차가 많은 작품</h2>
-      <ol class="rank-list">
-      <?php foreach ($top as $w): ?>
-        <li>
-          <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"<?= $title_lang ?>><?= html_escape($w['title']) ?></a>
-          <span class="rank__meta"><?= (int) $w['ep_count'] ?>화 · <?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
-        </li>
-      <?php endforeach; ?>
-      </ol>
+      <?php
+        // 다음 업데이트 — 오늘 다음 날부터 돌며 작품이 있는 날 셋. 데이터는 이미 $byDay 에 다 있다
+        $upcoming = array();
+        for ($i = 1; $i <= 6 && count($upcoming) < 3; $i++)
+        {
+            $d = (($today - 1 + $i) % 7) + 1;
+            if ($byDay[$d] !== array()) { $upcoming[$d] = $byDay[$d]; }
+        }
+      ?>
+      <?php if ($upcoming !== array()): ?>
+        <div class="next-up">
+          <h3 class="next-up__title">다음 업데이트</h3>
+          <ul class="next-up__list">
+            <?php foreach ($upcoming as $d => $ws): ?>
+              <li>
+                <span class="badge"><?= html_escape(PublishDay::LABELS[$d]) ?></span>
+                <span class="next-up__works"<?= $title_lang ?>><?= html_escape(implode(' · ', array_column($ws, 'title'))) ?></span>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+      <?php endif; ?>
     </section>
 
     <section class="panel recent" aria-labelledby="recent-title">
@@ -150,6 +161,19 @@ $card = function (array $w, $size) use ($AGE, $STATUS, $title_lang)
         <?php endforeach; ?>
         </tbody>
       </table>
+    </section>
+
+    <?php /* 순위는 최근 회차 뒤에 온다 — 넓은 화면에서 아래 띠로 깔리는 자리와 같은 순서 */ ?>
+    <section class="panel rank" aria-labelledby="top-title">
+      <h2 id="top-title">회차가 많은 작품</h2>
+      <ol class="rank-list">
+      <?php foreach ($top as $w): ?>
+        <li>
+          <a href="<?= html_escape(tp_host_url('lp', '/l/'.(int) $w['id'])) ?>"<?= $title_lang ?>><?= html_escape($w['title']) ?></a>
+          <span class="rank__meta"><?= (int) $w['ep_count'] ?>화 · <?= html_escape($STATUS[$w['status']] ?? $w['status']) ?></span>
+        </li>
+      <?php endforeach; ?>
+      </ol>
     </section>
   </div>
 
