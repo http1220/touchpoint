@@ -6,7 +6,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  *
  * 시트 두 장이다 — 넓은 가로 화면에서는 4:3 판, 세로 폰에서는 칸이 한 줄.
  *   1  서비스 — 작품 머리 · 이번 요청 · 다른 작품
- *   2  기록   — 최초 유입 · 마지막 유입 · 수집 이벤트 · 실험
+ *   2  기록   — 최초 접점 · 마지막 접점 · 수집 이벤트 · 실험
  *
  * 없는 번호에도 열린다. 방문·유입 기록은 작품과 무관하게 남는다 → Work_model::find
  *
@@ -94,16 +94,16 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
       <dl class="facts">
         <dt>방문</dt>
         <dd><span class="badge<?= $is_new ? ' badge--strong' : '' ?>"><?= $is_new ? '새 방문' : '기존 방문' ?></span></dd>
-        <dt>유입</dt>
+        <dt>이번 요청</dt>
         <dd>
           <?php if ( ! $result['is_direct']): ?>유입 파라미터 있음
           <?php elseif ($via_bridge): ?>브리지에서 넘어옴 — 이 요청엔 <code>vid</code> 만
           <?php else: ?>파라미터 없음 — 직접 유입
           <?php endif; ?>
         </dd>
-        <dt>최초 유입</dt>
+        <dt>최초 접점</dt>
         <dd><span class="badge<?= $result['first'] === 'created' ? ' badge--strong' : '' ?>"><code><?= html_escape($result['first']) ?></code></span></dd>
-        <dt>마지막 유입</dt>
+        <dt>마지막 접점</dt>
         <dd><span class="badge<?= $result['last'] === 'updated' ? ' badge--strong' : '' ?>"><code><?= html_escape($result['last']) ?></code></span></dd>
       </dl>
     </section>
@@ -145,12 +145,12 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
       </p>
       <p class="caption">
         <strong>확인할 것</strong> — 유입 파라미터를 붙여 <code>/go?work=<?= html_escape($work) ?>&amp;pid=google&amp;utm_source=google</code> 로 들어온 뒤
-        파라미터 없이 이 주소를 다시 열어 보세요. <strong>최초·마지막 유입이 그대로 남아야 합니다</strong> — 직접 유입이 광고 성과를 지우면 안 됩니다.
+        파라미터 없이 이 주소를 다시 열어 보세요. <strong>최초·마지막 접점이 그대로 남아야 합니다</strong> — 직접 유입이 광고 성과를 지우면 안 됩니다.
         <a href="<?= $repo ?>docs/failure-scenarios.md">failure-scenarios.md C-2<span aria-hidden="true">↗</span></a>
       </p>
     </section>
 
-    <?php foreach (array('first' => '최초 유입', 'last' => '마지막 유입') as $pos => $label): ?>
+    <?php foreach (array('first' => '최초 접점', 'last' => '마지막 접점') as $pos => $label): ?>
       <section class="panel touch touch--<?= $pos ?>" aria-labelledby="touch-<?= $pos ?>">
         <h3 id="touch-<?= $pos ?>"><?= html_escape($label) ?> <code class="touch__key"><?= $pos ?></code></h3>
         <?php if ($touchpoints[$pos] === NULL): ?>
@@ -173,7 +173,7 @@ $page_title = $work_row !== NULL ? $work_row['title'] : '작품 '.$work;
             </tbody>
           </table>
           <p class="empty">
-            <?php if ($filled === array()): ?>유입 파라미터가 하나도 없습니다 — 직접 유입.<?php endif; ?>
+            <?php if ($filled === array()): ?>유입 소스가 하나도 없습니다 — 직접 유입.<?php endif; ?>
             나머지 <?= count($fields) - count($filled) ?>개 필드는 비어 있습니다.
           </p>
         <?php endif; ?>

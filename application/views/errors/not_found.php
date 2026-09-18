@@ -27,7 +27,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
     <a class="panel panel--route" href="<?= html_escape(tp_host_url('lp', '/l/1')) ?>">
       <span class="step__num" aria-hidden="true">②</span>
       <span class="step__name">작품 랜딩</span>
-      <span class="step__desc">광고 유입이 최초·마지막 유입으로 남는 곳</span>
+      <span class="step__desc">광고 유입이 최초·마지막 접점으로 남는 곳</span>
     </a>
     <a class="panel panel--route" href="<?= html_escape(tp_host_url('app', '/metrics')) ?>">
       <span class="step__num" aria-hidden="true">③</span>

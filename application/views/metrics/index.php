@@ -193,14 +193,14 @@ $thin_badge = function ($d) use ($small_sample)
     <section class="panel visits" aria-labelledby="visits">
       <p class="eyebrow" id="inflow">① 유입</p>
       <h2 id="visits">방문과 접점</h2>
-      <p class="caption"><strong>"접점이 붙은 방문 ÷ 방문"은 보존율이 아니다</strong> — 직접 유입도 마지막 유입을 받아 처음부터 99%대로 뜬다(실측 529 / 530). 분모는 맨 아래 줄, 광고 유입 방문이다.
+      <p class="caption"><strong>"접점이 붙은 방문 ÷ 방문"은 보존율이 아니다</strong> — 직접 유입도 마지막 접점을 받아 처음부터 99%대로 뜬다(실측 529 / 530). 분모는 맨 아래 줄, 광고 유입 방문이다.
         <a href="<?= $repo ?>docs/benchmarks.md">benchmarks.md 5장<span aria-hidden="true">↗</span></a></p>
       <table class="data kv">
         <tbody>
           <tr><th scope="row">방문</th><td class="n"><b><?= html_escape(m_int($funnel['visits'])) ?></b></td><td class="muted">아래 비율의 분모</td></tr>
           <tr><th scope="row">접점이 붙은 방문</th><td class="n"><?= html_escape(m_int($funnel['with_tp'])) ?></td><td><?= m_rate($funnel['with_tp'], $funnel['visits']) ?></td></tr>
-          <tr><th scope="row">최초 유입이 있는 방문</th><td class="n"><?= html_escape(m_int($funnel['with_first'])) ?></td><td><?= m_rate($funnel['with_first'], $funnel['visits']) ?></td></tr>
-          <tr><th scope="row">마지막 유입이 있는 방문</th><td class="n"><?= html_escape(m_int($funnel['with_last'])) ?></td><td><?= m_rate($funnel['with_last'], $funnel['visits']) ?></td></tr>
+          <tr><th scope="row">최초 접점이 있는 방문</th><td class="n"><?= html_escape(m_int($funnel['with_first'])) ?></td><td><?= m_rate($funnel['with_first'], $funnel['visits']) ?></td></tr>
+          <tr><th scope="row">마지막 접점이 있는 방문</th><td class="n"><?= html_escape(m_int($funnel['with_last'])) ?></td><td><?= m_rate($funnel['with_last'], $funnel['visits']) ?></td></tr>
           <tr><th scope="row">광고 유입 방문</th><td class="n"><b><?= html_escape(m_int($funnel['with_ad'])) ?></b></td><td><?= m_rate($funnel['with_ad'], $funnel['visits']) ?><?= $thin_badge($funnel['with_ad']) ?></td></tr>
         </tbody>
       </table>
@@ -292,7 +292,7 @@ $thin_badge = function ($d) use ($small_sample)
             <strong>기준을 바꾸면 매체도, 합계도 달라진다</strong>(최초 <?= html_escape(m_int($ad_table['first_total'])) ?> · 마지막 <?= html_escape(m_int($ad_table['last_total'])) ?>).
             한쪽 접점만 있는 방문이 섞여 있다는 뜻이다 — 기준을 말하지 않은 전환 수는 뜻이 없다.
           <?php else: ?>
-            <strong>두 기준이 같은 값을 냈다.</strong> 지금 표본에서는 한 방문 안에서 최초와 마지막 유입이 같은 매체라는 뜻이고, 매체를 갈아타며 들어온 방문이 쌓이면 갈라진다.
+            <strong>두 기준이 같은 값을 냈다.</strong> 지금 표본에서는 한 방문 안에서 최초 접점과 마지막 접점이 같은 매체라는 뜻이고, 매체를 갈아타며 들어온 방문이 쌓이면 갈라진다.
           <?php endif; ?>
           금액은 <strong>last-touch 기준으로만 한 번</strong> 더한다 — 두 기준에 다 더하면 매출이 두 배가 된다.
           <strong>환불은 열을 갈랐다.</strong> 환불 전환의 <code>value_minor</code> 도 양수라(원 결제 금액 그대로) 같은 열에 넣으면 환불이 매출로 잡힌다.

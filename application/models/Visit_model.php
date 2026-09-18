@@ -114,7 +114,7 @@ class Visit_model extends CI_Model
 	/**
 	 * 판정 결과를 저장한다.
 	 *
-	 * first 는 INSERT IGNORE — 이미 있으면 그대로 둔다(최초 유입 보존).
+	 * first 는 INSERT IGNORE — 이미 있으면 그대로 둔다(최초 접점 보존).
 	 * last 는 UPSERT — 올 때마다 갱신한다.
 	 *
 	 * 두 규칙 모두 UNIQUE (visit_id, position) 이 있어야 성립한다.

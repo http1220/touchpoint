@@ -8,7 +8,7 @@ namespace App\Metrics;
  * 광고 유입 → 전환 귀속. 지표 화면의 "광고가 만든 것" 표를 만든다.
  *
  * **같은 전환이라도 어느 접점에 붙이느냐에 따라 매체가 달라진다.**
- * 최초 유입(first)으로 세면 처음 데려온 매체가, 마지막 유입(last)으로 세면
+ * 최초 접점(first)으로 세면 처음 데려온 매체가, 마지막 접점(last)으로 세면
  * 마지막으로 밀어 준 매체가 공을 가져간다. 광고비 정산에서 다투는 자리가
  * 정확히 여기라서, 이 화면은 **한 기준을 고르지 않고 둘을 나란히 놓는다.**
  *
@@ -58,7 +58,7 @@ final class AdAttribution
             $bySource[$source][$position] += (int) ($row['conversions'] ?? 0);
 
             /*
-             * 금액은 **마지막 유입 기준 한 번만** 더한다. 두 기준을 다 더하면
+             * 금액은 **last-touch 기준 한 번만** 더한다. 두 기준을 다 더하면
              * 같은 결제를 두 번 세어 합계가 실제 매출의 두 배가 된다.
              *
              * 그리고 **유형을 본다.** 환불 전환도 value_minor 가 양수라, 유형을 보지 않으면
@@ -88,7 +88,7 @@ final class AdAttribution
             $out[] = $entry;
         }
 
-        // 마지막 유입 기준 전환이 많은 순. 같으면 최초 기준, 그다음 이름으로 — 순서가 매번 흔들리지 않게.
+        // last-touch 기준 전환이 많은 순. 같으면 최초 기준, 그다음 이름으로 — 순서가 매번 흔들리지 않게.
         usort($out, static function (array $a, array $b): int {
             return [$b['last'], $b['first'], $a['source']] <=> [$a['last'], $a['first'], $b['source']];
         });

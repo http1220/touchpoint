@@ -32,7 +32,7 @@ $flow = array(
 	array('lane' => '브라우저', 'name' => '광고 클릭', 'href' => $go,
 	      'sub'  => '유입 파라미터를 달고 <code>/go</code> 로. 눌러 보세요'),
 	array('lane' => '서버', 'name' => '브리지 302', 'href' => NULL,
-	      'sub'  => '여기서 <code>first</code>·<code>last</code> 접점이 남는다. 랜딩에는 방문 번호(<code>vid</code>)만 넘긴다'),
+	      'sub'  => '여기서 최초·마지막 <strong>접점</strong>이 남는다. 랜딩에는 방문 번호(<code>vid</code>)만 넘긴다'),
 	array('lane' => '브라우저', 'name' => '작품 랜딩', 'href' => tp_host_url('lp', '/l/1'),
 	      'sub'  => '무엇이 기록됐는지 화면이 보여 준다. <code>track.js</code> 가 노출·클릭을 모은다'),
 	array('lane' => '브라우저', 'name' => '결제', 'href' => NULL,
@@ -139,7 +139,7 @@ $flow = array(
           <a href="<?= $repo ?>application/migrations/20260914000100_add_payment_visit.php">방문 칸을 더한 마이그레이션<span aria-hidden="true">↗</span></a></p>
         <p class="caption">그래서 지표 화면은 <strong>한 기준을 고르지 않고 둘을 나란히</strong> 냅니다 — 같은 결제도 first-touch 기준과 last-touch 기준에서 다른 매체에 붙습니다.
           <a href="<?= html_escape(tp_host_url('app', '/metrics#attribution')) ?>">광고가 만든 것<span aria-hidden="true">↗</span></a></p>
-        <p class="caption">홈의 웹툰 데이터 모델(연재 요일 · 기다리면 무료 · 언어와 문자 · 순위 기준)은 화면에서 덜어 내고 문서에 뒀습니다.
+        <p class="caption"><strong>접점 · 귀속 · 도달률 · 반영률</strong>이 각각 무엇을 세는 말인지는 <a href="<?= $repo ?>docs/glossary.md">용어<span aria-hidden="true">↗</span></a> 에 모아 두었습니다. 홈의 웹툰 데이터 모델은 화면에서 덜어 내고 문서에 뒀습니다.
           <a href="<?= $repo ?>docs/data-model.md">data-model.md 6장<span aria-hidden="true">↗</span></a> ·
           <a href="<?= $repo ?>docs/research-method.md">research-method.md 3-1<span aria-hidden="true">↗</span></a></p>
       </div>
