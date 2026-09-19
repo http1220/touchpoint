@@ -19,8 +19,9 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * @var string|null $inicis_js 결제창 스크립트. 모드가 틀렸으면 null
  * @var bool        $inicis_on 어댑터를 만들 수 있는가
  * @var string      $mode      test | live | ''
+ * @var bool        $is_mobile 엣지 판별(AB_IS_MOBILE). 참이면 이니시스 PC 결제창을 그리지 않는다 → B10
  */
-$ready  = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
+$ready  = $inicis_on && $inicis_js !== NULL && $user_uid !== '' && ! $is_mobile;
 $cheap  = $products === array() ? NULL : $products[0];   // 카드 없는 길은 가장 싼 상품 하나로
 ?><!doctype html>
 <html lang="ko">
@@ -64,14 +65,21 @@ $cheap  = $products === array() ? NULL : $products[0];   // 카드 없는 길은
 
     <section class="panel" aria-labelledby="pay-title">
       <h2 id="pay-title">이니시스 테스트 상점 · 카드</h2>
-      <?php if ($mode !== 'live'): ?>
+      <?php if ($mode !== 'live' && ! $is_mobile): ?>
       <p>
         이니시스 <strong>테스트 상점</strong>으로 연결됩니다. 테스트 상점도 <strong>카드 승인은 실제로 일어나고</strong>,
         이니시스가 당일 자정 전에 자동으로 취소합니다. 결제창을 열어 보고 카드를 넣지 않고 닫아도 됩니다.
       </p>
       <?php endif; ?>
 
-      <?php if ( ! $ready): ?>
+      <?php if ($is_mobile): ?>
+        <?php /* B10 을 뒤집었다(09-19 오후) — 처음엔 "모바일도 PC 결제창으로 시도, 안내 없음" 이었다.
+                 모바일에서 누르면 이니시스가 "[INIStdPay / Dev. Error] … PC로 결제 진행을 부탁드립니다" 만 띄운다 */ ?>
+        <p class="empty">
+          카드 결제창은 <strong>PC 에서</strong> 열립니다. 이니시스 모바일 결제는 별도 규격(파라미터 · 금액 해시 · 복귀 흐름이 다르다)이라 붙이지 않았습니다.
+          위의 <strong>카드 없이 끝까지</strong>는 여기서도 됩니다.
+        </p>
+      <?php elseif ( ! $ready): ?>
         <p class="empty">
           지금은 결제할 수 없습니다 —
           <?= $user_uid === '' ? '시연 회원(PAY_DEMO_USER_UID)이 없습니다.' : '이니시스 설정이 없거나 모드와 상점이 맞지 않습니다.' ?>

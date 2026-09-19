@@ -80,6 +80,10 @@ class Pay extends MY_Controller
 			'inicis_js'  => $mode === '' ? NULL : InicisEndpoints::js($mode),
 			'inicis_on'  => $this->gateways->get('inicis') !== NULL,
 			'mode'       => $mode,
+
+			// 엣지가 판별한다(nginx.conf map $is_mobile → php-pass.conf). 모바일이면 이니시스 PC
+			// 결제창 대신 안내 — INIStdPay 가 모바일에서 "Dev. Error" 경고만 띄운다(09-19 실측) → B10
+			'is_mobile'  => $this->server('AB_IS_MOBILE') === '1',
 		));
 	}
 

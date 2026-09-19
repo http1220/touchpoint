@@ -117,7 +117,8 @@ $flow = array(
         <p><strong>카드 없이도 끝까지 볼 수 있습니다</strong> — 가짜 결제대행사가 "결제됐다" 알림을 두 번 보내고,
           결과 화면이 확정 한 번 · 무시 한 번 · 코인 · 매체 전송을 장부 그대로 보여 줍니다. 돈은 움직이지 않습니다.</p>
         <p>실제 결제대행사로는 이니시스 <strong>테스트 상점</strong>에 연결됩니다. 테스트 상점도 <strong>카드 승인은 실제로 일어나고</strong>,
-          이니시스가 당일 자정 전에 자동으로 취소합니다. 카드 정보는 이니시스 결제창에 직접 넣으며 이 사이트를 거치지 않습니다.</p>
+          이니시스가 당일 자정 전에 자동으로 취소합니다. 카드 정보는 이니시스 결제창에 직접 넣으며 이 사이트를 거치지 않습니다.
+          카드 결제창은 <strong>PC 에서</strong> 열립니다(이니시스 모바일은 별도 규격이라 붙이지 않았습니다).</p>
         <form method="post" action="<?= html_escape(tp_host_url('app', '/pay/access')) ?>">
           <p class="buttons"><button type="submit" class="button">입장권 받고 결제 화면으로</button></p>
         </form>
