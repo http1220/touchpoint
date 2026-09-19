@@ -16,13 +16,15 @@
 | [009](ADR-009-no-spa.md) | SPA 미사용 | 백엔드 포지션 + 대상 서비스가 서버 렌더 + 추적 스니펫은 바닐라여야 |
 | [010](ADR-010-no-kubernetes.md) | K8s·ECR 미사용 | 컨테이너 4개. EKS 잡이 없는 것도 관측됨 |
 | [011](ADR-011-github-actions-over-jenkins.md) | GitHub Actions | **초안의 "CI 공백" 전제가 틀렸음.** 조직 표준은 Jenkins |
-| [012](ADR-012-observability-scope.md) | 관측 가능성 범위 | 어트리뷰션은 그대로, 계측을 **운영 관점으로 승격**. 인프라 포지션 동시 지원 대응 |
+| [012](ADR-012-observability-scope.md) | 관측 가능성 범위 | 어트리뷰션은 그대로, 계측을 **운영 관점으로 승격**. 인프라 포지션 동시 지원 대응. **자체 화면 항목은 뒤집힘 → [019](ADR-019-metrics-view-over-grafana.md)** |
 | [013](ADR-013-caddy-over-nginx.md) | **OpenResty** (Caddy 아님) | 최초 결정을 뒤집음. Lua로 복제본 배정을 구현한다 |
 | [014](ADR-014-stack-alignment.md) | **스택 정렬 원칙** | 다른 모든 ADR을 지배. "이 경험이 그 회사 업무에서 그대로 쓰이는가" |
 | [015](ADR-015-image-pipeline-cdn.md) | 이미지 S3 + CloudFront | **Phase 2.** 웹툰은 이미지가 본체. 미경험 영역이라 학습 가치가 크다 |
-| [016](ADR-016-payment-and-notification.md) | PG 테스트 연동 + 알림 어댑터 | **Phase 2.** 008 개정 — 구현체가 하나면 어댑터가 검증되지 않는다 |
+| [016](ADR-016-payment-and-notification.md) | PG 테스트 연동 + 알림 어댑터 | 008 개정 — 구현체가 하나면 어댑터가 검증되지 않는다. **결제는 이행 중 → [020](ADR-020-multi-pg-direct.md)**, 알림은 Phase 2 |
 | [017](ADR-017-ci3-application-structure.md) | **CI3 앱 구조** | CI3 관용구 + Composer PSR-4 병용. `src/`는 프레임워크 독립이라 테스트가 성립 |
 | [018](ADR-018-single-registered-domain.md) | **등록 도메인 1개** | 002 철회. 잃는 것은 A-1·A-2 둘뿐 — **CORS 는 오리진 기준이라 그대로 걸린다** |
+| [019](ADR-019-metrics-view-over-grafana.md) | **지표 화면 직접** (Grafana 아님) | 012 의 "자체 화면을 만들지 않는다" 를 뒤집음. 대체재(Grafana)는 [014](ADR-014-stack-alignment.md)가 같은 날 잘랐다 |
+| [020](ADR-020-multi-pg-direct.md) | **PG 직접 연동** — 모으는 자리는 상태 전이 | 016 이행(이니시스만). 이니시스 카드에는 웹훅이 없다. **인터페이스는 구현체 하나라 아직 검증 안 됨** |
 
 ---
 

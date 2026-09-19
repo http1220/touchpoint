@@ -148,7 +148,7 @@ pie showData
 | **틀린 예상 4가지**를 자세히 | [실패 시나리오](docs/failure-scenarios.md) |
 | **실제 결제대행사를 붙이며** 깨진 설계와 숨은 리스크 — 웹훅이 없는 PG, 브라우저가 실어 오는 승인 주소, 원문과 다른 매뉴얼 예시 | [멀티 PG 계획](docs/plan-multi-pg.md) |
 | **숫자와 측정 방법** | [계측 기록](docs/benchmarks.md) |
-| **왜 이렇게 만들었나** — 결정 19건, 그중 3건은 뒤집음 | [설계 결정](docs/decisions/) |
+| **왜 이렇게 만들었나** — 결정 20건, 그중 3건은 뒤집음 | [설계 결정](docs/decisions/) |
 | **데이터 구조를 어떻게 정했나** — 공개 자료 조사로 역추론 | [조사 요약](docs/research-method.md) |
 | **직접 돌려 보려면** | [구축 절차](docs/setup.md) |
 | 매일 무엇에 막혔나 | [작업 기록](docs/worklog.md) |
