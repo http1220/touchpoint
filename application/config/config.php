@@ -123,6 +123,7 @@ $config['global_xss_filtering'] = FALSE;
 |                          결제는 그 사람이 버튼을 누르고 카드를 넣어야 일어난다.
 |                          루트 도메인(/tour)의 폼이 app. 으로 POST 한다. CSRF 쿠키가 .<도메인> 이라
 |                          토큰을 실을 수는 있지만, 막을 것이 없는 경로라 싣지 않았다 (09-19 오후)
+|   pay/stub/confirm       입장권 쿠키 + "이 버튼이 방금 만든 시연 결제만" (StubWebhook::demoRejects)
 |   pay/inicis/start       입장권 쿠키. SameSite=Lax 라 다른 사이트의 POST 엔 안 실린다
 |   pay/inicis/return      이니시스 흐름 — authToken · authUrl 호스트 검사 · 금액 대조
 |                          **이니시스가 교차 사이트 POST 로 보낸다.** CSRF 토큰이 있을 수 없고
@@ -133,6 +134,9 @@ $config['global_xss_filtering'] = FALSE;
 | captured 웹훅에서만 발화하고 웹훅은 서명을 요구한다. 누구나 만들 수
 | 있는 것은 status=created 인 payments 행뿐이고, 스텁 PG 라 청구도 없다.
 | → docs/plan-payment-webhook.md 12장 결정 5
+| **09-19 오후부터 예외가 하나 있다**: 시연 버튼(pay/stub/confirm)이 서버 대신 서명해
+| "그 버튼이 방금 만든 demo- 결제" 를 captured 로 만든다. 그 전환은 매체로 간다(사용자 결정)
+| → docs/plan-multi-pg.md 6장
 |
 | **패턴은 요청 URI 와 맞춘다.** 라우팅 뒤의 컨트롤러 이름이 아니다 —
 | `webhooks/pg` 로 들어와 `webhook/pg` 로 라우팅되므로, `webhook/.*` 는
@@ -151,6 +155,7 @@ $config['csrf_exclude_uris'] = array(
 	'purchase',
 	'webhooks/.*',
 	'pay/access',
+	'pay/stub/.*',
 	'pay/inicis/.*',
 );
 

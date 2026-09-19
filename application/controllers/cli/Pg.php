@@ -220,20 +220,21 @@ class Pg extends MY_Controller
 	 */
 	private function payload($uidHex, $status)
 	{
-		return (string) json_encode(array(
-			'event_id'     => 'evt_'.bin2hex(tp_uuid7()),
-			'payment_uid'  => $uidHex,
-			'status'       => $status,
+		// 본문 모양은 시연 버튼(/pay/stub/confirm)과 같은 함수에서 나온다 → src/Payment/StubWebhook
+		return App\Payment\StubWebhook::body(
+			$uidHex,
+			$status,
 
 			/*
 			 * 금액을 싣지만 **서버는 이것을 쓰지 않는다.** 금액의 진실은
 			 * 우리가 만든 payments 행이다 → 계획 6장. 실제 PG 도 금액을
 			 * 보내므로 모양만 맞춘다.
 			 */
-			'amount_minor' => 9900,
-			'currency'     => 'KRW',
-			'occurred_at'  => gmdate('Y-m-d\TH:i:s').'.000Z',
-		), JSON_UNESCAPED_SLASHES);
+			9900,
+			'KRW',
+			'evt_'.bin2hex(tp_uuid7()),
+			gmdate('Y-m-d\TH:i:s').'.000Z'
+		);
 	}
 
 	private function signer()

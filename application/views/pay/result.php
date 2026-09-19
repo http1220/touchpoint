@@ -10,6 +10,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * @var array|null  $payment Payment_model::findByUid
  * @var list<array> $events  Payment_model::events
  * @var array       $refs    PG 번호
+ * @var array|null  $effects Payment_model::effects — 코인과 매체 전송
  * @var string|null $message 결제를 찾지 못했을 때 등
  */
 $labels = array(
@@ -49,9 +50,38 @@ $labels = array(
           <dt>PG</dt><dd><?= html_escape($payment['pg']) ?><?php foreach ($refs as $type => $value): ?> · <?= html_escape($type) ?> <code><?= html_escape($value) ?></code><?php endforeach; ?></dd>
           <dt>금액</dt><dd><?= number_format($payment['amount_minor']) ?> <?= html_escape($payment['currency']) ?></dd>
           <dt>승인 시각</dt><dd><?= $payment['captured_at'] === NULL ? '—' : html_escape($payment['captured_at']).' UTC' ?></dd>
+          <?php if ($effects !== NULL): ?>
+            <?php /* 장부 한 줄(captured) 뒤에 같은 트랜잭션으로 적힌 것들 → Payment_model::effects */ ?>
+            <dt>코인</dt><dd><?= $effects['lots'] === 0 ? '지급 없음' : number_format($effects['coins']).'개 지급 (지급 건 '.(int) $effects['lots'].')' ?></dd>
+            <dt>매체 전송</dt>
+            <dd>
+              <?php if ($effects['conversion_uid'] === NULL): ?>
+                구매 전환 없음
+              <?php else: ?>
+                구매 전환 1건 →
+                <?php if ($effects['outbox'] === array()): ?>보낼 매체 없음<?php endif; ?>
+                <?php foreach ($effects['outbox'] as $channel => $state): ?>
+                  <?= html_escape($channel) ?> <span class="badge<?= $state === 'sent' ? ' badge--success' : '' ?>"><?= html_escape($state) ?></span>
+                <?php endforeach; ?>
+                <span class="caption">— pending 은 워커가 곧 가져간다. 새로고침하면 바뀐다</span>
+              <?php endif; ?>
+            </dd>
+          <?php endif; ?>
         </dl>
 
         <h2>장부 이벤트</h2>
+        <?php if ($payment['pg'] === 'stub' && str_starts_with($payment['idempotency_key'], 'demo-')): ?>
+          <?php
+            // 고정 문장으로 "한 번만 나갔다" 고 말하지 않는다 — 장부에서 센 값을 그대로 보인다.
+            // 두 번 나갔다면 이 줄이 그렇게 말해야 한다
+            $captures = count(array_filter($events, static function ($e) { return $e['to'] === 'captured' && $e['from'] !== 'captured'; }));
+            $ignored  = count(array_filter($events, static function ($e) { return $e['from'] !== NULL && $e['from'] === $e['to']; }));
+          ?>
+          <p class="caption"><strong>가짜 PG 가 같은 "결제됐다" 알림을 두 번 보냈습니다.</strong>
+            장부에서 센 결과 — 확정 전이 <strong><?= (int) $captures ?>번</strong> · 무시 <strong><?= (int) $ignored ?>번</strong> ·
+            코인 지급 건 <strong><?= $effects === NULL ? 0 : (int) $effects['lots'] ?></strong>.
+            무시된 알림은 <code>captured → captured</code> 처럼 from 과 to 가 같은 줄로 남습니다.</p>
+        <?php endif; ?>
         <p class="caption">from 과 to 가 같은 줄은 전이가 아니라 <strong>무시된 이벤트</strong>입니다 — 중복·역전·장부에 올리지 않은 승인.</p>
         <div class="table-scroll" role="region" aria-label="결제 이벤트" tabindex="0">
           <table class="data">

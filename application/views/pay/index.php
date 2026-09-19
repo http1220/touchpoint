@@ -2,13 +2,17 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
- * 시연 결제 화면 (이니시스 · 카드). 입장권이 있어야 열린다 — 입장권은 안내 화면의 버튼으로 누구나 받는다 → controllers/Pay.php
+ * 시연 결제 화면. 입장권이 있어야 열린다 — 입장권은 안내 화면의 버튼으로 누구나 받는다 → controllers/Pay.php
  *
- * 흐름: 버튼 → POST /purchase (pg=inicis) → POST /pay/inicis/start → INIStdPay.pay()
- * → 이니시스 결제창 → POST /pay/inicis/return → /pay/result/{uid}
+ * 두 길이다 (09-19).
  *
- * 바닐라 JS 다 → ADR-009. 결제창 필드는 **서버가 서명해 준 것을 그대로** 폼에 넣는다 —
- * 여기서 금액을 정하지 않는다.
+ *   ① 카드 없이 끝까지 — 가짜 PG. 버튼 → POST /purchase (pg 없음 = 스텁, demo- 키)
+ *      → POST /pay/stub/confirm (서버가 확정 웹훅을 자기 /webhooks/pg 로 두 번) → /pay/result/{uid}
+ *      **면접관이 카드를 넣지 않아도 "된다" 를 끝까지 본다.** 이 칸이 먼저인 이유다
+ *   ② 이니시스 테스트 상점 · 카드. 버튼 → POST /purchase (pg=inicis) → POST /pay/inicis/start
+ *      → INIStdPay.pay() → 이니시스 결제창 → POST /pay/inicis/return → /pay/result/{uid}
+ *
+ * 바닐라 JS 다 → ADR-009. 금액은 여기서 정하지 않는다 — 상품표의 값을 싣고, 서버가 대조한다.
  *
  * @var list<App\Payment\CoinProduct> $products
  * @var string      $user_uid  시연 회원 (.env PAY_DEMO_USER_UID)
@@ -16,7 +20,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * @var bool        $inicis_on 어댑터를 만들 수 있는가
  * @var string      $mode      test | live | ''
  */
-$ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
+$ready  = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
+$cheap  = $products === array() ? NULL : $products[0];   // 카드 없는 길은 가장 싼 상품 하나로
 ?><!doctype html>
 <html lang="ko">
 <head>
@@ -33,18 +38,38 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
 
     <header class="masthead">
       <p class="masthead__mark"><a href="<?= html_escape(tp_host_url('root', '/')) ?>">touchpoint</a> <span class="masthead__sub">시연 결제</span></p>
-      <p class="eyebrow masthead__note">이니시스 <?= html_escape($mode === 'live' ? '운영' : '테스트') ?> · 카드</p>
+      <p class="eyebrow masthead__note">가짜 PG · 이니시스 <?= html_escape($mode === 'live' ? '운영' : '테스트') ?></p>
     </header>
 
+    <section class="panel" aria-labelledby="stub-title">
+      <h1 id="stub-title">카드 없이 끝까지 — 가짜 PG</h1>
+      <p>
+        결제를 만들고, 가짜 결제대행사가 <strong>"결제됐다" 알림(웹훅)을 두 번</strong> 보냅니다.
+        결과 화면에서 확정 한 번 · 무시 한 번 · 코인 지급 · 매체 전송을 장부 그대로 볼 수 있습니다.
+        돈은 움직이지 않습니다.
+      </p>
+      <?php if ($user_uid === '' OR $cheap === NULL): ?>
+        <p class="empty">지금은 해 볼 수 없습니다 — 시연 회원(PAY_DEMO_USER_UID)이 없습니다.</p>
+      <?php else: ?>
+        <p class="buttons">
+          <button type="button" class="button" id="stub-run"
+                  data-product="<?= html_escape($cheap->code) ?>"
+                  data-amount="<?= (int) $cheap->amountMinor ?>" data-currency="<?= html_escape($cheap->currency) ?>">
+            코인 <?= (int) $cheap->coins ?>개 · <?= number_format($cheap->amountMinor) ?>원 — 카드 없이 끝까지
+          </button>
+        </p>
+        <p id="stub-status" role="status" aria-live="polite"></p>
+      <?php endif; ?>
+    </section>
+
     <section class="panel" aria-labelledby="pay-title">
-      <h1 id="pay-title">코인 결제</h1>
+      <h2 id="pay-title">이니시스 테스트 상점 · 카드</h2>
       <?php if ($mode !== 'live'): ?>
       <p>
         이니시스 <strong>테스트 상점</strong>으로 연결됩니다. 테스트 상점도 <strong>카드 승인은 실제로 일어나고</strong>,
-        이니시스가 당일 자정 전에 자동으로 취소합니다.
+        이니시스가 당일 자정 전에 자동으로 취소합니다. 결제창을 열어 보고 카드를 넣지 않고 닫아도 됩니다.
       </p>
       <?php endif; ?>
-      <?php /* 모바일 안내는 두지 않는다 — PC 결제창으로 시도하기로 했다 → plan-multi-pg.md 6장 B10 */ ?>
 
       <?php if ( ! $ready): ?>
         <p class="empty">
@@ -54,7 +79,8 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
       <?php else: ?>
         <div class="buttons">
           <?php foreach ($products as $p): ?>
-            <button type="button" class="button" data-product="<?= html_escape($p->code) ?>"
+            <button type="button" class="button" data-inicis
+                    data-product="<?= html_escape($p->code) ?>"
                     data-amount="<?= (int) $p->amountMinor ?>" data-currency="<?= html_escape($p->currency) ?>">
               코인 <?= (int) $p->coins ?>개 · <?= number_format($p->amountMinor) ?>원
             </button>
@@ -69,13 +95,10 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
   </div>
 </main>
 
-<?php if ($ready): ?>
+<?php if ($user_uid !== ''): ?>
 <script>
 (function () {
   var USER = <?= json_encode($user_uid) ?>;
-  var status = document.getElementById('pay-status');
-
-  function say(msg) { status.textContent = msg; }
 
   async function post(url, body) {
     var res = await fetch(url, {
@@ -90,23 +113,45 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
     return json;
   }
 
-  document.querySelectorAll('[data-product]').forEach(function (btn) {
+  // 키는 클릭마다 새로 만든다. 두 번 누름은 버튼 비활성이 막는다 —
+  // 그래도 행이 둘 생기면 확정된 쪽만 장부에 오르고 나머지는 created 로 남아 오래된 결제 보고에 잡힌다
+  function purchase(btn, extra) {
+    return post('/purchase', Object.assign({
+      product: btn.dataset.product,
+      amount_minor: Number(btn.dataset.amount),
+      currency: btn.dataset.currency,
+      user_uid: USER
+    }, extra));
+  }
+
+  // ① 카드 없이 끝까지. pg 를 싣지 않으면 스텁이다. demo- 키만 확정 엔드포인트가 받는다 → StubWebhook::demoRejects
+  var stub = document.getElementById('stub-run');
+  if (stub) {
+    var stubStatus = document.getElementById('stub-status');
+    stub.addEventListener('click', async function () {
+      stub.disabled = true;
+      stubStatus.textContent = '결제를 만드는 중…';
+      try {
+        var p = await purchase(stub, { idempotency_key: 'demo-' + crypto.randomUUID() });
+        stubStatus.textContent = '가짜 PG 가 "결제됐다" 알림을 두 번 보내는 중…';
+        var c = await post('/pay/stub/confirm', { payment_uid: p.payment_uid });
+        location.href = c.result_url;
+      } catch (e) {
+        stubStatus.textContent = '끝까지 가지 못했습니다: ' + e.message;
+        stub.disabled = false;
+      }
+    });
+  }
+
+  // ② 이니시스
+  var payStatus = document.getElementById('pay-status');
+  document.querySelectorAll('[data-inicis]').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       btn.disabled = true;
-      say('결제를 만드는 중…');
+      payStatus.textContent = '결제를 만드는 중…';
       try {
-        // 키는 클릭마다 새로 만든다. 두 번 누름은 버튼 비활성이 막는다(위 disabled) —
-        // 그래도 행이 둘 생기면 결제창을 연 쪽만 승인되고 나머지는 created 로 남아 오래된 결제 보고에 잡힌다
-        var purchase = await post('/purchase', {
-          product: btn.dataset.product,
-          amount_minor: Number(btn.dataset.amount),
-          currency: btn.dataset.currency,
-          idempotency_key: 'pay-' + crypto.randomUUID(),
-          user_uid: USER,
-          pg: 'inicis'
-        });
-
-        var start = await post('/pay/inicis/start', { payment_uid: purchase.payment_uid });
+        var p = await purchase(btn, { idempotency_key: 'pay-' + crypto.randomUUID(), pg: 'inicis' });
+        var start = await post('/pay/inicis/start', { payment_uid: p.payment_uid });
 
         var form = document.getElementById('inicis-form');
         form.replaceChildren();
@@ -118,10 +163,10 @@ $ready = $inicis_on && $inicis_js !== NULL && $user_uid !== '';
           form.appendChild(input);
         });
 
-        say('결제창을 엽니다.');
+        payStatus.textContent = '결제창을 엽니다.';
         INIStdPay.pay('inicis-form');
       } catch (e) {
-        say('결제를 시작하지 못했습니다: ' + e.message);
+        payStatus.textContent = '결제를 시작하지 못했습니다: ' + e.message;
       } finally {
         btn.disabled = false;
       }

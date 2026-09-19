@@ -38,6 +38,7 @@ $route['webhooks/pg'] = 'webhook/pg';        // PG 웹훅. app. 에서만 — do
 // 실PG(이니시스) — 입장권(안내 화면의 버튼으로 누구나 받는다)이 있어야 열린다. docs/plan-multi-pg.md
 $route['pay']                = 'pay/index';          // GET  시연 결제 화면 (입장권 없으면 받기 안내)
 $route['pay/access']         = 'pay/access';         // POST 입장권 발급 — /tour 의 버튼
+$route['pay/stub/confirm']   = 'pay/stub_confirm';   // POST 카드 없는 한 바퀴 — 가짜 PG 가 확정 웹훅을 두 번
 $route['pay/inicis/start']   = 'pay/inicis_start';   // POST 결제창 필드 서명
 $route['pay/inicis/return']  = 'pay/inicis_return';  // POST 이니시스 복귀 → 승인 → 장부
 $route['pay/inicis/close']   = 'pay/inicis_close';   // *    결제창 닫기

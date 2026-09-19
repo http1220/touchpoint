@@ -18,7 +18,7 @@
 | 3-2 | GET | `/click` | **`api.sshwan.com`** | 배너 클릭 기록 후 302 (09-15) |
 | 5 | POST | `/signup` | `app.sshwan.com` | 가입 |
 | 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(기본 스텁 · `pg=inicis` 는 입장권 필요) |
-| 6-1 | GET·POST | `/pay`, `/pay/access`, `/pay/inicis/*`, `/pay/result/{uid}` | `app.sshwan.com` | 실PG(이니시스 테스트 상점) 결제 — 입장권, 안내 화면 버튼으로 누구나 (09-19) |
+| 6-1 | GET·POST | `/pay`, `/pay/access`, `/pay/stub/confirm`, `/pay/inicis/*`, `/pay/result/{uid}` | `app.sshwan.com` | 실PG(이니시스 테스트 상점) 결제 — 입장권, 안내 화면 버튼으로 누구나 (09-19) |
 | 7 | GET | `/metrics` | `app.sshwan.com` | 지표 화면 |
 
 ---
@@ -303,6 +303,7 @@ created → pending → authorized → captured
 | 메서드 | 경로 | 문 | 하는 일 |
 |---|---|---|---|
 | POST | `app./pay/access` | 없음 | 입장권(서명 · 만료 1일)을 쿠키 `tp_pay` 로 주고 `303 /pay`. **안내 화면(`/tour#pay`)의 버튼이 부른다** — POST 라 크롤러는 받지 않는다 |
+| POST | `app./pay/stub/confirm` `{payment_uid}` | 쿠키 + **이 버튼이 방금 만든 결제만**(스텁 · `created` · `demo-` 키 · 10분) | **카드 없는 한 바퀴** — 서버가 서명한 `captured` 웹훅을 자기 `/webhooks/pg` 로 **같은 바이트 두 번** 보낸다(1번째 applied · 2번째 ignored). `{result_url, deliveries}`. 아니면 409 `not-a-demo-payment` |
 | GET | `app./pay?t=<비밀>` | 비밀 | 운영자 지름길 — 입장권을 주고 `303 /pay` (주소에서 비밀을 지운다) |
 | GET | `app./pay` | 쿠키 | 시연 결제 화면. 없으면 입장권 받기 안내(200) — 처음엔 404 였다(09-19 오후 C4 를 뒤집기 전) |
 | POST | `app./pay/inicis/start` `{payment_uid}` | 쿠키 | 결제창 필드에 **서버가** 서명해 돌려준다 (`signature` · `verification` · `mKey`) |

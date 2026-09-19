@@ -1,18 +1,22 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+use App\Channel\CurlHttpClient;
 use App\Payment\CoinProduct;
 use App\Payment\Gateway\Checkout;
 use App\Payment\Gateway\GatewayResult;
 use App\Payment\Gateway\InicisEndpoints;
 use App\Payment\PayAccess;
 use App\Payment\PaymentStatus;
+use App\Payment\StubWebhook;
+use App\Payment\WebhookSignature;
 
 /**
  * 실PG 결제(이니시스). `app.<도메인>` 에서만 열린다 → docs/plan-multi-pg.md
  *
  *   GET  /pay                 시연 결제 화면. 입장권이 없으면 입장권 받기 안내
  *   POST /pay/access          입장권 발급 → 303 /pay  (안내 화면 /tour 의 버튼이 부른다)
+ *   POST /pay/stub/confirm    카드 없는 한 바퀴 — 가짜 PG 가 확정 웹훅을 두 번 보낸다
  *   POST /pay/inicis/start    결제창 필드에 서명해 돌려준다
  *   POST /pay/inicis/return   이니시스 복귀 → 승인 → 장부 (없으면 망취소)
  *   *    /pay/inicis/close    결제창 닫기
@@ -102,6 +106,102 @@ class Pay extends MY_Controller
 
 		$this->grant($secret);
 		$this->output->set_status_header(303)->set_header('Location: /pay');
+	}
+
+	/**
+	 * POST /pay/stub/confirm  {payment_uid} — **카드 없는 한 바퀴.** 가짜 PG 가 확정 웹훅을 두 번 보낸다.
+	 *
+	 * 면접관 대부분은 모르는 사이트에 실카드를 넣지 않는다. 그러면 이니시스 경로로는
+	 * "결제창이 뜬다" 까지만 보이고, 결과 화면(장부 · 코인 · 매체 전송)에는 닿지 않는다
+	 * → docs/plan-multi-pg.md 6장 「카드 없는 길」
+	 *
+	 * ── 진짜 문을 탄다 ──
+	 *
+	 * applyEvent 를 직접 부르지 않고, 서명한 웹훅을 **자기 공개 주소의 /webhooks/pg 로
+	 * 실제 HTTP 로** 보낸다. HMAC 검증 · 웹훅 컨트롤러 · 응답 코드까지 운영 경로 그대로다.
+	 * 웹 요청 안에서 외부 HTTP 를 부르는 것은 이니시스 승인(B11)과 같은 예외이고,
+	 * 자기에게 보내는 요청이 php-fpm 작업자 하나를 더 잡는다(pm.max_children = 8).
+	 *
+	 * ── 같은 바이트를 두 번 ──
+	 *
+	 * 두 번째는 무시(200 ignored)되고 장부에 `from = to` 줄로 남는다. "같은 알림이 두 번
+	 * 와도 한 번만 센다" 가 면접 전에, 결과 화면에서 10초 만에 보인다. 코인은 한 번만 나간다.
+	 *
+	 * ── 아무 결제나 확정하지 못한다 ──
+	 *
+	 * 입장권은 누구나 받는다. 그래서 **이 버튼이 방금 만든 결제만**: 스텁 · created ·
+	 * `demo-` 키 · 10분 이내 → src/Payment/StubWebhook::demoRejects. D-3 측정용 결제나
+	 * 남의 결제를 골라 captured 로 만들 수 없다.
+	 *
+	 * 매체로는 **그대로 보낸다**(사용자 결정 — 스텁 결제의 D2 와 같다). 운영 GA4 에 표시 없이 들어간다.
+	 */
+	public function stub_confirm()
+	{
+		$this->requirePost();
+		$this->requireAccess();
+
+		$body    = json_decode((string) $this->input->raw_input_stream, TRUE);
+		$uid     = strtolower(trim((string) (is_array($body) ? ($body['payment_uid'] ?? '') : '')));
+		$payment = preg_match('/\A[0-9a-f]{32}\z/', $uid) === 1 ? $this->payment_model->findByUid($uid) : NULL;
+
+		if ($payment === NULL)
+		{
+			$this->problem(404, 'payment-not-found', '그런 결제가 없습니다.');
+		}
+
+		$createdAt = (new DateTimeImmutable($payment['created_at'], new DateTimeZone('UTC')))->getTimestamp();
+		$why       = StubWebhook::demoRejects($payment['pg'], $payment['status'], $payment['idempotency_key'], $createdAt, time());
+
+		if ($why !== NULL)
+		{
+			$this->problem(409, 'not-a-demo-payment', '이 버튼이 방금 만든 시연 결제만 확정합니다.', array('reason' => $why));
+		}
+
+		$secret = (string) (getenv('PG_WEBHOOK_SECRET') ?: '');
+
+		if ($secret === '')
+		{
+			$this->problem(503, 'pg-unavailable', '가짜 PG 의 서명 키가 없습니다.');
+		}
+
+		$raw = StubWebhook::body(
+			$uid,
+			PaymentStatus::CAPTURED,
+			$payment['amount_minor'],
+			$payment['currency'],
+			'evt_'.bin2hex(tp_uuid7()),
+			gmdate('Y-m-d\TH:i:s').'.000Z'
+		);
+
+		$signer = new WebhookSignature($secret, (int) (getenv('PG_WEBHOOK_TOLERANCE_SEC') ?: WebhookSignature::DEFAULT_TOLERANCE_SEC));
+		$sig    = $signer->header($raw, time());
+		$http   = new CurlHttpClient('touchpoint-stub-pg/1.0');
+		$url    = tp_host_url('app', '/webhooks/pg');
+
+		$deliveries = array();
+
+		foreach (array(1, 2) as $n)
+		{
+			// 같은 본문 · 같은 서명 헤더. 바이트까지 같은 재전송이다 → cli/pg 의 sign 과 같은 성질
+			$res  = $http->postJson($url, $raw, array(WebhookSignature::HEADER => $sig), 10000);
+			$json = $res->json();
+
+			$deliveries[] = array(
+				'http'   => $res->status,
+				'result' => isset($json['result']) ? (string) $json['result'] : NULL,
+				'error'  => $res->error,
+			);
+		}
+
+		log_message('info', sprintf('pay stub demo: payment=%s 1st=%s/%s 2nd=%s/%s', $uid,
+			(string) $deliveries[0]['http'], (string) $deliveries[0]['result'],
+			(string) $deliveries[1]['http'], (string) $deliveries[1]['result']));
+
+		$this->json(200, array(
+			'result_url' => '/pay/result/'.$uid,
+			'deliveries' => $deliveries,
+			'trace_id'   => $this->trace_id,
+		));
 	}
 
 	/** POST /pay/inicis/start  {payment_uid} */
@@ -301,6 +401,7 @@ class Pay extends MY_Controller
 			'payment' => $payment,
 			'events'  => $payment === NULL ? array() : $this->payment_model->events($payment['id']),
 			'refs'    => $payment === NULL ? array() : $this->payment_model->findPgRefs($payment['id']),
+			'effects' => $payment === NULL ? NULL : $this->payment_model->effects($payment),
 			'message' => $message,
 		));
 	}

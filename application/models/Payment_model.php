@@ -56,7 +56,7 @@ class Payment_model extends CI_Model
 	 * 문자열로 나가면 호출자가 둘을 다른 것으로 센다 — 여기서 맞춘다.
 	 */
 	const SELECT_COLUMNS = 'SELECT id, LOWER(HEX(payment_uid)) AS uid_hex, user_id, visit_id, pg, status,
-	                               amount_minor, currency, idempotency_key, captured_at
+	                               amount_minor, currency, idempotency_key, captured_at, created_at
 	                          FROM '.self::TABLE;
 
 	/** PG 번호. 이니시스 tid · 페이팔 order·capture → 20260919000100 */
@@ -839,6 +839,44 @@ class Payment_model extends CI_Model
 	}
 
 	/**
+	 * 결과 화면이 보여 줄 **부수 효과** — 코인과 매체 전송.
+	 *
+	 * 장부 이벤트만으로는 "코인이 나갔나, 매체로 갔나" 가 안 보인다. captured 한 줄
+	 * 뒤에 무엇이 같은 트랜잭션에 적혔는지를 화면이 말하게 한다(카드 없는 시연,
+	 * 09-19). 매체 전송 상태는 워커가 가져가기 전이면 pending 이다 — 새로고침하면 바뀐다.
+	 *
+	 * @return array{lots: int, coins: int, conversion_uid: string|null, outbox: array<string, string>}
+	 */
+	public function effects(array $payment)
+	{
+		$lot = $this->db
+			->query('SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS coins FROM coin_lots WHERE payment_id = ?', array((int) $payment['id']))
+			->row();
+
+		$conv = $this->db
+			->query('SELECT id, LOWER(HEX(conversion_uid)) AS uid_hex FROM conversions WHERE dedup_key = ? LIMIT 1',
+				array(self::DEDUP_PREFIX.$payment['uid_hex']))
+			->row();
+
+		$outbox = array();
+
+		if ($conv)
+		{
+			foreach ($this->db->query('SELECT channel, status FROM dispatch_outbox WHERE conversion_id = ? ORDER BY channel', array((int) $conv->id))->result() as $row)
+			{
+				$outbox[(string) $row->channel] = (string) $row->status;
+			}
+		}
+
+		return array(
+			'lots'           => $lot ? (int) $lot->n : 0,
+			'coins'          => $lot ? (int) $lot->coins : 0,
+			'conversion_uid' => $conv ? (string) $conv->uid_hex : NULL,
+			'outbox'         => $outbox,
+		);
+	}
+
+	/**
 	 * 이 결제에 붙은 PG 번호. ref_type => 값.
 	 *
 	 * 같은 종류가 여럿이면(페이팔 부분환불의 refund ID 등) 먼저 적재된 것이다.
@@ -939,6 +977,7 @@ class Payment_model extends CI_Model
 			'currency'        => (string) $row->currency,
 			'idempotency_key' => (string) $row->idempotency_key,
 			'captured_at'     => $row->captured_at === NULL ? NULL : (string) $row->captured_at,
+			'created_at'      => (string) $row->created_at,
 		);
 	}
 
