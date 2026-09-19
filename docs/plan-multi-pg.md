@@ -108,7 +108,7 @@
 | `application/views/pay/{index,result}.php` | 바닐라 JS([ADR-009](decisions/ADR-009-no-spa.md)). INIStdPay.js / 페이팔 JS SDK |
 | `application/migrations/20260919000100_create_payment_pg_refs.php` | `payment_pg_refs(payment_id, pg, ref_type, ref_value, created_at)`, `UNIQUE(pg, ref_type, ref_value)` (B7) |
 | `tests/Payment/Gateway/*Test.php` | 4장 검증 1 |
-| `docs/decisions/ADR-020-multi-pg-direct.md` | 시나리오의 사유 · 1장의 리스크 · **깨진 것 B1~B8** · 기각한 대안(통합 PG) · ADR-016과 양방향 링크 |
+| [`docs/decisions/ADR-020-multi-pg-direct.md`](decisions/ADR-020-multi-pg-direct.md) | **썼다(09-19, 이니시스 편).** 시나리오의 사유 · 1장의 리스크 · **깨진 것 B1~B8** · 기각한 대안(통합 PG) · ADR-016과 양방향 링크 |
 
 ### 고칠 기존 파일
 
@@ -116,7 +116,7 @@
 - `Purchase.php` — 선택 필드 `pg`(기본 `stub` → D-3 측정 스크립트 유지), `gateway->supports(currency)` 검사, **`pg≠stub` 이면 토큰 필수**, 결정 5 주석 갱신(C4)
 - `Webhook.php` — `paypal()` 추가. 기존 `pg()`(스텁 HMAC)는 그대로 둔다
 - `CoinProduct.php` — **USD 2종**($9.99·$24.99) 추가(6장 A 수수료). 코인 수는 국내 비율 × 가정 환율이고, 그 가정을 주석에 적는다. 통화 안에서 금액이 유일하다는 불변식은 기존 테스트가 지킨다
-- `cli/Verify.php` — `payments` 에 **오래된 `created`·`pending`** 항목 추가(6장 D1·D3)
+- `cli/Verify.php` — `payments` 에 **오래된 `created`·`pending`** 항목 추가(6장 D1·D3) → **09-19 저녁에야 넣었다.** 결정만 하고 빠뜨린 것을 ADR-020 을 쓰다 찾았다([worklog](worklog.md))
 - `src/Channel/HttpClient.php` + `CurlHttpClient` + 테스트용 가짜 구현 — `postForm()`에 `headers` 추가(페이팔 OAuth Basic 인증). **인터페이스 변경이라 구현체를 전부 grep으로 찾는다**
 - `config/routes.php` · `config.php`의 `csrf_exclude_uris`에 `pay/inicis/return`·`pay/inicis/close` 추가(C2) · `.env.example`(키 이름만) · `scripts/check-env.sh`(PG 모드 일치 검사, D5)
 - `cli/Pg.php` — `refund <uid>`(PG 환불 API → `applyEvent(refunded, source=admin)`) · `list`. **웹 어드민은 만들지 않는다** — 인증이 없으면 누구나 누를 수 있는 환불 버튼이 된다. ADR-020에 그 이유를 적는다
@@ -214,7 +214,7 @@
 | C5 | **허용 목록 + 원문 sha256** | 카드번호·결제자 개인정보가 보존 범위에 들어오지 않는다. **허용 목록 밖 필드는 나중에 분쟁이 생겨도 복원할 수 없다** |
 | C6 | **기록만, 판단은 사람** | 분쟁·역전 이벤트를 `from=to` 로 남기고 error 로그. 상태와 코인은 바꾸지 않는다([RefundPolicy](../src/Payment/RefundPolicy.php) ② 와 같은 판단). **손실을 받아들인다** |
 | C7 | 해당 없음 | 이 프로젝트에는 성인 콘텐츠가 없다. AUP 원문은 확인하지 못했다 |
-| D1·D3 | **오래된 결제 보고 + 당일 환불** | `cli/verify payments` 가 오래된 `created`·`pending` 을 보고한다. 테스트 결제는 그날 `cli/pg refund`. ~~INIAPI 환불 키를 얻지 못하면 → 수동 기록~~ → **0단계에서 테스트 MID 의 INIAPI 키를 공개 원문으로 확인해 INIAPI 환불로 간다**(키가 무효면 그때 수동 기록으로 후퇴). PG 조회 API·정산 파일 대사는 하지 않는다 |
+| D1·D3 | **오래된 결제 보고 + 당일 환불** | `cli/verify payments` 가 오래된 `created`·`pending` 을 보고한다(1시간 넘은 것, 판정에는 넣지 않음 — **09-19 저녁 구현**). 테스트 결제는 그날 `cli/pg refund`. ~~INIAPI 환불 키를 얻지 못하면 → 수동 기록~~ → **0단계에서 테스트 MID 의 INIAPI 키를 공개 원문으로 확인해 INIAPI 환불로 간다**(키가 무효면 그때 수동 기록으로 후퇴). PG 조회 API·정산 파일 대사는 하지 않는다 |
 | D2 | **표시 없이 보냄** (검토한 추천과 다름) | 테스트 결제도 운영 GA4 에 실거래와 구분 없이 간다 — 스텁 결제도 지금 그렇다. 당일 환불로 **순매출은 맞지만, GA4 에서 테스트와 실거래를 가려낼 수 없다.** `/metrics` 와 반영률 표본에도 섞인다 |
 | D4 | **카드만** | 수단별 분기는 `GatewayResult` 에 결제 수단 칸만 둔다 |
 | D5 | 대응 | `check-env.sh` 에서 PG 모드 일치 검사 |

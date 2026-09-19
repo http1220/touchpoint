@@ -26,6 +26,9 @@ use App\Verify\Reconciliation;
  */
 class Verify extends MY_Controller
 {
+    /** 이만큼 지나도 created·pending 이면 정상 경로로는 끝나지 않는다 → reportStale() */
+    const STALE_AFTER_SECONDS = 3600;
+
     public function __construct()
     {
         parent::__construct();
@@ -404,6 +407,8 @@ class Verify extends MY_Controller
             $this->line('  제외 '.$uid.'  '.$reason);
         }
 
+        $this->reportStale($since);
+
         if ($r->isClean())
         {
             $this->line('  어긋난 것 없음');
@@ -422,6 +427,62 @@ class Verify extends MY_Controller
         }
 
         exit(1);
+    }
+
+    /**
+     * 오래된 created·pending 을 **보고만** 한다. 종료 코드에는 넣지 않는다.
+     *
+     * 정상 경로는 한 시간 안에 끝난다 — 이니시스는 인증 뒤 10분 안에 승인하거나
+     * 망취소하고, 카드 없는 시연 확정은 10분 창이다. 그 뒤에도 남은 결제는 둘 중
+     * 하나다: 결제창을 닫고 떠난 것(대부분), 또는 **PG 에서는 끝났는데 우리가
+     * 모르는 것**(재전송 한도를 넘긴 웹훅, 복귀 요청 유실). 둘을 가르는 PG 조회는
+     * 하지 않는다 → 사람이 본다. docs/plan-multi-pg.md 6장 D1·D3
+     *
+     * 판정(어긋남)으로 넣지 않는 이유: 떠난 결제는 정상이라, 넣으면 cron 이 영원히 실패한다.
+     */
+    private function reportStale($since)
+    {
+        $rows = $this->db->query(
+            'SELECT LOWER(HEX(payment_uid)) AS uid, pg, status, created_at
+               FROM payments
+              WHERE status IN ("created", "pending") AND created_at >= ? AND created_at < ?
+              ORDER BY created_at', array($since, gmdate('Y-m-d H:i:s', time() - self::STALE_AFTER_SECONDS))
+        )->result_array();
+
+        if (empty($rows))
+        {
+            $this->line('  오래된 created·pending 없음');
+
+            return;
+        }
+
+        $byKind = array();
+
+        foreach ($rows as $row)
+        {
+            $kind          = $row['pg'].' '.$row['status'];
+            $byKind[$kind] = ($byKind[$kind] ?? 0) + 1;
+        }
+
+        $parts = array();
+
+        foreach ($byKind as $kind => $n)
+        {
+            $parts[] = $kind.' '.$n;
+        }
+
+        $this->line(sprintf('  오래된 created·pending %d건 (%d분 넘게) — 보고만, 판정에 넣지 않음 · %s',
+            count($rows), self::STALE_AFTER_SECONDS / 60, implode(' · ', $parts)));
+
+        foreach (array_slice($rows, 0, 20) as $row)
+        {
+            $this->line('    '.$row['uid'].'  '.$row['pg'].'  '.$row['status'].'  '.$row['created_at'].' UTC');
+        }
+
+        if (count($rows) > 20)
+        {
+            $this->line('    … '.(count($rows) - 20).'건 더');
+        }
     }
 
     private function fail($msg)
