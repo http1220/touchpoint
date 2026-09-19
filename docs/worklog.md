@@ -163,6 +163,28 @@ production 에서는 막혀 있습니다. .env 에 SEED_ALLOWED=true 를 넣으�
 | `01a0b7b50b80…` | stub · **captured** | 내 카드 없는 한 바퀴 확인 — GA4·Meta 전송됨 |
 | `01a0b78e2145…` | inicis · created | **내 요청이 아니다** — UA `iPhone OS 18_7` 실기기, 02:45:40 UTC. 휴대폰으로 결제를 눌러 본 누군가 [추정: 사용자의 확인] |
 
+### 오후 ③ — 모바일은 안내로 (B10 번복, `dec358f`)
+
+**한 일** 모바일에서는 이니시스 버튼·스크립트를 그리지 않고 "카드 결제창은 PC 에서" 를 보인다. 카드 없는 길은 그대로. 판별은 엣지의 `map $is_mobile` 을 `fastcgi_param AB_IS_MOBILE` 로 넘겨 **한 곳**에 둔다.
+
+**막힌 것 — 원격 스크립트가 reload 전에 끝났다**
+`ssh … 'bash -s' <<REMOTE` 로 넘긴 스크립트에서 `nginx -t` 출력 뒤로 아무것도 나오지 않았다.
+**원인** [확인] 스크립트 본문이 bash 의 stdin 인데, 그 안의 `docker compose exec -T` 가 **남은 stdin 을 읽어 버렸다** — 뒤의 reload·확인 명령이 통째로 먹혔다. 오전의 "원격 스크립트가 안내 문구도 없이 끝났다"(막힌 것 7 의 [미확인]) 도 같은 원인일 가능성이 크다 [추정] — 그 스크립트도 `docker compose exec -T` 뒤에 있었다.
+**대응** 원격 스크립트 안의 `docker compose exec` 에 `</dev/null`.
+
+**확인(운영)** `nginx -t` 통과 → `nginx -s reload`(rc 0). 같은 입장권으로 UA 만 바꿔 `/pay`:
+
+| UA | 이니시스 스크립트 | 이니시스 버튼 | PC 안내 | 카드 없는 버튼 |
+|---|---|---|---|---|
+| iPhone | 없음 | 없음 | 있음 | 있음 |
+| PC | 있음 | 3 | 없음 | 있음 |
+
+헤드리스 iPhone 흉내 스크린샷: 가로 스크롤 없음(폭 390). `lp.` 의 모바일 302 는 그대로(302).
+
+**찾은 것 둘 — 이번엔 적어만 둔다**
+- `.env.example` 의 `MOBILE_REDIRECT_ENABLED` 를 **읽는 코드가 없다.** 302 는 늘 켜져 있다 — 문서가 없는 스위치를 있다고 말하고 있었다(주석을 고쳤다)
+- reload 때 엣지가 `lua_code_cache is off; this will hurt performance` 경고를 낸다(`nginx.conf:44`). 운영에서 Lua 를 요청마다 다시 읽고 있다 — 성능 계측 수치의 전제일 수 있어 따로 본다
+
 ### 한 일
 
 - 멀티 PG 계획 공개본, 리스크별 결정(6장), 세금 인터페이스와 통과 구현 (`349e597`, `731baff`)
