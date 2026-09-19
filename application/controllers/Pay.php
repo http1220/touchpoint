@@ -243,7 +243,8 @@ class Pay extends MY_Controller
 			(string) (getenv('PAY_DEMO_BUYER_EMAIL') ?: ''),
 
 			tp_host_url('app', '/pay/inicis/return'),
-			tp_host_url('app', '/pay/inicis/close')
+			// 닫은 뒤 결과 화면으로 가려면 어느 결제인지 알아야 한다 → inicis_close()
+			tp_host_url('app', '/pay/inicis/close?uid='.$payment['uid_hex'])
 		)));
 	}
 
@@ -333,17 +334,27 @@ class Pay extends MY_Controller
 	 * (다른 오리진) 안의 프레임**에서 열릴 수 있다 — 엣지가 모든 응답에
 	 * `X-Frame-Options: SAMEORIGIN` 을 붙이므로 그때는 그려지지 않는다.
 	 * 무과금 확인 ①(결제창 열고 닫기)에서 판정한다 → plan-multi-pg.md 6장
+	 * → 09-19 확인: 닫기 URL 이 불리고(200) 결제창이 닫힌다.
+	 *
+	 * **닫은 뒤 결과 화면으로 보낸다(09-19 오후).** 전에는 결제 화면이 "결제창을
+	 * 엽니다." 에 멈춰 있어 닫았다는 반응이 없었다. 닫기 URL 에 결제 uid 를 실어
+	 * 보내고(`?uid=`), 이 페이지가 상위 화면을 `/pay/result/{uid}?closed=1` 로 옮긴다.
+	 * [추정] 이 페이지가 우리 결제 화면을 부모로 둔 프레임에서 열린다 — 운영에서 판정한다.
 	 */
 	public function inicis_close()
 	{
 		$mode = $this->gateways->inicisMode();
 		$host = $mode === InicisEndpoints::MODE_LIVE ? 'https://stdpay.inicis.com' : 'https://stgstdpay.inicis.com';
+		$uid  = strtolower(trim((string) $this->input->get('uid', FALSE)));
 
 		$this->output->set_header('X-Robots-Tag: noindex, nofollow');
-		$this->load->view('pay/close', array('close_js' => $host.'/stdjs/INIStdPay_close.js'));
+		$this->load->view('pay/close', array(
+			'close_js'   => $host.'/stdjs/INIStdPay_close.js',
+			'result_url' => preg_match('/\A[0-9a-f]{32}\z/', $uid) === 1 ? '/pay/result/'.$uid.'?closed=1' : NULL,
+		));
 	}
 
-	/** GET /pay/result/{uid} */
+	/** GET /pay/result/{uid}  (?closed=1 — 결제창을 닫고 온 경우) */
 	public function result($uid = NULL)
 	{
 		if ( ! $this->hasAccess())
@@ -358,10 +369,16 @@ class Pay extends MY_Controller
 
 		if ($payment === NULL)
 		{
-			$this->problem(404, 'payment-not-found', '그런 결제가 없습니다.');
+			// 사람이 여는 화면이라 JSON 대신 결과 화면으로 말한다. 상태 코드는 404 그대로
+			$this->output->set_status_header(404);
+			$this->showOutcome(NULL, '그런 결제가 없습니다.');
+
+			return;
 		}
 
-		$this->showOutcome($payment, NULL);
+		$closed = $this->input->get('closed', FALSE) === '1' && $payment['status'] === PaymentStatus::CREATED;
+
+		$this->showOutcome($payment, $closed ? '결제창을 닫았습니다. 승인을 요청하지 않았고, 청구되지 않았습니다.' : NULL);
 	}
 
 	// ────────────────────────────────────────────────────────

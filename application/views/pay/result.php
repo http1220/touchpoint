@@ -14,7 +14,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * @var string|null $message 결제를 찾지 못했을 때 등
  */
 $labels = array(
-	'created'  => '결제 생성',
+	'created'  => '결제 생성 — 승인 없음 · 청구되지 않음',
 	'pending'  => '보류',
 	'captured' => '승인 — 코인 지급',
 	'failed'   => '실패',
