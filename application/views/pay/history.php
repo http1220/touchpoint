@@ -44,6 +44,13 @@ $coins = static function (array $p) {
 	return number_format($p['coins']).'개'.($p['lots'] > 1 ? ' · 지급 '.$p['lots'].'건' : '').($p['revoked'] > 0 ? ' · 회수' : '');
 };
 
+// 상태마다 <code> 하나 — 줄은 화살표에서만 바뀐다. 한 덩어리로 두면 폰에서 글자마다 접혔다(09-20, 390 실측)
+$flow = static function (array $p) {
+	$codes = array_map(static function ($s) { return '<code>'.html_escape($s).'</code>'; }, $p['path']);
+
+	return implode(' → ', $codes).($p['ignored'] > 0 ? ' · 무시 '.(int) $p['ignored'] : '');
+};
+
 $byStatus = array();
 
 foreach ($counts as $statuses)
@@ -92,7 +99,7 @@ $inicisCaptured = ($counts['inicis']['captured'] ?? 0) + ($counts['inicis']['ref
           <p class="caption">상세 화면은 입장권이 필요합니다(1일). <a href="<?= html_escape(tp_host_url('root', '/tour#pay')) ?>">안내 화면</a>에서 다시 받을 수 있습니다.</p>
         <?php endif; ?>
         <div class="table-scroll" role="region" aria-label="이 브라우저에서 만든 결제" tabindex="0">
-          <table class="data">
+          <table class="data data--history">
             <thead><tr><th scope="col">시각(KST)</th><th scope="col">출처</th><th scope="col">금액</th><th scope="col">상태</th><th scope="col">장부 흐름</th><th scope="col">코인</th><th scope="col">상세</th></tr></thead>
             <tbody>
             <?php foreach ($mine as $p): ?>
@@ -101,7 +108,7 @@ $inicisCaptured = ($counts['inicis']['captured'] ?? 0) + ($counts['inicis']['ref
                 <td><?= html_escape(PaymentOrigin::label($p['idempotency_key'])) ?> <span class="muted">(<?= html_escape($p['pg']) ?>)</span></td>
                 <td class="nowrap"><?= number_format($p['amount_minor']) ?> <?= html_escape($p['currency']) ?></td>
                 <td><span class="badge<?= $p['status'] === 'captured' ? ' badge--success' : '' ?>"><?= html_escape($labels[$p['status']] ?? $p['status']) ?></span></td>
-                <td><code><?= html_escape(implode(' → ', $p['path'])) ?></code><?= $p['ignored'] > 0 ? ' · 무시 '.(int) $p['ignored'] : '' ?></td>
+                <td class="flow"><?= $flow($p) ?></td>
                 <td class="nowrap"><?= html_escape($coins($p)) ?></td>
                 <td><a href="/pay/result/<?= html_escape($p['uid_hex']) ?>">장부 보기</a></td>
               </tr>
@@ -114,10 +121,10 @@ $inicisCaptured = ($counts['inicis']['captured'] ?? 0) + ($counts['inicis']['ref
       <h2>최근 결제 전부 <span class="muted">— <?= count($recent) ?>건<?= $total > count($recent) ? ' / '.number_format($total) : '' ?></span></h2>
       <p class="caption">
         다른 사람의 결제는 번호 앞 12자리(만든 시각)만 보이고 상세 링크가 없습니다.
-        확인·측정용으로 만든 결제도 지우지 않았습니다 — <strong>출처는 결제를 만들 때 보낸 키의 앞부분으로 가른 자기 신고</strong>입니다.
+        확인·측정용으로 만든 결제도 지우지 않았습니다 — <strong>출처는 결제를 만들 때 보낸 키의 모양으로 가른 자기 신고</strong>입니다.
       </p>
       <div class="table-scroll" role="region" aria-label="최근 결제 전부" tabindex="0">
-        <table class="data">
+        <table class="data data--history">
           <thead><tr><th scope="col">시각(KST)</th><th scope="col">결제</th><th scope="col">출처</th><th scope="col">금액</th><th scope="col">상태</th><th scope="col">장부 흐름</th><th scope="col">코인</th></tr></thead>
           <tbody>
           <?php foreach ($recent as $p): ?>
@@ -137,7 +144,7 @@ $inicisCaptured = ($counts['inicis']['captured'] ?? 0) + ($counts['inicis']['ref
               </td>
               <td class="nowrap"><?= number_format($p['amount_minor']) ?> <?= html_escape($p['currency']) ?></td>
               <td><span class="badge<?= $p['status'] === 'captured' ? ' badge--success' : '' ?>"><?= html_escape($labels[$p['status']] ?? $p['status']) ?></span></td>
-              <td><code><?= html_escape(implode(' → ', $p['path'])) ?></code><?= $p['ignored'] > 0 ? ' · 무시 '.(int) $p['ignored'] : '' ?></td>
+              <td class="flow"><?= $flow($p) ?></td>
               <td class="nowrap"><?= html_escape($coins($p)) ?></td>
             </tr>
           <?php endforeach; ?>

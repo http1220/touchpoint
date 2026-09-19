@@ -16,12 +16,13 @@ final class PaymentOriginTest extends TestCase
         self::assertSame($byVisitor, PaymentOrigin::byVisitor($key));
     }
 
-    /** 09-20 운영 payments 의 접두어 전부(vt- 제외 — 아래) */
+    /** 09-20 운영 payments 에 있는 키 모양 전부(vt- 제외 — 아래) */
     public static function 운영에_있는_접두어(): array
     {
         return [
             'demo'      => ['demo-6b1f0c2e-1d3a-4c55-9e0a-2f6d8b7c1a90', '카드 없는 버튼', true],
             'pay'       => ['pay-12f29c01-6615-4608-bf57-3e0abc4c8a06', '카드 결제창', true],
+            'demo 스크립트' => ['demo-1789619982', '1사이클 데모 스크립트', false],
             'interview' => ['interview-dup-1789790369467363236', '면접 시연 대본', false],
             'd3'        => ['d3-1789357066', '동시성 측정 (D-3)', false],
             'ctl'       => ['ctl-1789357243', '동시성 측정 (D-3)', false],
@@ -46,5 +47,15 @@ final class PaymentOriginTest extends TestCase
         // 'demo' 로 시작하지만 'demo-' 는 아니다 — 방문자 버튼으로 세면 안 된다
         self::assertSame(PaymentOrigin::OTHER, PaymentOrigin::label('demonstration-1'));
         self::assertSame(PaymentOrigin::OTHER, PaymentOrigin::label('payload-1'));
+    }
+
+    public function test_방문자_버튼은_접두어에_UUID_까지_맞아야_한다(): void
+    {
+        // 09-20: 접두어만 보다가 09-17 의 운영자 스크립트 결제(demo-<유닉스초>)를 "카드 없는 버튼" 으로 셌다.
+        // 그 버튼은 09-19 에 생겼다
+        self::assertFalse(PaymentOrigin::byVisitor('demo-1789619982'));
+        self::assertSame(PaymentOrigin::OTHER, PaymentOrigin::label('demo-hand-typed'));
+        self::assertSame(PaymentOrigin::OTHER, PaymentOrigin::label('pay-1'));
+        self::assertFalse(PaymentOrigin::byVisitor('DEMO-6B1F0C2E-1D3A-4C55-9E0A-2F6D8B7C1A90'));
     }
 }
