@@ -123,6 +123,9 @@ $flow = array(
           <p class="buttons"><button type="submit" class="button">입장권 받고 결제 화면으로</button></p>
         </form>
       <?php endif; ?>
+      <?php /* 이력은 입장권 없이 열린다(09-20) — 결제를 하지 않고도 "지금까지 무엇이 있었나" 를 본다 → Pay::history */ ?>
+      <p><a href="<?= html_escape(tp_host_url('app', '/pay/history')) ?>">지금까지의 결제 이력</a> — 입장권 없이 열립니다.
+        방문자가 만든 결제와 확인·측정용으로 만든 결제가 출처와 함께 있습니다.</p>
       <p class="caption">결과 화면은 장부(결제 이벤트)를 그대로 보여 줍니다. 승인됐는데 장부에 오르지 못하면 그 요청이 승인을 되돌립니다(망취소) —
         <a href="<?= $repo ?>application/controllers/Pay.php">Pay.php<span aria-hidden="true">↗</span></a> ·
         <a href="<?= $repo ?>application/controllers/Purchase.php">Purchase.php<span aria-hidden="true">↗</span></a></p>

@@ -43,7 +43,7 @@ $sections = array(
 
     <header class="masthead">
       <p class="masthead__mark"><a href="<?= html_escape(tp_host_url('root', '/')) ?>">touchpoint</a> <span class="masthead__sub">웹툰</span></p>
-      <p class="eyebrow masthead__note">시행일 2026년 9월 19일</p>
+      <p class="eyebrow masthead__note">시행일 2026년 9월 20일</p>
     </header>
 
     <section class="panel panel--bottom privacy-title" aria-labelledby="page-title">
@@ -139,7 +139,10 @@ $sections = array(
             <tr><td><code>tp_ad_optout</code></td><td>이 사이트</td><td>맞춤형 광고 거부 설정 기억</td><td>1년</td></tr>
             <?php /* src/Payment/PayAccess · controllers/Pay::grant — 09-19 */ ?>
             <tr><td><code>tp_pay</code></td><td>이 사이트</td><td>시연 결제 입장권 — 버튼을 누른 브라우저에 주는 서명된 임의 값 (개인 식별 없음)</td><td>1일</td></tr>
-            <tr><td><code>tp_probe_vid</code></td><td>이 사이트</td><td>진단 페이지(<code>/diag</code>)의 쿠키 동작 시험</td><td>짧은 기간</td></tr>
+            <?php /* src/Payment/MyPayments · controllers/Pay::rememberMine — 09-20 */ ?>
+            <tr><td><code>tp_pay_mine</code></td><td>이 사이트</td><td>이 브라우저에서 만든 시연 결제의 번호 목록 — 결제 이력 화면의 "이 브라우저에서 만든 결제" (개인 식별 없음)</td><td>30일</td></tr>
+            <?php /* controllers/Diag.php — tp_probe_tid 는 09-20 에 빠진 것을 찾아 추가 */ ?>
+            <tr><td><code>tp_probe_vid</code>, <code>tp_probe_tid</code></td><td>이 사이트</td><td>진단 페이지(<code>/diag</code>)의 쿠키 동작 시험</td><td>1시간</td></tr>
             <tr><td><code>_ga</code>, <code>_ga_*</code></td><td>Google</td><td>이용 통계</td><td>최대 2년</td></tr>
             <tr><td><code>_fbp</code></td><td>Meta</td><td>광고 성과 측정 (픽셀이 켜져 있을 때)</td><td>90일</td></tr>
             <tr><td><code>_fbc</code></td><td>Meta</td><td>Meta 광고를 눌러 들어온 경우의 클릭 식별</td><td>90일</td></tr>

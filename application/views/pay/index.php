@@ -39,7 +39,7 @@ $cheap  = $products === array() ? NULL : $products[0];   // 카드 없는 길은
 
     <header class="masthead">
       <p class="masthead__mark"><a href="<?= html_escape(tp_host_url('root', '/')) ?>">touchpoint</a> <span class="masthead__sub">시연 결제</span></p>
-      <p class="eyebrow masthead__note">가짜 PG · 이니시스 <?= html_escape($mode === 'live' ? '운영' : '테스트') ?></p>
+      <p class="eyebrow masthead__note">가짜 PG · 이니시스 <?= html_escape($mode === 'live' ? '운영' : '테스트') ?> · <a href="/pay/history">결제 이력</a></p>
     </header>
 
     <section class="panel" aria-labelledby="stub-title">

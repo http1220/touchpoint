@@ -43,6 +43,7 @@ $route['pay/inicis/start']   = 'pay/inicis_start';   // POST 결제창 필드 �
 $route['pay/inicis/return']  = 'pay/inicis_return';  // POST 이니시스 복귀 → 승인 → 장부
 $route['pay/inicis/close']   = 'pay/inicis_close';   // *    결제창 닫기
 $route['pay/result/(:any)']  = 'pay/result/$1';      // GET  결과
+$route['pay/history']        = 'pay/history';        // GET  결제 이력 — 입장권 없이 누구나
 $route['metrics']     = 'metrics/index';     // 7. GET  /metrics
 $route['privacy']     = 'privacy/index';     // 개인정보처리방침 — 픽셀보다 먼저
 $route['privacy/ads'] = 'privacy/ads';       // 맞춤형 광고 거부 (쿠키)

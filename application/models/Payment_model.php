@@ -904,6 +904,92 @@ class Payment_model extends CI_Model
 	}
 
 	/**
+	 * 결제 이력 화면(/pay/history) — 최근 것부터.
+	 *
+	 * 결제마다 **전이 경로**(created → captured → refunded)와 무시된 이벤트 수, 코인 지급을
+	 * 한 쿼리로 센다. 결과 화면(effects · events)을 결제마다 부르면 50건에 쿼리 200번이다.
+	 *
+	 * 공개 화면이라 싣지 않는 것: 회원 · 방문 · 이벤트 원문 · PG 번호. 멱등 키는 출처를
+	 * 가르는 데만 쓰고 화면에 내지 않는다 → App\Payment\PaymentOrigin
+	 *
+	 * 프라이머리에서 읽는다 — 방금 만든 결제가 "내 결제" 칸에 바로 떠야 한다 → ADR-007
+	 *
+	 * @param list<string>|null $uids null 이면 전체, 아니면 그 결제들만(형식이 틀린 uid 는 버린다)
+	 * @return list<array{uid_hex: string, pg: string, status: string, amount_minor: int, currency: string,
+	 *                    idempotency_key: string, created_at: string, path: list<string>, ignored: int, lots: int, coins: int, revoked: int}>
+	 */
+	public function history($limit, ?array $uids = NULL)
+	{
+		$where = '';
+		$binds = array();
+
+		if ($uids !== NULL)
+		{
+			$uids = array_values(array_filter($uids, static function ($u) { return self::isUidHex($u); }));
+
+			if ($uids === array())
+			{
+				return array();
+			}
+
+			$where = ' WHERE p.payment_uid IN ('.implode(', ', array_fill(0, count($uids), 'UNHEX(?)')).')';
+			$binds = $uids;
+		}
+
+		$binds[] = max(1, (int) $limit);
+
+		$rows = $this->db->query(
+			'SELECT LOWER(HEX(p.payment_uid)) AS uid_hex, p.pg, p.status, p.amount_minor, p.currency,
+			        p.idempotency_key, p.created_at,
+			        (SELECT GROUP_CONCAT(e.to_status ORDER BY e.id SEPARATOR " ") FROM '.self::EVENTS.' e
+			          WHERE e.payment_id = p.id AND (e.from_status IS NULL OR e.from_status <> e.to_status)) AS path,
+			        (SELECT COUNT(*) FROM '.self::EVENTS.' e WHERE e.payment_id = p.id AND e.from_status = e.to_status) AS ignored,
+			        (SELECT COUNT(*) FROM coin_lots l WHERE l.payment_id = p.id) AS lots,
+			        (SELECT COALESCE(SUM(l.amount), 0) FROM coin_lots l WHERE l.payment_id = p.id) AS coins,
+			        (SELECT COUNT(*) FROM coin_lots l WHERE l.payment_id = p.id AND l.revoked_at IS NOT NULL) AS revoked
+			   FROM '.self::TABLE.' p'.$where.'
+			  ORDER BY p.id DESC
+			  LIMIT ?',
+			$binds
+		)->result();
+
+		$out = array();
+
+		foreach ($rows as $row)
+		{
+			$out[] = array(
+				'uid_hex'         => (string) $row->uid_hex,
+				'pg'              => (string) $row->pg,
+				'status'          => (string) $row->status,
+				'amount_minor'    => (int) $row->amount_minor,
+				'currency'        => (string) $row->currency,
+				'idempotency_key' => (string) $row->idempotency_key,
+				'created_at'      => (string) $row->created_at,
+				'path'            => $row->path === NULL ? array() : explode(' ', (string) $row->path),
+				'ignored'         => (int) $row->ignored,
+				'lots'            => (int) $row->lots,
+				'coins'           => (int) $row->coins,
+				'revoked'         => (int) $row->revoked,
+			);
+		}
+
+		return $out;
+	}
+
+	/** @return array<string, array<string, int>> PG → 상태 → 결제 수(전체). 이력 화면 맨 위 줄 */
+	public function countByPgStatus()
+	{
+		$out = array();
+
+		foreach ($this->db->query('SELECT pg, status, COUNT(*) AS n FROM '.self::TABLE.' GROUP BY pg, status')->result() as $row)
+		{
+			$out[(string) $row->pg][(string) $row->status] = (int) $row->n;
+		}
+
+		return $out;
+	}
+
+	/**
 	 * INSERT IGNORE — 같은 번호를 다시 받아도(웹훅 재전송) 행이 늘지 않는다.
 	 * uq_pg_ref 가 **다른 결제**의 번호와 겹쳐서 무시된 것이면 그건 사고다.
 	 * 여기서는 판별하지 않고 호출자가 findPgRefs 로 본다.

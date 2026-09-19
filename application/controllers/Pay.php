@@ -6,6 +6,7 @@ use App\Payment\CoinProduct;
 use App\Payment\Gateway\Checkout;
 use App\Payment\Gateway\GatewayResult;
 use App\Payment\Gateway\InicisEndpoints;
+use App\Payment\MyPayments;
 use App\Payment\PayAccess;
 use App\Payment\PaymentStatus;
 use App\Payment\StubWebhook;
@@ -21,11 +22,13 @@ use App\Payment\WebhookSignature;
  *   POST /pay/inicis/return   이니시스 복귀 → 승인 → 장부 (없으면 망취소)
  *   *    /pay/inicis/close    결제창 닫기
  *   GET  /pay/result/{uid}    결과
+ *   GET  /pay/history         결제 이력 — 이 브라우저의 결제 + 최근 결제 전부
  *
  * ── 문은 둘이다 ──
  *
  *   입장권 쿠키(PayAccess)      /pay · start · result — **누구나 버튼 한 번으로 받는다**(09-19 오후,
  *                                C4 를 뒤집었다). 막는 것은 사람이 아니라 크롤러와 "모르고 누르기" 다
+ *                                history 는 문이 없다 — 읽기만 하고, 남의 결제는 uid 를 다 보이지 않는다
  *   이니시스 흐름                return — **쿠키가 실리지 않는다.** 교차 사이트 POST 라
  *                                SameSite=Lax 쿠키(세션·ab_vid·tp_pay)가 없다 → C3.
  *                                결제는 쿠키가 아니라 orderNumber 로 찾는다
@@ -41,6 +44,9 @@ use App\Payment\WebhookSignature;
  */
 class Pay extends MY_Controller
 {
+	/** 이력 화면 아래 표(최근 결제 전부)의 행 수 */
+	const HISTORY_LIMIT = 50;
+
 	public function __construct()
 	{
 		parent::__construct();
@@ -135,7 +141,9 @@ class Pay extends MY_Controller
 	 *
 	 * 입장권은 누구나 받는다. 그래서 **이 버튼이 방금 만든 결제만**: 스텁 · created ·
 	 * `demo-` 키 · 10분 이내 → src/Payment/StubWebhook::demoRejects. D-3 측정용 결제나
-	 * 남의 결제를 골라 captured 로 만들 수 없다.
+	 * 남의 결제를 골라 captured 로 만들 수 없다. **누가 만들었는지는 보지 않는다** — 남이
+	 * 방금 만든 시연 결제는 uid 를 알면 확정할 수 있다. 그래서 이력 화면(history)은 남의
+	 * 결제 uid 를 앞 12자리만 보인다.
 	 *
 	 * 매체로는 **그대로 보낸다**(사용자 결정 — 스텁 결제의 D2 와 같다). 운영 GA4 에 표시 없이 들어간다.
 	 */
@@ -167,6 +175,8 @@ class Pay extends MY_Controller
 		{
 			$this->problem(503, 'pg-unavailable', '가짜 PG 의 서명 키가 없습니다.');
 		}
+
+		$this->rememberMine($uid);
 
 		$raw = StubWebhook::body(
 			$uid,
@@ -227,6 +237,9 @@ class Pay extends MY_Controller
 			// 이미 진행된 결제로 결제창을 또 열면 승인이 두 번 날 수 있다.
 			$this->problem(409, 'payment-not-open', '이미 진행된 결제입니다.', array('status' => $payment['status']));
 		}
+
+		// 결제창을 열기 전에 기억한다 — 닫고 떠난 결제도 "내 결제" 에 "승인 없음" 으로 남는다
+		$this->rememberMine($payment['uid_hex']);
 
 		$gateway = $this->gatewayOr503();
 		$product = CoinProduct::findByPrice($payment['amount_minor'], $payment['currency']);
@@ -381,6 +394,36 @@ class Pay extends MY_Controller
 		$this->showOutcome($payment, $closed ? '결제창을 닫았습니다. 승인을 요청하지 않았고, 청구되지 않았습니다.' : NULL);
 	}
 
+	/**
+	 * GET /pay/history — 결제 이력. **입장권 없이 누구나 연다**(사용자 결정, 09-20).
+	 * 면접관·방문자가 "결제가 됐나, 이 시스템에 무엇이 있었나" 를 버튼 없이 본다.
+	 *
+	 *   위    이 브라우저에서 만든 결제 — 상세(/pay/result) 링크까지. 쿠키 → App\Payment\MyPayments
+	 *   아래  최근 결제 전부 — uid 앞 12자리(UUIDv7 의 시각 부분)만, 링크 없이.
+	 *         스모크·측정·면접 대본 행도 숨기지 않고 출처를 단다 → App\Payment\PaymentOrigin
+	 *
+	 * **남의 결제에 전체 uid 를 내지 않는 이유**: 카드 없는 확정(/pay/stub/confirm)은 누가
+	 * 만든 결제인지 보지 않는다(스텁 · created · demo- · 10분만 본다). 전체 uid 가 공개되면
+	 * 남이 방금 만든 시연 결제를 대신 확정할 수 있다.
+	 */
+	public function history()
+	{
+		$mineUids = MyPayments::parse($this->input->cookie(MyPayments::COOKIE, FALSE));
+
+		// 대사에서 뺀 결제(일부러 어긋나게 만든 대조군)는 사유를 함께 보인다 → config/reconciliation.php
+		$this->config->load('reconciliation', TRUE, TRUE);
+
+		$this->output->set_header('X-Robots-Tag: noindex, nofollow');
+		$this->load->view('pay/history', array(
+			'mine'       => $mineUids === array() ? array() : $this->payment_model->history(MyPayments::MAX, $mineUids),
+			'mine_set'   => array_flip($mineUids),
+			'recent'     => $this->payment_model->history(self::HISTORY_LIMIT),
+			'counts'     => $this->payment_model->countByPgStatus(),
+			'excluded'   => (array) $this->config->item('reconciliation_excluded', 'reconciliation'),
+			'has_access' => $this->hasAccess(),
+		));
+	}
+
 	// ────────────────────────────────────────────────────────
 
 	/**
@@ -487,6 +530,22 @@ class Pay extends MY_Controller
 	{
 		$this->output->set_header('X-Robots-Tag: noindex, nofollow');
 		$this->load->view('pay/gate', array('open' => $this->secret() !== ''));
+	}
+
+	/**
+	 * 이 브라우저가 만든 결제를 기억한다 → /pay/history 의 "내 결제".
+	 * 입장권과 달리 서명하지 않는다 — 여는 문이 새로 생기지 않는다 → MyPayments 주석
+	 */
+	private function rememberMine($uid)
+	{
+		setcookie(MyPayments::COOKIE, MyPayments::add($this->input->cookie(MyPayments::COOKIE, FALSE), $uid), array(
+			'expires'  => time() + MyPayments::TTL,
+			'path'     => '/pay',    // 이 컨트롤러만 읽고 쓴다
+			'domain'   => '',        // app. 호스트에만
+			'secure'   => TRUE,
+			'httponly' => TRUE,
+			'samesite' => 'Lax',
+		));
 	}
 
 	private function grant($secret)

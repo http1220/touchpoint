@@ -102,7 +102,7 @@ $labels = array(
         </div>
       <?php endif; ?>
 
-      <p><a class="button" href="/pay">결제 화면으로</a></p>
+      <p class="buttons"><a class="button" href="/pay">결제 화면으로</a> <a href="/pay/history">결제 이력</a></p>
     </section>
   </div>
 </main>
