@@ -303,13 +303,14 @@ created → pending → authorized → captured
 | 메서드 | 경로 | 문 | 하는 일 |
 |---|---|---|---|
 | POST | `app./pay/access` | 없음 | 입장권(서명 · 만료 1일)을 쿠키 `tp_pay` 로 주고 `303 /pay`. **안내 화면(`/tour#pay`)의 버튼이 부른다** — POST 라 크롤러는 받지 않는다 |
-| POST | `app./pay/stub/confirm` `{payment_uid}` | 쿠키 + **이 버튼이 방금 만든 결제만**(스텁 · `created` · `demo-` 키 · 10분) | **카드 없는 한 바퀴** — 서버가 서명한 `captured` 웹훅을 자기 `/webhooks/pg` 로 **같은 바이트 두 번** 보낸다(1번째 applied · 2번째 ignored). `{result_url, deliveries}`. 아니면 409 `not-a-demo-payment` |
+| POST | `app./pay/stub/confirm` `{payment_uid}` | 쿠키 + **이 버튼이 방금 만든 결제만**(스텁 · `created` · `demo-` 키 · 10분 — 만든 사람은 보지 않는다) | **카드 없는 한 바퀴** — 서버가 서명한 `captured` 웹훅을 자기 `/webhooks/pg` 로 **같은 바이트 두 번** 보낸다(1번째 applied · 2번째 ignored). `{result_url, deliveries}`. 아니면 409 `not-a-demo-payment` |
 | GET | `app./pay?t=<비밀>` | 비밀 | 운영자 지름길 — 입장권을 주고 `303 /pay` (주소에서 비밀을 지운다) |
 | GET | `app./pay` | 쿠키 | 시연 결제 화면. 없으면 입장권 받기 안내(200) — 처음엔 404 였다(09-19 오후 C4 를 뒤집기 전) |
 | POST | `app./pay/inicis/start` `{payment_uid}` | 쿠키 | 결제창 필드에 **서버가** 서명해 돌려준다 (`signature` · `verification` · `mKey`) |
 | POST | `app./pay/inicis/return` | **이니시스 흐름** | 이니시스가 브라우저를 통해 보낸다 — 쿠키가 실리지 않는다(교차 사이트 POST). 승인 → 장부 → `303 /pay/result/{uid}` |
 | GET·POST | `app./pay/inicis/close` | — | 결제창 닫기 |
 | GET | `app./pay/result/{uid}` | 쿠키 | 결제 상태와 장부 이벤트 |
+| GET | `app./pay/history` | **없음** | 결제 이력. 위: 이 브라우저에서 만든 결제(쿠키 `tp_pay_mine` — 결제 uid 목록 최대 20, 30일, `Path=/pay`, 서명 없음) · 아래: 최근 결제 50건 — **uid 앞 12자리만, 상세 링크 없이**(카드 없는 확정이 만든 사람을 보지 않아서). 출처는 멱등 키의 모양 — 접두어 + 형식(자기 신고, `src/Payment/PaymentOrigin`). 회원 · 방문 · PG 번호 · 키 원문은 내지 않는다 |
 
 ### `return` 이 장부에 적는 것
 

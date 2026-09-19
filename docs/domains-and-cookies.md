@@ -62,14 +62,36 @@ api.sshwan.com   A  <EIP>
 
 ## 3. 쿠키 정책표
 
-| 쿠키 | 발급 도메인 | `Domain` | `SameSite` | `Secure` | `HttpOnly` | `Partitioned` | 수명 | 담는 값 |
-|---|---|---|---|---|---|---|---|---|
-| `ab_vid` | `lp.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | **visit_uid만** (UUIDv7) |
-| `ab_sid` | `app.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 세션 | 로그인 세션 |
-| `ab_tid` | `api.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | 수집 측 식별자 |
-| `ab_g4cid` | `app.sshwan.com` | `.sshwan.com` | `Lax` | ✅ | ❌ | — | 2년 | GA4 client_id 복제 |
+> **09-20 에 코드·응답 헤더와 대조해 다시 썼다.** 이 표는 설계 때(09-08) 쓴 뒤 고치지 않아서, 발급하지 않는
+> 쿠키 셋(`ab_sid` · `ab_tid` · `ab_g4cid`)을 적고 실제로 나가는 쿠키 일곱을 빠뜨리고 있었다. `config.php` 와
+> `Visitor.php` 주석이 "이 표와 일치해야 한다" 고 적고 있었는데도. 사용자에게 알리는 목록은
+> [개인정보 처리방침](../application/views/privacy/index.php)의 쿠키 표다(09-15 에 응답 헤더와 대조 · 09-20 에 빠져 있던 `tp_probe_tid` 추가).
+>
+> "확인" 열: **헤더** = 운영 응답의 `Set-Cookie` 원문(09-20) · **브라우저** = 헤드리스 Chrome 의 쿠키 목록(09-20) · **코드** = `setcookie` 인자
+
+| 쿠키 | 누가 · 언제 | `Domain` | `SameSite` | `Secure` | `HttpOnly` | `Partitioned` | 수명 | 담는 값 | 확인 |
+|---|---|---|---|---|---|---|---|---|---|
+| `ab_vid` | 방문을 여는 요청(`lp.` 랜딩 · 브리지) — `Visitor.php` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | **visit_uid만** (UUIDv7) | 헤더 |
+| `tp_sess` | 모든 호스트 — CI3 세션 | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 2시간 | 세션 ID | 헤더 |
+| `tp_csrf` | 모든 호스트 — CI3 CSRF | `.sshwan.com` | **`Strict`** | ✅ | ✅ | — | 2시간 | CSRF 토큰 | 헤더 |
+| `ab_rdb` | 모든 호스트 — 엣지 Lua(`replica.lua`) | 없음(호스트 전용) | `Lax` | ✅ | ✅ | — | 1일 | 읽기 복제본 배정 | 헤더 |
+| `tp_ad_optout` | 방침 화면의 거부 폼 — `Privacy.php` | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1년 | `1` | 코드 |
+| `tp_pay` | `app./pay/access` — 시연 결제 입장권 | 없음(`app.` 전용) | `Lax` | ✅ | ✅ | — | 1일 | 서명된 입장권 | 브라우저 |
+| `tp_pay_mine` | `app./pay/stub/confirm` · `/pay/inicis/start` | 없음(`app.` 전용) · `Path=/pay` | `Lax` | ✅ | ✅ | — | 30일 | 이 브라우저가 만든 결제 uid 목록(서명 없음 → `MyPayments`) | 브라우저 |
+| `tp_probe_vid` | `/diag` — 쿠키 동작 시험 | `.sshwan.com` | `Lax` | ✅ | ✅ | — | 1시간 | 임의 값 | 코드 |
+| `tp_probe_tid` | `/diag` — 쿠키 동작 시험 | `.sshwan.com` | `None` | ✅ | ✅ | ✅ | 1시간 | 임의 값 | 코드 |
+
+**설계만 하고 발급하지 않는 쿠키** (09-20 `grep` — 어느 코드도 만들지 않는다)
+
+| 쿠키 | 설계 때의 목적 | 실제 |
+|---|---|---|
+| `ab_sid` | 로그인 세션 | 가입·로그인이 없다. 세션은 `tp_sess` |
+| `ab_tid` | 수집 측 식별자 | 수집도 `ab_vid` 로 방문을 잇는다(`Collect.php`) |
+| `ab_g4cid` | GA4 client_id 복제 | 서버가 gtag 의 `_ga` 를 읽는다(`src/Channel/GaClientId`) |
 
 ### 설계 결정 4가지
+
+> 2·3 은 위의 **발급하지 않는** 쿠키에 대한 결정이다. 설계 기록으로 남긴다.
 
 **1. 쿠키에는 `visit_uid`만 담는다.**
 어트리뷰션 본체(utm, gclid, pid…)는 서버 DB에 둔다. 클라이언트가 값을 바꿔도 데이터가 오염되지 않는다. 플랫폼 A도 자체 방문자 ID 쿠키만 쿠키에 두고 나머지는 서버에서 처리한다.
