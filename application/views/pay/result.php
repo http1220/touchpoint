@@ -63,7 +63,9 @@ $labels = array(
                 <?php foreach ($effects['outbox'] as $channel => $state): ?>
                   <?= html_escape($channel) ?> <span class="badge<?= $state === 'sent' ? ' badge--success' : '' ?>"><?= html_escape($state) ?></span>
                 <?php endforeach; ?>
-                <span class="caption">— pending 은 워커가 곧 가져간다. 새로고침하면 바뀐다</span>
+                <?php if (array_diff($effects['outbox'], array('sent')) !== array()): ?>
+                  <span class="muted">— pending · sending 은 워커가 처리하는 중입니다. 새로고침하면 바뀝니다</span>
+                <?php endif; ?>
               <?php endif; ?>
             </dd>
           <?php endif; ?>
