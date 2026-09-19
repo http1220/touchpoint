@@ -104,7 +104,7 @@
 | `src/Payment/Gateway/PgAmount.php` | PG별 소수 자릿수(페이팔 HUF·JPY·TWD=0). `MinorUnits`(ISO)와 **일부러 따로 둔다**(B2) |
 | `src/Payment/Gateway/PayloadRedactor.php` | 저장할 필드만 남기는 허용 목록(C5). 원문 전체 대신 `sha256(raw)`를 함께 남긴다 |
 | `application/libraries/Gateways.php` | [`Channels.php`](../application/libraries/Channels.php)와 같은 조립 방식. 통화 → PG 규칙을 한 곳에(KRW→inicis, USD→paypal) |
-| `application/controllers/Pay.php` | **전부 `PAY_DEMO_TOKEN`으로 잠금**(6장 C4) · `GET /pay`(시연 결제 화면, noindex) · `POST /pay/inicis/start` · `POST /pay/inicis/return` · `/pay/inicis/close` · `POST /pay/paypal/order` · `POST /pay/paypal/capture` · `GET /pay/result/{uid}` |
+| `application/controllers/Pay.php` | **입장권**(6장 C4 — 09-19 오후에 "토큰 잠금" 에서 "버튼으로 누구나" 로 바뀌었다) · `GET /pay`(시연 결제 화면, noindex) · `POST /pay/inicis/start` · `POST /pay/inicis/return` · `/pay/inicis/close` · `POST /pay/paypal/order` · `POST /pay/paypal/capture` · `GET /pay/result/{uid}` |
 | `application/views/pay/{index,result}.php` | 바닐라 JS([ADR-009](decisions/ADR-009-no-spa.md)). INIStdPay.js / 페이팔 JS SDK |
 | `application/migrations/20260919000100_create_payment_pg_refs.php` | `payment_pg_refs(payment_id, pg, ref_type, ref_value, created_at)`, `UNIQUE(pg, ref_type, ref_value)` (B7) |
 | `tests/Payment/Gateway/*Test.php` | 4장 검증 1 |
@@ -210,7 +210,7 @@
 | B6 | **자체 검증** | 원본 바이트 규칙을 지킨다. 인증서 URL 호스트 허용 목록과 캐시를 직접 만든다 |
 | B8 | **시각 창 없이 CAS 에 맡김** | 진짜 서명의 재생은 같은 전이를 다시 시도하는 것일 뿐이라 무시된다(D-3). 종결 상태는 되돌릴 수 없다. **스텁(HMAC, 300초 창)과 규칙이 달라진다.** 재전송 서명 실측은 컷 ① 로 남는다 |
 | C1·C2·C3 | 대응 (선택지 없음) | |
-| C4 | **토큰 잠금** | `/pay/*` 전부와 `/purchase`(pg≠stub). 스텁 경로는 D-3 측정 스크립트 때문에 그대로 둔다. 진짜 인증은 아니다 |
+| C4 | ~~토큰 잠금~~ → **뒤집음(09-19 오후): 공개 + 입장권 버튼** | 처음 결정은 공유 토큰을 아는 사람만(`/pay/*` · `/purchase` pg≠stub). 면접관이 별도 링크 없이 해 볼 수 있게 **안내 화면(`/tour#pay`)의 버튼으로 누구나 입장권**(서명 · 만료 1일)을 받게 바꿨다 → 아래 「C4 를 뒤집은 것」 |
 | C5 | **허용 목록 + 원문 sha256** | 카드번호·결제자 개인정보가 보존 범위에 들어오지 않는다. **허용 목록 밖 필드는 나중에 분쟁이 생겨도 복원할 수 없다** |
 | C6 | **기록만, 판단은 사람** | 분쟁·역전 이벤트를 `from=to` 로 남기고 error 로그. 상태와 코인은 바꾸지 않는다([RefundPolicy](../src/Payment/RefundPolicy.php) ② 와 같은 판단). **손실을 받아들인다** |
 | C7 | 해당 없음 | 이 프로젝트에는 성인 콘텐츠가 없다. AUP 원문은 확인하지 못했다 |
@@ -254,3 +254,21 @@
 | C1 위조 승인 주소 | 거절(HTTP 0회), 결제는 `created` 그대로 — C9 도 함께 확인 |
 | C4 토큰 | 없으면 404, `pg=inicis` 는 쿠키 없이 403, 스텁 경로는 그대로 201 |
 | **확인하지 못한 것** | 승인 요청(STEP3)의 서명 · 망취소 · 환불 **성공** — 실카드 없이는 닿을 수 없다(사용자 결정) |
+
+### C4 를 뒤집은 것 — 2026-09-19 오후
+
+**결정**: 안내 탭에서 결제를 해 볼 수 있게, 공개로 열되 **입장권 받기 버튼**을 둔다(사용자 결정). 검토했던 추천은 "토큰 유지 + 안내에서 연결"이었다.
+
+| | 처음(토큰 잠금) | 지금(입장권 버튼) |
+|---|---|---|
+| 누가 여는가 | 공유 비밀을 아는 사람 | **버튼을 누른 누구나** |
+| 쿠키 | 비밀의 해시 — 모두 같은 값 | 방문자마다 다른 **서명된 입장권**, 만료 1일 (`PayAccess::issue`) |
+| 입장권 없이 `/pay` | 404 (문을 숨긴다) | 받기 안내 화면 (문이 공개됐으니 숨길 이유가 없다) |
+| 막는 것 | 사람 | 크롤러(버튼은 POST)와 "모르고 누르기"(버튼 옆에 실승인 문장) |
+| 운영자 지름길 | `/pay?t=<비밀>` | 그대로 |
+
+**받아들이는 것** — 처음 C4 가 막으려던 것이 그대로 열린다:
+
+- 모르는 사람의 카드가 **실제로 승인된다**(자정 전 자동 취소). 버튼과 결제창 사이에 두 번 알린다(안내 문장 · 이니시스 결제창의 약관 동의)
+- 그 결제가 운영 GA4 에 **구분 없이** 들어간다 — D2 의 결정("표시 없이 보냄")이 공개와 만나 커진다. 당일 자동 취소는 **우리에게 알리지 않으므로**(D1) GA4 의 매출은 상쇄되지 않는다. 우리가 `cli/pg refund` 한 것만 상쇄된다
+- 누구나 결제 행을 쌓을 수 있다. 한도는 두지 않았다(검토한 선택지 「공개하되 한도」를 고르지 않았다)

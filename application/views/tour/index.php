@@ -5,7 +5,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * 시연 안내. 홈에서 옮겨 왔다.
  *
  * 시트 두 장.
- *   1  성공 기준 한 문장 + 흐름도 일곱 걸음 (광고 클릭 → … → 결제 → PG 웹훅 → … → 매체)
+ *   1  성공 기준 한 문장 + 흐름도 일곱 걸음 (광고 클릭 → … → 결제 → PG 확정 → … → 매체)
+ *      + 결제를 직접 해 보는 패널 (09-19 — 이니시스 테스트 상점, 입장권 버튼)
  *   2  어려운 자리는 여기다 (5열) · 귀속은 이렇게 정해진다 (7열)
  *
  * 흐름도는 SVG 가 아니라 글자와 선으로 그린다 — 좁은 화면에서 글자가 줄어들지 않고,
@@ -15,6 +16,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * 마지막 자리는 귀속 규칙이 쓴다(2026-09-18).
  *
  * @var string $trace_id
+ * @var bool   $pay_open 시연 결제가 열려 있는가 (PAY_DEMO_TOKEN)
  */
 $repo = 'https://github.com/http1220/touchpoint/blob/main/';
 
@@ -36,12 +38,13 @@ $flow = array(
 	      'sub'  => '광고 링크가 <strong>먼저 들르는 서버</strong>. 유입을 적고 <code>302</code> 로 랜딩에 넘긴다 — 바로 들여보내면 기록할 기회가 없다'),
 	array('lane' => '브라우저', 'name' => '작품 랜딩', 'href' => tp_host_url('lp', '/l/1'), 'code' => NULL,
 	      'sub'  => '무엇이 기록됐는지 화면이 보여 준다. <code>track.js</code> 가 노출·클릭을 모은다'),
-	array('lane' => 'API', 'name' => '결제', 'href' => NULL,
-	      'code' => 'application/controllers/Purchase.php',
-	      'sub'  => '<code>POST /purchase</code> — 금액의 진실은 서버 상품표에 있다. 브라우저가 부른 값을 믿지 않는다'),
-	array('lane' => 'API', 'name' => 'PG 웹훅', 'href' => NULL,
-	      'code' => 'application/controllers/Webhook.php',
-	      'sub'  => '<code>POST /webhooks/pg</code> — 결제 확정은 <strong>웹훅으로</strong> 온다. 같은 알림이 두 번 와도 한 번만 센다'),
+	// 결제는 아래 패널에서 직접 해 볼 수 있다(09-19). 그래서 코드 대신 그 패널로 건다 — 코드 링크는 패널 안에 있다
+	array('lane' => 'API', 'name' => '결제', 'href' => '#pay', 'code' => NULL,
+	      'sub'  => '<code>POST /purchase</code> — 금액의 진실은 서버 상품표에 있다. 아래에서 직접 해 보세요'),
+	// 처음엔 "PG 웹훅" 이었다. 이니시스 카드 결제에는 웹훅이 없다 — 결과를 브라우저가 가져오고 우리가 승인을 요청한다
+	array('lane' => 'API', 'name' => 'PG 확정', 'href' => NULL,
+	      'code' => 'application/models/Payment_model.php',
+	      'sub'  => '가짜 PG 는 <strong>웹훅</strong>, 이니시스는 <strong>복귀 뒤 승인 요청</strong>으로 온다. 어느 문으로 와도 같은 전이를 탄다 — 같은 알림이 두 번 와도 한 번만 센다'),
 	array('lane' => '서버', 'name' => '전환 기록 · 발송 적재', 'href' => NULL,
 	      'code' => 'application/models/Conversion_model.php',
 	      'sub'  => '결제 같은 <strong>값어치 있는 사건</strong>(전환)과 매체로 보낼 것을 <strong>같은 트랜잭션</strong>에 적는다. 어느 광고에서 왔는지가 여기서 붙는다'),
@@ -95,11 +98,32 @@ $flow = array(
         <?php endforeach; ?>
       </ol>
 
-      <p class="meta-line"><strong>일곱 걸음 모두 만들어져 돌아갑니다.</strong> 밑줄 친 셋은 화면이 있어 눌러 볼 수 있고,
-        나머지 넷은 <strong>서버와 API 라 눌러 볼 화면이 없을 뿐</strong>입니다 — 그 걸음이 도는 <strong>코드로 링크</strong>를 걸어 두었고,
+      <p class="meta-line"><strong>일곱 걸음 모두 만들어져 돌아갑니다.</strong> 밑줄 친 넷은 화면이 있어 눌러 볼 수 있고,
+        나머지 셋은 <strong>서버와 API 라 눌러 볼 화면이 없을 뿐</strong>입니다 — 그 걸음이 도는 <strong>코드로 링크</strong>를 걸어 두었고,
         실제로 돈 결과는 <a href="<?= html_escape(tp_host_url('app', '/metrics#convert')) ?>">지표의 전환 표</a>에 있습니다(결제 · 환불 · 가입).
-        결제는 <strong>가짜 PG</strong> 로 웹훅까지 한 바퀴 돕니다 — 실제 PG 는 붙이지 않았습니다.
-        <a href="<?= $repo ?>docs/decisions/ADR-008-stub-pg.md">ADR-008<span aria-hidden="true">↗</span></a></p>
+        결제는 두 길로 돕니다 — 중복·역전을 재는 <strong>가짜 PG</strong>(웹훅까지 한 바퀴)와 <strong>이니시스 테스트 상점</strong>(카드, 아래에서 직접).
+        <a href="<?= $repo ?>docs/decisions/ADR-008-stub-pg.md">ADR-008<span aria-hidden="true">↗</span></a> ·
+        <a href="<?= $repo ?>docs/plan-multi-pg.md">plan-multi-pg<span aria-hidden="true">↗</span></a></p>
+    </section>
+
+    <?php /* 09-19: 흐름도의 '결제' 걸음을 실제 결제대행사로 돌려 보는 자리. 입장권은 누구나 버튼으로 받는다 —
+             POST 라 크롤러는 받지 않고, 버튼 옆 문장이 "카드 승인이 실제로 일어난다" 를 먼저 말한다.
+             문구는 pay/gate.php 와 같게 둔다 → docs/plan-multi-pg.md C4 */ ?>
+    <section class="panel tour-pay" id="pay" aria-labelledby="pay-title">
+      <h2 id="pay-title">결제를 직접 해 보세요</h2>
+      <?php if ( ! $pay_open): ?>
+        <p class="empty">지금은 시연 결제가 열려 있지 않습니다.</p>
+      <?php else: ?>
+        <p>이니시스 <strong>테스트 상점</strong>으로 연결됩니다. 테스트 상점도 <strong>카드 승인은 실제로 일어나고</strong>,
+          이니시스가 당일 자정 전에 자동으로 취소합니다. 카드 정보는 이니시스 결제창에 직접 넣으며 이 사이트를 거치지 않습니다.
+          결제창을 열어 보고 카드를 넣지 않고 닫아도 됩니다.</p>
+        <form method="post" action="<?= html_escape(tp_host_url('app', '/pay/access')) ?>">
+          <p class="buttons"><button type="submit" class="button">입장권 받고 결제 화면으로</button></p>
+        </form>
+      <?php endif; ?>
+      <p class="caption">결과 화면은 장부(결제 이벤트)를 그대로 보여 줍니다. 승인됐는데 장부에 오르지 못하면 그 요청이 승인을 되돌립니다(망취소) —
+        <a href="<?= $repo ?>application/controllers/Pay.php">Pay.php<span aria-hidden="true">↗</span></a> ·
+        <a href="<?= $repo ?>application/controllers/Purchase.php">Purchase.php<span aria-hidden="true">↗</span></a></p>
     </section>
   </div>
 

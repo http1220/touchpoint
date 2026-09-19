@@ -118,8 +118,12 @@ $config['global_xss_filtering'] = FALSE;
 |   collect · conversion   Origin 검사 (src/Http/CorsPolicy)
 |   webhooks/pg            HMAC 서명 (src/Payment/WebhookSignature)
 |   purchase               pg=stub 은 없음 — 인증 자체가 없다. 악용 범위는 아래
-|                          pg≠stub 은 시연 토큰 쿠키 (src/Payment/PayAccess)
-|   pay/inicis/start       시연 토큰 쿠키. SameSite=Lax 라 다른 사이트의 POST 엔 안 실린다
+|                          pg≠stub 은 입장권 쿠키 (src/Payment/PayAccess)
+|   pay/access             없음 — 입장권을 주기만 한다. 남의 브라우저에 입장권을 쥐여 줘도
+|                          결제는 그 사람이 버튼을 누르고 카드를 넣어야 일어난다.
+|                          루트 도메인(/tour)의 폼이 app. 으로 POST 한다. CSRF 쿠키가 .<도메인> 이라
+|                          토큰을 실을 수는 있지만, 막을 것이 없는 경로라 싣지 않았다 (09-19 오후)
+|   pay/inicis/start       입장권 쿠키. SameSite=Lax 라 다른 사이트의 POST 엔 안 실린다
 |   pay/inicis/return      이니시스 흐름 — authToken · authUrl 호스트 검사 · 금액 대조
 |                          **이니시스가 교차 사이트 POST 로 보낸다.** CSRF 토큰이 있을 수 없고
 |                          제외하지 않으면 모든 결제가 403 이다 → docs/plan-multi-pg.md C2
@@ -146,6 +150,7 @@ $config['csrf_exclude_uris'] = array(
 	'click',
 	'purchase',
 	'webhooks/.*',
+	'pay/access',
 	'pay/inicis/.*',
 );
 

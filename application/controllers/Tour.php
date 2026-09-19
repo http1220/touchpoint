@@ -10,6 +10,10 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  * "이건 시연입니다" 라는 말은 서비스 화면이 할 말이 아니다.
  *
  * DB 를 읽지 않는다 — 파이프라인의 모양과 링크뿐이다.
+ *
+ * 09-19: 결제를 직접 해 보는 패널이 생겼다. 버튼은 app. 의 `POST /pay/access` 로
+ * 간다 — 입장권은 결제가 사는 호스트에 걸려야 한다. 비밀(PAY_DEMO_TOKEN)이 없으면
+ * 버튼을 그리지 않는다 → controllers/Pay.php
  */
 class Tour extends MY_Controller
 {
@@ -22,6 +26,7 @@ class Tour extends MY_Controller
 
 		$this->load->view('tour/index', array(
 			'trace_id' => $this->trace_id,
+			'pay_open' => (string) (getenv('PAY_DEMO_TOKEN') ?: '') !== '',
 		));
 	}
 }

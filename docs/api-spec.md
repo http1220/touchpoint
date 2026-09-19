@@ -17,8 +17,8 @@
 | 3-1 | POST | `/impression` | **`api.sshwan.com`** | 배너 노출 배치 (09-15) |
 | 3-2 | GET | `/click` | **`api.sshwan.com`** | 배너 클릭 기록 후 302 (09-15) |
 | 5 | POST | `/signup` | `app.sshwan.com` | 가입 |
-| 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(기본 스텁 · `pg=inicis` 는 시연 토큰 필요) |
-| 6-1 | GET·POST | `/pay`, `/pay/inicis/*`, `/pay/result/{uid}` | `app.sshwan.com` | 실PG(이니시스 테스트 상점) 결제 — 시연 토큰 (09-19) |
+| 6 | POST | `/purchase` | `app.sshwan.com` | 코인 결제(기본 스텁 · `pg=inicis` 는 입장권 필요) |
+| 6-1 | GET·POST | `/pay`, `/pay/access`, `/pay/inicis/*`, `/pay/result/{uid}` | `app.sshwan.com` | 실PG(이니시스 테스트 상점) 결제 — 입장권, 안내 화면 버튼으로 누구나 (09-19) |
 | 7 | GET | `/metrics` | `app.sshwan.com` | 지표 화면 |
 
 ---
@@ -292,7 +292,7 @@ created → pending → authorized → captured
 | 값 | 조건 | 거절 |
 |---|---|---|
 | 없음 · `stub` | 없음 (기존 그대로) | — |
-| `inicis` | 시연 토큰 쿠키 `tp_pay` · 이니시스 설정 · 통화 KRW | 403 `pay-locked` · 503 `pg-unavailable` · 422 |
+| `inicis` | 입장권 쿠키 `tp_pay` · 이니시스 설정 · 통화 KRW | 403 `pay-locked` · 503 `pg-unavailable` · 422 |
 
 결제 행을 만들기 **전에** 검사한다. 받을 수 없는 결제의 행이 남으면 오래된 결제 보고에 영원히 걸린다.
 
@@ -302,8 +302,9 @@ created → pending → authorized → captured
 
 | 메서드 | 경로 | 문 | 하는 일 |
 |---|---|---|---|
-| GET | `app./pay?t=<토큰>` | 토큰 | 쿠키 `tp_pay` 를 걸고 `303 /pay` (주소에서 토큰을 지운다) |
-| GET | `app./pay` | 쿠키 | 시연 결제 화면. 없으면 **404** — 잠긴 문이 있다는 것도 알리지 않는다 |
+| POST | `app./pay/access` | 없음 | 입장권(서명 · 만료 1일)을 쿠키 `tp_pay` 로 주고 `303 /pay`. **안내 화면(`/tour#pay`)의 버튼이 부른다** — POST 라 크롤러는 받지 않는다 |
+| GET | `app./pay?t=<비밀>` | 비밀 | 운영자 지름길 — 입장권을 주고 `303 /pay` (주소에서 비밀을 지운다) |
+| GET | `app./pay` | 쿠키 | 시연 결제 화면. 없으면 입장권 받기 안내(200) — 처음엔 404 였다(09-19 오후 C4 를 뒤집기 전) |
 | POST | `app./pay/inicis/start` `{payment_uid}` | 쿠키 | 결제창 필드에 **서버가** 서명해 돌려준다 (`signature` · `verification` · `mKey`) |
 | POST | `app./pay/inicis/return` | **이니시스 흐름** | 이니시스가 브라우저를 통해 보낸다 — 쿠키가 실리지 않는다(교차 사이트 POST). 승인 → 장부 → `303 /pay/result/{uid}` |
 | GET·POST | `app./pay/inicis/close` | — | 결제창 닫기 |

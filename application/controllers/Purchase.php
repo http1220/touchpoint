@@ -28,8 +28,9 @@ use App\Payment\PayAccess;
  * 없다 → 계획 12장 결정 5
  *
  * **이 근거는 `pg=stub` 에서만 성립한다(09-19).** 이니시스 테스트 MID 는
- * 실승인이다. 그래서 `pg≠stub` 은 시연 토큰 쿠키(PayAccess)를 요구한다 —
- * 진짜 인증은 아니지만 공개 페이지에서 누구나 실승인을 일으키지는 못한다
+ * 실승인이다. 그래서 `pg≠stub` 은 입장권 쿠키(PayAccess)를 요구한다. 입장권은
+ * 안내 화면의 버튼으로 누구나 받는다(09-19 오후) — 인증이 아니라, 크롤러와
+ * "모르고 누르기" 를 막는 한 번의 명시적 동작이다
  * → docs/plan-multi-pg.md C4
  * ──────────────────────────────────────────────────────────
  *
@@ -184,7 +185,7 @@ class Purchase extends MY_Controller
 	/**
 	 * 어느 PG 로 결제하는가. 없으면 스텁 — D-3 측정 스크립트가 그대로 돈다.
 	 *
-	 * 실PG 는 세 가지를 본다: 이름이 맞는가(422) · 시연 토큰이 있는가(403) ·
+	 * 실PG 는 세 가지를 본다: 이름이 맞는가(422) · 입장권이 있는가(403) ·
 	 * 그 PG 가 지금 이 통화를 받는가(503·422). 결제 행을 만들기 **전에** 본다 —
 	 * 받을 수 없는 결제의 행을 남기면 오래된 결제 보고에 영원히 걸린다.
 	 */
@@ -202,9 +203,9 @@ class Purchase extends MY_Controller
 			$this->problem(422, 'invalid-request', 'pg 는 stub | '.implode(' | ', Gateways::REAL).' 중 하나여야 합니다.', array('field' => 'pg'));
 		}
 
-		if ( ! PayAccess::allows($this->input->cookie(PayAccess::COOKIE, FALSE), (string) (getenv('PAY_DEMO_TOKEN') ?: '')))
+		if ( ! PayAccess::allows($this->input->cookie(PayAccess::COOKIE, FALSE), (string) (getenv('PAY_DEMO_TOKEN') ?: ''), time()))
 		{
-			$this->problem(403, 'pay-locked', '실결제 경로는 시연 토큰이 필요합니다.');
+			$this->problem(403, 'pay-locked', '실결제 경로는 입장권이 필요합니다. 안내 화면(/tour)이나 /pay 에서 받으세요.');
 		}
 
 		$gateway = $this->gateways->get($pg);

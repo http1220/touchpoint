@@ -11,7 +11,8 @@ use App\Payment\PaymentStatus;
 /**
  * 실PG 결제(이니시스). `app.<도메인>` 에서만 열린다 → docs/plan-multi-pg.md
  *
- *   GET  /pay                 시연 결제 화면 (?t=<토큰> 으로 들어와 쿠키를 받는다)
+ *   GET  /pay                 시연 결제 화면. 입장권이 없으면 입장권 받기 안내
+ *   POST /pay/access          입장권 발급 → 303 /pay  (안내 화면 /tour 의 버튼이 부른다)
  *   POST /pay/inicis/start    결제창 필드에 서명해 돌려준다
  *   POST /pay/inicis/return   이니시스 복귀 → 승인 → 장부 (없으면 망취소)
  *   *    /pay/inicis/close    결제창 닫기
@@ -19,7 +20,8 @@ use App\Payment\PaymentStatus;
  *
  * ── 문은 둘이다 ──
  *
- *   시연 토큰 쿠키(PayAccess)   /pay · start · result
+ *   입장권 쿠키(PayAccess)      /pay · start · result — **누구나 버튼 한 번으로 받는다**(09-19 오후,
+ *                                C4 를 뒤집었다). 막는 것은 사람이 아니라 크롤러와 "모르고 누르기" 다
  *   이니시스 흐름                return — **쿠키가 실리지 않는다.** 교차 사이트 POST 라
  *                                SameSite=Lax 쿠키(세션·ab_vid·tp_pay)가 없다 → C3.
  *                                결제는 쿠키가 아니라 orderNumber 로 찾는다
@@ -47,19 +49,23 @@ class Pay extends MY_Controller
 	/** GET /pay */
 	public function index()
 	{
-		$token = (string) (getenv('PAY_DEMO_TOKEN') ?: '');
+		$secret = $this->secret();
 
-		if (PayAccess::tokenMatches($this->input->get('t', FALSE), $token))
+		if (PayAccess::tokenMatches($this->input->get('t', FALSE), $secret))
 		{
-			$this->grant($token);
-
-			// 주소에서 토큰을 지운다. 남기면 방문 기록·Referer 로 샌다.
+			// 운영자 지름길. 주소에서 비밀을 지운다 — 남기면 방문 기록·Referer 로 샌다.
+			$this->grant($secret);
 			$this->output->set_status_header(303)->set_header('Location: /pay');
 
 			return;
 		}
 
-		$this->requireAccess();
+		if ( ! $this->hasAccess())
+		{
+			$this->showGate();
+
+			return;
+		}
 
 		$mode = $this->gateways->inicisMode();
 
@@ -71,6 +77,31 @@ class Pay extends MY_Controller
 			'inicis_on'  => $this->gateways->get('inicis') !== NULL,
 			'mode'       => $mode,
 		));
+	}
+
+	/**
+	 * POST /pay/access — 입장권을 받는다. 안내 화면(루트 도메인)의 폼이 부른다.
+	 *
+	 * **POST 인 이유**: 링크를 따라가는 크롤러·메신저 미리보기가 입장권을 받지 않게.
+	 * CSRF 제외 목록에 있다 — 남의 브라우저에 입장권을 쥐여 주는 것은 피해가 없다.
+	 * 결제는 여전히 그 사람이 버튼을 누르고 카드를 넣어야 일어난다.
+	 */
+	public function access()
+	{
+		$this->requirePost();
+
+		$secret = $this->secret();
+
+		if ($secret === '')
+		{
+			// 설정이 없으면 아무도 못 연다. 안내는 그대로 보여 준다.
+			$this->showGate();
+
+			return;
+		}
+
+		$this->grant($secret);
+		$this->output->set_status_header(303)->set_header('Location: /pay');
 	}
 
 	/** POST /pay/inicis/start  {payment_uid} */
@@ -211,7 +242,12 @@ class Pay extends MY_Controller
 	/** GET /pay/result/{uid} */
 	public function result($uid = NULL)
 	{
-		$this->requireAccess();
+		if ( ! $this->hasAccess())
+		{
+			$this->showGate();
+
+			return;
+		}
 
 		$uid     = strtolower(trim((string) $uid));
 		$payment = preg_match('/\A[0-9a-f]{32}\z/', $uid) === 1 ? $this->payment_model->findByUid($uid) : NULL;
@@ -300,24 +336,41 @@ class Pay extends MY_Controller
 		return $gateway;
 	}
 
+	private function secret()
+	{
+		return (string) (getenv('PAY_DEMO_TOKEN') ?: '');
+	}
+
+	private function hasAccess()
+	{
+		return PayAccess::allows($this->input->cookie(PayAccess::COOKIE, FALSE), $this->secret(), time());
+	}
+
 	/**
-	 * 토큰 쿠키. 없으면 **404** — 잠긴 문이 있다는 사실도 알려 주지 않는다.
-	 * requireHost 가 호스트가 틀렸을 때 주는 응답과 같다.
+	 * API(POST) 용. 입장권이 없으면 403.
+	 *
+	 * 처음엔 404 였다 — 잠긴 문이 있다는 것도 알리지 않으려고. 안내 화면에 버튼이
+	 * 생긴 뒤로는 문이 공개돼 있으니 숨길 이유가 없고, 이유를 말하는 편이 낫다.
 	 */
 	private function requireAccess()
 	{
-		$token = (string) (getenv('PAY_DEMO_TOKEN') ?: '');
-
-		if ( ! PayAccess::allows($this->input->cookie(PayAccess::COOKIE, FALSE), $token))
+		if ( ! $this->hasAccess())
 		{
-			$this->problem(404, 'not-found', '이 호스트에는 없는 경로입니다.');
+			$this->problem(403, 'pay-locked', '입장권이 없습니다. 안내 화면이나 /pay 에서 먼저 받으세요.');
 		}
 	}
 
-	private function grant($token)
+	/** 입장권이 없을 때의 화면. 받는 버튼이 여기도 있다 — 안내를 거치지 않고 /pay 로 곧장 온 사람 */
+	private function showGate()
 	{
-		setcookie(PayAccess::COOKIE, PayAccess::cookieValue($token), array(
-			'expires'  => time() + 86400,
+		$this->output->set_header('X-Robots-Tag: noindex, nofollow');
+		$this->load->view('pay/gate', array('open' => $this->secret() !== ''));
+	}
+
+	private function grant($secret)
+	{
+		setcookie(PayAccess::COOKIE, PayAccess::issue($secret, time()), array(
+			'expires'  => time() + PayAccess::TTL,
 			'path'     => '/',       // /purchase 도 이 쿠키를 본다 (pg≠stub)
 			'domain'   => '',        // app. 호스트에만
 			'secure'   => TRUE,

@@ -2,7 +2,7 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
- * 시연 결제 화면 (이니시스 · 카드). 시연 토큰이 있어야 열린다 → controllers/Pay.php
+ * 시연 결제 화면 (이니시스 · 카드). 입장권이 있어야 열린다 — 입장권은 안내 화면의 버튼으로 누구나 받는다 → controllers/Pay.php
  *
  * 흐름: 버튼 → POST /purchase (pg=inicis) → POST /pay/inicis/start → INIStdPay.pay()
  * → 이니시스 결제창 → POST /pay/inicis/return → /pay/result/{uid}

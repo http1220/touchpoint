@@ -53,7 +53,7 @@ $sections = array(
         광고 유입부터 전환까지를 추적하는 구조를 보여 주기 위해 만들었고,
         <strong>실제 회원가입은 없습니다.</strong>
         <?php /* 09-19: 이니시스 테스트 상점 연결(controllers/Pay.php). 전에는 "결제(청구)는 없습니다" 였다 */ ?>
-        결제는 <strong>시연 토큰을 받은 사람만 여는</strong> 결제대행사(PG)의 테스트 환경에만 연결되어 있습니다.
+        결제는 결제대행사(PG)의 <strong>테스트 환경</strong>에만 연결되어 있고, <a href="<?= html_escape(tp_host_url('root', '/tour')) ?>#pay">시연 안내</a>의 버튼으로 누구나 해 볼 수 있습니다.
         테스트 환경이라도 <strong>카드 승인은 실제로 일어나고</strong>, 결제대행사가 당일 자정 전에 자동으로 취소합니다.
         아래 내용은 이 사이트의 코드가 실제로 하는 일을 그대로 적은 것입니다
         (<a href="<?= $repo ?>">소스 공개</a>).
@@ -138,7 +138,7 @@ $sections = array(
             <tr><td><code>ab_rdb</code></td><td>이 사이트</td><td>읽기용 데이터베이스 배정 (개인 식별 없음)</td><td>1일</td></tr>
             <tr><td><code>tp_ad_optout</code></td><td>이 사이트</td><td>맞춤형 광고 거부 설정 기억</td><td>1년</td></tr>
             <?php /* src/Payment/PayAccess · controllers/Pay::grant — 09-19 */ ?>
-            <tr><td><code>tp_pay</code></td><td>이 사이트</td><td>시연 결제 화면을 열 수 있는지 확인 (토큰의 해시값, 개인 식별 없음)</td><td>1일</td></tr>
+            <tr><td><code>tp_pay</code></td><td>이 사이트</td><td>시연 결제 입장권 — 버튼을 누른 브라우저에 주는 서명된 임의 값 (개인 식별 없음)</td><td>1일</td></tr>
             <tr><td><code>tp_probe_vid</code></td><td>이 사이트</td><td>진단 페이지(<code>/diag</code>)의 쿠키 동작 시험</td><td>짧은 기간</td></tr>
             <tr><td><code>_ga</code>, <code>_ga_*</code></td><td>Google</td><td>이용 통계</td><td>최대 2년</td></tr>
             <tr><td><code>_fbp</code></td><td>Meta</td><td>광고 성과 측정 (픽셀이 켜져 있을 때)</td><td>90일</td></tr>

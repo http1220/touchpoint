@@ -972,6 +972,7 @@ a:hover .step__name { text-decoration-thickness: var(--border-width-strong); }
   /* 시연 안내 — 흐름도는 가로로 편다. 화살표도 → 로 */
   .layout-tour { align-content: start; align-items: start; }
   .layout-tour > .tour-intro { grid-column: 1 / -1; }
+  .layout-tour > .tour-pay   { grid-column: 1 / -1; }   /* 결제를 직접 해 보는 패널 (09-19) */
   /* 귀속 칸이 표 하나를 더 이고 있어 조금 넓다 — 5:7 로 나눈다 */
   .layout-tour > .tour-hard { grid-column: 1 / span 5; }
   .layout-tour > .tour-attr { grid-column: 6 / span 7; }

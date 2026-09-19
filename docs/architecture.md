@@ -198,5 +198,5 @@ classDiagram
 | Kubernetes / ECR | 컨테이너 4개 → [ADR-010](decisions/ADR-010-no-kubernetes.md) |
 | Redis / SQS | → [ADR-003](decisions/ADR-003-mysql-outbox.md) |
 | SPA / React | → [ADR-009](decisions/ADR-009-no-spa.md) |
-| 실제 PG 상용 연동 | **테스트 연동까지만.** 이니시스 테스트 상점(카드)을 붙였다 — 시연 토큰이 있어야 열리고, 실카드 승인 경로는 운영에서 확인하지 않았다(단위 테스트만). 페이팔은 아직 → [plan-multi-pg.md](plan-multi-pg.md) · [ADR-016](decisions/ADR-016-payment-and-notification.md) |
+| 실제 PG 상용 연동 | **테스트 연동까지만.** 이니시스 테스트 상점(카드)을 붙였다 — 안내 화면의 버튼으로 누구나 입장권을 받아 해 볼 수 있고, 실카드 승인 경로는 운영에서 확인하지 않았다(단위 테스트만). 페이팔은 아직 → [plan-multi-pg.md](plan-multi-pg.md) · [ADR-016](decisions/ADR-016-payment-and-notification.md) |
 | 웹툰 뷰어·랭킹·검색 | 광고 연동과 무관 → [조사 요약](research-method.md) 버린 것 24개 |
