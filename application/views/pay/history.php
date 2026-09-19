@@ -108,7 +108,7 @@ $inicisCaptured = ($counts['inicis']['captured'] ?? 0) + ($counts['inicis']['ref
                 <td><?= html_escape(PaymentOrigin::label($p['idempotency_key'])) ?> <span class="muted">(<?= html_escape($p['pg']) ?>)</span></td>
                 <td class="nowrap"><?= number_format($p['amount_minor']) ?> <?= html_escape($p['currency']) ?></td>
                 <td><span class="badge<?= $p['status'] === 'captured' ? ' badge--success' : '' ?>"><?= html_escape($labels[$p['status']] ?? $p['status']) ?></span></td>
-                <td class="flow"><?= $flow($p) ?></td>
+                <td class="ledger-path"><?= $flow($p) ?></td>
                 <td class="nowrap"><?= html_escape($coins($p)) ?></td>
                 <td><a href="/pay/result/<?= html_escape($p['uid_hex']) ?>">장부 보기</a></td>
               </tr>
@@ -144,7 +144,7 @@ $inicisCaptured = ($counts['inicis']['captured'] ?? 0) + ($counts['inicis']['ref
               </td>
               <td class="nowrap"><?= number_format($p['amount_minor']) ?> <?= html_escape($p['currency']) ?></td>
               <td><span class="badge<?= $p['status'] === 'captured' ? ' badge--success' : '' ?>"><?= html_escape($labels[$p['status']] ?? $p['status']) ?></span></td>
-              <td class="flow"><?= $flow($p) ?></td>
+              <td class="ledger-path"><?= $flow($p) ?></td>
               <td class="nowrap"><?= html_escape($coins($p)) ?></td>
             </tr>
           <?php endforeach; ?>
